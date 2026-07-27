@@ -400,7 +400,9 @@ export default function Home() {
             melhor será o primeiro orçamento.
           </p>
           <a
-            href="mailto:contato@artgianstudio.com.br?subject=Quero%20criar%20uma%20peça%203D"
+            href="https://wa.me/5516997432741"
+            target="_blank"
+            rel="noopener noreferrer"
             className="mt-8 flex items-center justify-between rounded-full bg-[#0b2447] py-3 pr-3 pl-6 font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-xl"
           >
             Pedir orçamento{" "}
