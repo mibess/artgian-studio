@@ -19,7 +19,7 @@ const projects = [
     title: "Bandeja Aurora. Organização em forma de escultura.",
     alt: "Bandeja Aurora impressa em 3D",
     position: "object-center",
-    image: "/bandeja-decorativa.png",
+    image: "/bandeja-aurora-capa.png",
     href: "/bandeja-aurora",
   },
   {
@@ -226,13 +226,9 @@ export default function Home() {
         </header>
 
         <div className="mt-16 grid gap-8 md:grid-cols-3">
-          {projects.map((project, index) => (
+          {projects.map((project) => (
             <a className="group block" href={project.href} key={project.number}>
-              <div
-                className={`overflow-hidden rounded-[1.5rem] bg-[#e9dfcf] ${
-                  index === 0 ? "h-[32rem] md:h-[35rem]" : "h-[28rem] md:h-[31rem]"
-                }`}
-              >
+              <div className="aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-[#e9dfcf]">
                 <img
                   className={`h-full w-full object-cover ${project.position} transition duration-700 ease-out group-hover:scale-105`}
                   src={project.image}

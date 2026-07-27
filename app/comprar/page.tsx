@@ -82,7 +82,7 @@ export default async function CheckoutPage({
               <div className="overflow-hidden rounded-[1.4rem] bg-white">
                 <img
                   className="aspect-square w-full object-cover"
-                  src="/bandeja-decorativa.png"
+                  src="/bandeja-aurora-capa.png"
                   alt="Bandeja Aurora na cor areia"
                 />
               </div>

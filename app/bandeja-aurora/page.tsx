@@ -69,7 +69,7 @@ export default function BandejaAuroraPage() {
           <figure className="absolute inset-3 overflow-hidden rounded-[2.6rem] bg-[#fffaf4] shadow-[0_35px_90px_rgba(91,48,35,.22)] lg:inset-6">
             <img
               className="h-full w-full object-cover"
-              src="/bandeja-decorativa.png"
+              src="/bandeja-aurora-capa.png"
               alt="Bandeja decorativa facetada na cor areia"
             />
           </figure>
