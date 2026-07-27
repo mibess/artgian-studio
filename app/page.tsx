@@ -15,10 +15,12 @@ const steps = [
 const projects = [
   {
     number: "01",
-    category: "Iluminação",
-    title: "Luz que também decora.",
-    alt: "Luminária escultórica impressa em 3D",
-    position: "object-[59%_28%]",
+    category: "Casa",
+    title: "Bandeja Aurora. Organização em forma de escultura.",
+    alt: "Bandeja Aurora impressa em 3D",
+    position: "object-center",
+    image: "/bandeja-decorativa.png",
+    href: "/bandeja-aurora",
   },
   {
     number: "02",
@@ -26,6 +28,8 @@ const projects = [
     title: "Pequenos objetos, grandes histórias.",
     alt: "Chaveiro de ursinho impresso em 3D",
     position: "object-[9%_65%]",
+    image: "/hero-gallery.png",
+    href: "#orcamento",
   },
   {
     number: "03",
@@ -33,6 +37,8 @@ const projects = [
     title: "Detalhes que dão vida à imaginação.",
     alt: "Miniatura detalhada impressa em 3D",
     position: "object-[93%_72%]",
+    image: "/hero-gallery.png",
+    href: "#orcamento",
   },
 ];
 
@@ -221,7 +227,7 @@ export default function Home() {
 
         <div className="mt-16 grid gap-8 md:grid-cols-3">
           {projects.map((project, index) => (
-            <article className="group" key={project.number}>
+            <a className="group block" href={project.href} key={project.number}>
               <div
                 className={`overflow-hidden rounded-[1.5rem] bg-[#e9dfcf] ${
                   index === 0 ? "h-[32rem] md:h-[35rem]" : "h-[28rem] md:h-[31rem]"
@@ -229,7 +235,7 @@ export default function Home() {
               >
                 <img
                   className={`h-full w-full object-cover ${project.position} transition duration-700 ease-out group-hover:scale-105`}
-                  src="/hero-gallery.png"
+                  src={project.image}
                   alt={project.alt}
                 />
               </div>
@@ -239,7 +245,11 @@ export default function Home() {
               <h3 className="mt-2 max-w-sm font-serif text-2xl font-normal">
                 {project.title}
               </h3>
-            </article>
+              <span className="mt-4 inline-flex items-center gap-3 border-b border-[#b88a3b]/60 pb-1 text-xs font-semibold opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                {project.number === "01" ? "Conhecer a peça" : "Criar algo assim"}{" "}
+                <b className="text-[#b88a3b]">→</b>
+              </span>
+            </a>
           ))}
         </div>
       </section>
