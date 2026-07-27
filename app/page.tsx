@@ -33,12 +33,12 @@ const projects = [
   },
   {
     number: "03",
-    category: "Colecionáveis",
-    title: "Detalhes que dão vida à imaginação.",
-    alt: "Miniatura detalhada impressa em 3D",
-    position: "object-[93%_72%]",
-    image: "/hero-gallery.png",
-    href: "#orcamento",
+    category: "Música",
+    title: "Porta-Palhetas Solo. Seu nome entra no ritmo.",
+    alt: "Porta-Palhetas Solo personalizado com o texto Seu Nome",
+    position: "object-center",
+    image: "/porta-palhetas-solo-capa.png",
+    href: "/porta-palhetas-solo",
   },
 ];
 
@@ -242,7 +242,7 @@ export default function Home() {
                 {project.title}
               </h3>
               <span className="mt-4 inline-flex items-center gap-3 border-b border-[#b88a3b]/60 pb-1 text-xs font-semibold opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
-                {project.number === "03" ? "Criar algo assim" : "Conhecer a peça"}{" "}
+                Conhecer a peça{" "}
                 <b className="text-[#b88a3b]">→</b>
               </span>
             </a>

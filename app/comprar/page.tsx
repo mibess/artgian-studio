@@ -13,6 +13,7 @@ type CheckoutPageProps = {
     produto?: string;
     cor?: string;
     quantidade?: string;
+    personalizacao?: string;
   }>;
 };
 
@@ -21,6 +22,7 @@ const colorNames: Record<string, string> = {
   preto: "Preto",
   branco: "Branco",
   rosa: "Rosa",
+  terracota: "Terracota",
   "rosa-marfim": "Rosa & Marfim",
   "marrom-branco": "Marrom & Branco",
   "areia-branco": "Areia & Branco",
@@ -35,6 +37,7 @@ const products = {
     unitPrice: 189.9,
     shipping: 24.9,
     defaultColor: "Areia",
+    customizable: false,
   },
   "organizador-arco": {
     name: "Organizador Arco",
@@ -44,6 +47,17 @@ const products = {
     unitPrice: 249.9,
     shipping: 29.9,
     defaultColor: "Rosa & Marfim",
+    customizable: false,
+  },
+  "porta-palhetas-solo": {
+    name: "Porta-Palhetas Solo",
+    href: "/porta-palhetas-solo",
+    image: "/porta-palhetas-solo-capa.png",
+    alt: "Porta-Palhetas Solo terracota personalizado com o texto Seu Nome",
+    unitPrice: 129.9,
+    shipping: 19.9,
+    defaultColor: "Terracota",
+    customizable: true,
   },
 } as const;
 
@@ -60,6 +74,9 @@ export default async function CheckoutPage({
   const shipping = product?.shipping ?? 0;
   const total = unitPrice * quantity + shipping;
   const color = colorNames[params.cor || ""] || product?.defaultColor || "";
+  const personalization = product?.customizable
+    ? params.personalizacao?.trim().slice(0, 18) || "Seu Nome"
+    : null;
 
   return (
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
@@ -125,6 +142,11 @@ export default async function CheckoutPage({
                     <p className="mt-1 text-xs text-white/55">
                       Cor {color} · Quantidade {quantity}
                     </p>
+                    {personalization && (
+                      <p className="mt-1 text-xs text-[#d8bc7b]">
+                        Personalização: “{personalization}”
+                      </p>
+                    )}
                   </div>
                   <strong className="shrink-0 text-sm">
                     {(unitPrice * quantity).toLocaleString("pt-BR", {
