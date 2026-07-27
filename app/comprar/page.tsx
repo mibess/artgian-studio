@@ -21,18 +21,45 @@ const colorNames: Record<string, string> = {
   preto: "Preto",
   branco: "Branco",
   rosa: "Rosa",
+  "rosa-marfim": "Rosa & Marfim",
+  "marrom-branco": "Marrom & Branco",
+  "areia-branco": "Areia & Branco",
 };
+
+const products = {
+  "bandeja-aurora": {
+    name: "Bandeja Aurora",
+    href: "/bandeja-aurora",
+    image: "/bandeja-aurora-capa.png",
+    alt: "Bandeja Aurora na cor areia",
+    unitPrice: 189.9,
+    shipping: 24.9,
+    defaultColor: "Areia",
+  },
+  "organizador-arco": {
+    name: "Organizador Arco",
+    href: "/organizador-arco",
+    image: "/organizador-arco-capa.png",
+    alt: "Organizador Arco rosa com gavetas em marfim",
+    unitPrice: 249.9,
+    shipping: 29.9,
+    defaultColor: "Rosa & Marfim",
+  },
+} as const;
 
 export default async function CheckoutPage({
   searchParams,
 }: CheckoutPageProps) {
   const params = await searchParams;
   const quantity = Math.min(9, Math.max(1, Number(params.quantidade) || 1));
-  const hasProduct = params.produto === "bandeja-aurora";
-  const unitPrice = 189.9;
-  const shipping = hasProduct ? 24.9 : 0;
+  const product =
+    params.produto && params.produto in products
+      ? products[params.produto as keyof typeof products]
+      : null;
+  const unitPrice = product?.unitPrice ?? 0;
+  const shipping = product?.shipping ?? 0;
   const total = unitPrice * quantity + shipping;
-  const color = colorNames[params.cor || ""] || "Areia";
+  const color = colorNames[params.cor || ""] || product?.defaultColor || "";
 
   return (
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
@@ -50,13 +77,13 @@ export default async function CheckoutPage({
           </div>
           <Link
             className="text-xs font-semibold text-[#647087] hover:text-[#0b2447]"
-            href={hasProduct ? "/bandeja-aurora" : "/#produtos"}
+            href={product?.href || "/#produtos"}
           >
             ← Continuar comprando
           </Link>
         </div>
 
-        {!hasProduct ? (
+        {!product ? (
           <div className="rounded-[2rem] border border-[#0b2447]/10 bg-white p-8 text-center sm:p-14">
             <span className="font-serif text-5xl text-[#b88a3b]">◇</span>
             <h2 className="mt-5 font-serif text-3xl font-normal">
@@ -82,8 +109,8 @@ export default async function CheckoutPage({
               <div className="overflow-hidden rounded-[1.4rem] bg-white">
                 <img
                   className="aspect-square w-full object-cover"
-                  src="/bandeja-aurora-capa.png"
-                  alt="Bandeja Aurora na cor areia"
+                  src={product.image}
+                  alt={product.alt}
                 />
               </div>
               <div className="px-2 pt-6 pb-3">
@@ -93,7 +120,7 @@ export default async function CheckoutPage({
                 <div className="mt-3 flex items-start justify-between gap-5">
                   <div>
                     <h2 className="font-serif text-2xl font-normal">
-                      Bandeja Aurora
+                      {product.name}
                     </h2>
                     <p className="mt-1 text-xs text-white/55">
                       Cor {color} · Quantidade {quantity}

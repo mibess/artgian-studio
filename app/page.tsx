@@ -24,12 +24,12 @@ const projects = [
   },
   {
     number: "02",
-    category: "Presentes",
-    title: "Pequenos objetos, grandes histórias.",
-    alt: "Chaveiro de ursinho impresso em 3D",
-    position: "object-[9%_65%]",
-    image: "/hero-gallery.png",
-    href: "#orcamento",
+    category: "Organização",
+    title: "Organizador Arco. Ordem com personalidade.",
+    alt: "Organizador Arco rosa com gavetas",
+    position: "object-center",
+    image: "/organizador-arco-capa.png",
+    href: "/organizador-arco",
   },
   {
     number: "03",
@@ -242,7 +242,7 @@ export default function Home() {
                 {project.title}
               </h3>
               <span className="mt-4 inline-flex items-center gap-3 border-b border-[#b88a3b]/60 pb-1 text-xs font-semibold opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
-                {project.number === "01" ? "Conhecer a peça" : "Criar algo assim"}{" "}
+                {project.number === "03" ? "Criar algo assim" : "Conhecer a peça"}{" "}
                 <b className="text-[#b88a3b]">→</b>
               </span>
             </a>
