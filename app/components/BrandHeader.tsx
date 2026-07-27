@@ -24,24 +24,16 @@ export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
         <div className="pointer-events-none absolute -top-16 left-1/4 size-36 rounded-full bg-white/70 blur-3xl" />
 
         <Link
-          className="relative z-10 flex shrink-0 items-center gap-3"
+          className="relative z-10 flex shrink-0 items-center"
           href="/"
           aria-label="Artgian Studio — página inicial"
         >
-          <span className="grid size-10 place-items-center overflow-hidden rounded-full border border-white/80 bg-[#f7f3ea]/80 shadow-sm sm:size-11">
+          <span className="grid size-12 place-items-center overflow-hidden rounded-2xl border border-white/80 bg-[#f7f3ea]/80 shadow-sm sm:size-14">
             <img
-              className="size-16 max-w-none mix-blend-multiply"
-              src="/artgian-logo.jpeg"
-              alt=""
+              className="size-full object-cover mix-blend-multiply"
+              src="/artgian-monogram.png"
+              alt="AS"
             />
-          </span>
-          <span className="flex flex-col leading-none">
-            <b className="font-serif text-xl font-normal tracking-[0.08em] sm:text-2xl">
-              Artgian
-            </b>
-            <small className="mt-1 pl-0.5 text-[0.5rem] font-bold uppercase tracking-[0.48em]">
-              studio
-            </small>
           </span>
         </Link>
 

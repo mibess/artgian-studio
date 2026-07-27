@@ -59,6 +59,16 @@ const products = {
     defaultColor: "Terracota",
     customizable: true,
   },
+  "suporte-pocket": {
+    name: "Suporte Pocket",
+    href: "/suporte-pocket",
+    image: "/suporte-pocket-capa.png",
+    alt: "Suporte Pocket preto nas posições aberta e fechada",
+    unitPrice: 69.9,
+    shipping: 16.9,
+    defaultColor: "Preto",
+    customizable: false,
+  },
 } as const;
 
 export default async function CheckoutPage({

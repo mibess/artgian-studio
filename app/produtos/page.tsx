@@ -48,6 +48,19 @@ const products = [
     accent: "#c96f47",
     feature: "Personalizável",
   },
+  {
+    number: "04",
+    category: "Mobilidade",
+    name: "Suporte Pocket",
+    description:
+      "Um apoio articulado que abre para o uso e fecha para acompanhar você sem ocupar espaço.",
+    price: "R$ 69,90",
+    image: "/suporte-pocket-capa.png",
+    alt: "Suporte Pocket preto nas posições aberta e fechada",
+    href: "/suporte-pocket",
+    accent: "#a87927",
+    feature: "3 cores",
+  },
 ];
 
 export default function ProductsPage() {
