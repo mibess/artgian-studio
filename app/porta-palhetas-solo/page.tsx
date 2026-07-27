@@ -129,8 +129,8 @@ export default function PortaPalhetasSoloPage() {
           <div className="min-h-[30rem] overflow-hidden bg-[#f2d2bd]">
             <img
               className="h-full w-full object-cover object-center"
-              src="/porta-palhetas-solo-capa.png"
-              alt="Detalhe da personalização Seu Nome no Porta-Palhetas Solo"
+              src="/porta-palhetas-descricao.png"
+              alt="Arte descritiva do Porta-Palhetas Solo com personalização Seu Nome e opções preta e branca"
             />
           </div>
           <div className="flex flex-col justify-center px-7 py-16 sm:px-12 lg:px-[6vw]">

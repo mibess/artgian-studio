@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BrandHeader from "./components/BrandHeader";
 
 const sectionLabel =
   "flex items-center gap-3 text-[0.68rem] font-bold uppercase tracking-[0.2em]";
@@ -47,68 +48,7 @@ const projects = [
 export default function Home() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#f7f3ea] text-[#0b2447]">
-      <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-6 sm:pt-5">
-        <div className="relative mx-auto flex max-w-7xl items-center justify-between overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/45 px-4 py-3 shadow-[0_18px_60px_rgba(11,36,71,0.13),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-[#0b2447]/5 backdrop-blur-2xl sm:px-6">
-          <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-white to-transparent" />
-          <div className="pointer-events-none absolute -top-16 left-1/4 size-36 rounded-full bg-white/70 blur-3xl" />
-
-          <a
-            className="relative z-10 flex shrink-0 items-center gap-3"
-            href="#inicio"
-            aria-label="Artgian Studio — início"
-          >
-            <span className="grid size-10 place-items-center overflow-hidden rounded-full border border-white/80 bg-[#f7f3ea]/80 shadow-sm sm:size-11">
-              <img
-                className="size-16 max-w-none mix-blend-multiply"
-                src="/artgian-logo.jpeg"
-                alt=""
-              />
-            </span>
-            <span className="flex flex-col leading-none">
-              <b className="font-serif text-xl font-normal tracking-[0.08em] sm:text-2xl">
-                Artgian
-              </b>
-              <small className="mt-1 pl-0.5 text-[0.5rem] font-bold uppercase tracking-[0.48em]">
-                studio
-              </small>
-            </span>
-          </a>
-
-          <nav
-            className="relative z-10 hidden items-center gap-1 rounded-full border border-white/50 bg-white/30 p-1 lg:flex"
-            aria-label="Navegação principal"
-          >
-            {[
-              ["Produtos", "/produtos"],
-              ["Personalizados", "#personalizados"],
-              ["Como funciona", "#como-funciona"],
-              ["Sobre", "#sobre"],
-            ].map(([label, href]) => (
-              <a
-                key={href}
-                className="rounded-full px-4 py-2 text-xs font-semibold transition hover:bg-white/70 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b]"
-                href={href}
-              >
-                {label}
-              </a>
-            ))}
-          </nav>
-
-          <a
-            className="relative z-10 inline-flex items-center gap-2 rounded-full bg-[#0b2447] py-2.5 pr-3 pl-4 text-xs font-semibold text-[#fffdf8] shadow-lg shadow-[#0b2447]/15 transition hover:-translate-y-0.5 hover:bg-[#143866] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] sm:gap-3 sm:py-3 sm:pr-4 sm:pl-5 sm:text-sm"
-            href="#orcamento"
-          >
-            <span className="hidden sm:inline">Pedir orçamento</span>
-            <span className="sm:hidden">Orçamento</span>
-            <span
-              className="grid size-7 place-items-center rounded-full bg-[#d8bc7b] text-base text-[#0b2447]"
-              aria-hidden="true"
-            >
-              ↗
-            </span>
-          </a>
-        </div>
-      </header>
+      <BrandHeader fixed />
 
       <section
         className="relative mx-auto min-h-screen max-w-[1600px] px-5 pt-36 pb-12 sm:px-8 sm:pt-44 lg:px-16"

@@ -1,62 +1,79 @@
+import Link from "next/link";
+
 type BrandHeaderProps = {
-  cartHref?: string;
+  fixed?: boolean;
   tone?: "light" | "clay";
 };
 
-export default function BrandHeader({
-  cartHref = "/comprar",
-  tone = "light",
-}: BrandHeaderProps) {
-  const clay = tone === "clay";
+const navigation = [
+  ["Produtos", "/produtos"],
+  ["Personalizados", "/#personalizados"],
+  ["Como funciona", "/#como-funciona"],
+  ["Sobre", "/#sobre"],
+];
 
+export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
   return (
-    <header className="relative z-50 px-4 pt-4 sm:px-7 sm:pt-6">
-      <div
-        className={`mx-auto flex max-w-[1440px] items-center justify-between rounded-full border px-4 py-3 backdrop-blur-xl sm:px-6 ${
-          clay
-            ? "border-white/35 bg-[#fffaf4]/75 text-[#152849] shadow-[0_16px_50px_rgba(77,41,30,.12)]"
-            : "border-white/70 bg-white/60 text-[#0b2447] shadow-[0_16px_50px_rgba(11,36,71,.1)]"
-        }`}
-      >
+    <header
+      className={`inset-x-0 top-0 z-50 px-3 pt-3 sm:px-6 sm:pt-5 ${
+        fixed ? "fixed" : "relative"
+      }`}
+    >
+      <div className="relative mx-auto flex max-w-7xl items-center justify-between overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/55 px-4 py-3 text-[#0b2447] shadow-[0_18px_60px_rgba(11,36,71,0.13),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-[#0b2447]/5 backdrop-blur-2xl sm:px-6">
+        <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-white to-transparent" />
+        <div className="pointer-events-none absolute -top-16 left-1/4 size-36 rounded-full bg-white/70 blur-3xl" />
+
         <Link
-          className="flex items-center gap-3"
+          className="relative z-10 flex shrink-0 items-center gap-3"
           href="/"
           aria-label="Artgian Studio — página inicial"
         >
-          <span className="grid size-9 place-items-center overflow-hidden rounded-full bg-[#f7f3ea] ring-1 ring-[#b88a3b]/30 sm:size-11">
+          <span className="grid size-10 place-items-center overflow-hidden rounded-full border border-white/80 bg-[#f7f3ea]/80 shadow-sm sm:size-11">
             <img
-              className="size-14 max-w-none mix-blend-multiply sm:size-16"
+              className="size-16 max-w-none mix-blend-multiply"
               src="/artgian-logo.jpeg"
               alt=""
             />
           </span>
-          <span className="leading-none">
-            <b className="block font-serif text-xl font-normal tracking-[0.08em] sm:text-2xl">
+          <span className="flex flex-col leading-none">
+            <b className="font-serif text-xl font-normal tracking-[0.08em] sm:text-2xl">
               Artgian
             </b>
-            <small className="mt-1 block text-[0.45rem] font-bold uppercase tracking-[0.5em]">
+            <small className="mt-1 pl-0.5 text-[0.5rem] font-bold uppercase tracking-[0.48em]">
               studio
             </small>
           </span>
         </Link>
 
-        <div className="flex items-center gap-2 sm:gap-5">
-          <Link
-            className="hidden text-xs font-semibold sm:inline"
-            href="/produtos"
+        <nav
+          className="relative z-10 hidden items-center gap-2 lg:flex"
+          aria-label="Navegação principal"
+        >
+          {navigation.map(([label, href]) => (
+            <Link
+              key={href}
+              className="rounded-full px-4 py-2 text-xs font-semibold transition hover:bg-white/65 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b]"
+              href={href}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+
+        <Link
+          className="relative z-10 inline-flex items-center gap-2 rounded-full bg-[#0b2447] py-2.5 pr-3 pl-4 text-xs font-semibold text-[#fffdf8] shadow-lg shadow-[#0b2447]/15 transition hover:-translate-y-0.5 hover:bg-[#143866] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] sm:gap-3 sm:py-3 sm:pr-4 sm:pl-5 sm:text-sm"
+          href="/#orcamento"
+        >
+          <span className="hidden sm:inline">Pedir orçamento</span>
+          <span className="sm:hidden">Orçamento</span>
+          <span
+            className="grid size-7 place-items-center rounded-full bg-[#d8bc7b] text-base text-[#0b2447]"
+            aria-hidden="true"
           >
-            Todos os produtos
-          </Link>
-          <Link
-            className="grid size-10 place-items-center rounded-full bg-[#0b2447] text-lg text-white transition hover:-translate-y-0.5 hover:bg-[#173b68] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b]"
-            href={cartHref}
-            aria-label="Abrir carrinho"
-          >
-            <span aria-hidden="true">⌑</span>
-          </Link>
-        </div>
+            ↗
+          </span>
+        </Link>
       </div>
     </header>
   );
 }
-import Link from "next/link";
