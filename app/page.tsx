@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const sectionLabel =
   "flex items-center gap-3 text-[0.68rem] font-bold uppercase tracking-[0.2em]";
 const sectionNumber =
@@ -77,7 +79,7 @@ export default function Home() {
             aria-label="Navegação principal"
           >
             {[
-              ["Produtos", "#produtos"],
+              ["Produtos", "/produtos"],
               ["Personalizados", "#personalizados"],
               ["Como funciona", "#como-funciona"],
               ["Sobre", "#sobre"],
@@ -247,6 +249,17 @@ export default function Home() {
               </span>
             </a>
           ))}
+        </div>
+        <div className="mt-14 flex justify-center">
+          <Link
+            className="inline-flex items-center gap-5 rounded-full border border-[#0b2447]/20 bg-white/45 py-3 pr-3 pl-6 text-sm font-semibold transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg"
+            href="/produtos"
+          >
+            Ver catálogo completo
+            <span className="grid size-9 place-items-center rounded-full bg-[#0b2447] text-lg text-white">
+              →
+            </span>
+          </Link>
         </div>
       </section>
 
@@ -438,9 +451,9 @@ export default function Home() {
           </p>
         </div>
         <nav className="flex flex-wrap gap-x-6 gap-y-3 font-semibold">
-          <a className="hover:text-[#b88a3b]" href="#produtos">
+          <Link className="hover:text-[#b88a3b]" href="/produtos">
             Produtos
-          </a>
+          </Link>
           <a className="hover:text-[#b88a3b]" href="#personalizados">
             Personalizados
           </a>

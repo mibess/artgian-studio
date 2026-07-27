@@ -43,9 +43,9 @@ export default function BrandHeader({
         <div className="flex items-center gap-2 sm:gap-5">
           <Link
             className="hidden text-xs font-semibold sm:inline"
-            href="/#produtos"
+            href="/produtos"
           >
-            Criações em destaque
+            Todos os produtos
           </Link>
           <Link
             className="grid size-10 place-items-center rounded-full bg-[#0b2447] text-lg text-white transition hover:-translate-y-0.5 hover:bg-[#173b68] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b]"

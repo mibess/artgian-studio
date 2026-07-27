@@ -94,7 +94,7 @@ export default async function CheckoutPage({
           </div>
           <Link
             className="text-xs font-semibold text-[#647087] hover:text-[#0b2447]"
-            href={product?.href || "/#produtos"}
+            href={product?.href || "/produtos"}
           >
             ← Continuar comprando
           </Link>
@@ -111,7 +111,7 @@ export default async function CheckoutPage({
             </p>
             <Link
               className="mt-7 inline-flex rounded-full bg-[#0b2447] px-6 py-3 text-sm font-semibold text-white"
-              href="/#produtos"
+              href="/produtos"
             >
               Ver criações
             </Link>
