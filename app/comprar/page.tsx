@@ -92,7 +92,7 @@ export default async function CheckoutPage({
 
   return (
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
-      <BrandHeader cartHref="/comprar" />
+      <BrandHeader />
 
       <div className="mx-auto max-w-7xl px-5 py-12 sm:px-8 lg:py-20">
         <div className="mb-10 flex flex-col justify-between gap-5 border-b border-[#0b2447]/15 pb-8 sm:flex-row sm:items-end">
