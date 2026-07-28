@@ -16,15 +16,29 @@ export type MercadoPagoPayment = {
   date_last_updated?: string;
 };
 
-function getRequiredEnv(name: string) {
-  const value = process.env[name]?.trim();
+export async function getEnvironmentVariable(name: string) {
+  try {
+    const { env } = await import("cloudflare:workers");
+    const binding = env[name];
+    if (typeof binding === "string" && binding.trim()) {
+      return binding.trim();
+    }
+  } catch {
+    // Fall back to process.env when running in a native Node.js environment.
+  }
+
+  return process.env[name]?.trim() || undefined;
+}
+
+async function getRequiredEnv(name: string) {
+  const value = await getEnvironmentVariable(name);
   if (!value) {
     throw new Error(`A variável ${name} não está configurada.`);
   }
   return value;
 }
 
-function getAccessToken() {
+async function getAccessToken() {
   return getRequiredEnv("MERCADO_PAGO_ACCESS_TOKEN");
 }
 
@@ -35,7 +49,7 @@ async function mercadoPagoRequest<T>(
   const response = await fetch(`${API_BASE_URL}${pathname}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${getAccessToken()}`,
+      Authorization: `Bearer ${await getAccessToken()}`,
       "Content-Type": "application/json",
       ...init.headers,
     },
@@ -125,7 +139,8 @@ export async function createCheckoutPreference(input: {
     },
   );
 
-  const environment = process.env.MERCADO_PAGO_ENVIRONMENT ?? "test";
+  const environment =
+    (await getEnvironmentVariable("MERCADO_PAGO_ENVIRONMENT")) ?? "test";
   const checkoutUrl =
     environment === "production"
       ? preference.init_point
@@ -155,7 +170,7 @@ export async function validateWebhookSignature(input: {
   xRequestId: string | null;
   dataId: string;
 }) {
-  const secret = getRequiredEnv("MERCADO_PAGO_WEBHOOK_SECRET");
+  const secret = await getRequiredEnv("MERCADO_PAGO_WEBHOOK_SECRET");
   if (!input.xSignature || !input.xRequestId) return false;
 
   const signatureParts = Object.fromEntries(

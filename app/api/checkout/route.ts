@@ -2,7 +2,10 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { orderItems, orders } from "../../../db/schema";
 import { getProductSelection } from "../../../lib/catalog";
-import { createCheckoutPreference } from "../../../lib/mercado-pago";
+import {
+  createCheckoutPreference,
+  getEnvironmentVariable,
+} from "../../../lib/mercado-pago";
 
 type CheckoutPayload = {
   productId?: string;
@@ -25,8 +28,8 @@ function clean(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
-function resolveAppUrl(request: Request) {
-  const configuredUrl = process.env.APP_URL?.trim();
+async function resolveAppUrl(request: Request) {
+  const configuredUrl = await getEnvironmentVariable("APP_URL");
   const url = new URL(configuredUrl || request.url);
   const isLocal =
     url.hostname === "localhost" ||
@@ -86,7 +89,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const appUrl = resolveAppUrl(request);
+    const appUrl = await resolveAppUrl(request);
     orderId = crypto.randomUUID();
     const db = await getDb();
 
