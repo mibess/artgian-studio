@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import BrandHeader from "../components/BrandHeader";
 import ProductPurchase from "./ProductPurchase";
+import ProductColorImage from "../components/ProductColorImage";
 
 export const metadata: Metadata = {
   title: "Organizador Arco | Artgian Studio",
@@ -79,10 +80,12 @@ export default function OrganizadorArcoPage() {
         <div className="relative min-h-[38rem] lg:min-h-[48rem]">
           <div className="absolute inset-0 -rotate-2 rounded-t-[16rem] rounded-b-[3rem] bg-[#fff7ed]/35" />
           <figure className="absolute inset-3 overflow-hidden rounded-t-[15rem] rounded-b-[2.6rem] bg-[#fff7ed] shadow-[0_35px_90px_rgba(118,38,56,.2)] lg:inset-6">
-            <img
+            <ProductColorImage
               className="h-full w-full object-cover"
+              product="organizador-arco"
               src="/organizador-arco-capa.png"
               alt="Organizador Arco rosa com quatro gavetas e dois nichos"
+              initialColor="rosa-marfim"
             />
           </figure>
           <div className="absolute -bottom-5 -left-3 flex size-28 rotate-[-7deg] flex-col items-center justify-center rounded-full border border-white/45 bg-[#762638] text-center text-[#fff8ed] shadow-xl lg:size-36">

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import BrandHeader from "../components/BrandHeader";
 import ProductPurchase from "./ProductPurchase";
+import ProductColorImage from "../components/ProductColorImage";
 
 export const metadata: Metadata = {
   title: "Bandeja Aurora | Artgian Studio",
@@ -67,10 +68,12 @@ export default function BandejaAuroraPage() {
         <div className="relative min-h-[34rem] lg:min-h-[44rem]">
           <div className="absolute inset-0 rotate-3 rounded-[3rem] bg-[#fff5e9]/35" />
           <figure className="absolute inset-3 overflow-hidden rounded-[2.6rem] bg-[#fffaf4] shadow-[0_35px_90px_rgba(91,48,35,.22)] lg:inset-6">
-            <img
+            <ProductColorImage
               className="h-full w-full object-cover"
+              product="bandeja-aurora"
               src="/bandeja-aurora-capa.png"
               alt="Bandeja decorativa facetada na cor areia"
+              initialColor="areia"
             />
           </figure>
           <div className="absolute -bottom-5 -left-3 flex size-28 rotate-[-8deg] flex-col items-center justify-center rounded-full border border-white/45 bg-[#152849] text-center text-[#fff8ed] shadow-xl lg:size-36">

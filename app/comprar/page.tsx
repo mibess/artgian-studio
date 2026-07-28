@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import BrandHeader from "../components/BrandHeader";
 import CheckoutForm from "./CheckoutForm";
+import ProductColorImage from "../components/ProductColorImage";
 
 export const metadata: Metadata = {
   title: "Finalizar compra | Artgian Studio",
@@ -83,7 +84,8 @@ export default async function CheckoutPage({
   const unitPrice = product?.unitPrice ?? 0;
   const shipping = product?.shipping ?? 0;
   const total = unitPrice * quantity + shipping;
-  const color = colorNames[params.cor || ""] || product?.defaultColor || "";
+  const colorValue = params.cor || "";
+  const color = colorNames[colorValue] || product?.defaultColor || "";
   const personalization = product?.customizable
     ? params.personalizacao?.trim().slice(0, 18) || "Seu Nome"
     : null;
@@ -134,10 +136,12 @@ export default async function CheckoutPage({
 
             <aside className="rounded-[2rem] bg-[#0b2447] p-5 text-white shadow-[0_24px_70px_rgba(11,36,71,.16)] lg:sticky lg:top-6">
               <div className="overflow-hidden rounded-[1.4rem] bg-white">
-                <img
+                <ProductColorImage
                   className="aspect-square w-full object-cover"
+                  product={params.produto || ""}
                   src={product.image}
                   alt={product.alt}
+                  initialColor={colorValue}
                 />
               </div>
               <div className="px-2 pt-6 pb-3">

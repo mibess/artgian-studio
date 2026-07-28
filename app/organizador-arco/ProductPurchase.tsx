@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { announceProductColor } from "../components/ProductColorImage";
 
 const colors = [
   {
@@ -57,7 +58,10 @@ export default function ProductPurchase() {
                 name="cor"
                 value={item.value}
                 checked={color === item.value}
-                onChange={() => setColor(item.value)}
+                onChange={() => {
+                  setColor(item.value);
+                  announceProductColor("organizador-arco", item.value);
+                }}
               />
               <span
                 className="relative size-6 overflow-hidden rounded-full border border-black/10 shadow-inner"

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import BrandHeader from "../components/BrandHeader";
 import ProductPurchase from "./ProductPurchase";
+import ProductColorImage from "../components/ProductColorImage";
 
 export const metadata: Metadata = {
   title: "Porta-Palhetas Solo | Artgian Studio",
@@ -80,10 +81,12 @@ export default function PortaPalhetasSoloPage() {
         <div className="relative min-h-[38rem] lg:min-h-[48rem]">
           <div className="absolute inset-0 rotate-2 rounded-[3rem] bg-[#fff7ed]/35" />
           <figure className="absolute inset-3 overflow-hidden rounded-[2.6rem] bg-[#fff7ed] shadow-[0_35px_90px_rgba(61,36,26,.22)] lg:inset-6">
-            <img
+            <ProductColorImage
               className="h-full w-full object-cover"
+              product="porta-palhetas-solo"
               src="/porta-palhetas-solo-capa.png"
               alt="Porta-Palhetas Solo terracota personalizado com o texto Seu Nome"
+              initialColor="terracota"
             />
           </figure>
           <div className="absolute -bottom-5 -left-3 flex size-28 rotate-[-7deg] flex-col items-center justify-center rounded-full border border-white/45 bg-[#182645] text-center text-[#fff8ed] shadow-xl lg:size-36">

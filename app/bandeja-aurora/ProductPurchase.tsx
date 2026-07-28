@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { announceProductColor } from "../components/ProductColorImage";
 
 const colors = [
   { name: "Areia", value: "areia", color: "#c69572" },
@@ -46,7 +47,10 @@ export default function ProductPurchase() {
                 name="cor"
                 value={item.value}
                 checked={color === item.value}
-                onChange={() => setColor(item.value)}
+                onChange={() => {
+                  setColor(item.value);
+                  announceProductColor("bandeja-aurora", item.value);
+                }}
               />
               <span
                 className="size-6 rounded-full border border-black/10 shadow-inner"

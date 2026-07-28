@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import BrandHeader from "../components/BrandHeader";
 import ProductPurchase from "./ProductPurchase";
+import ProductColorImage from "../components/ProductColorImage";
 
 export const metadata: Metadata = {
   title: "Suporte Pocket | Artgian Studio",
@@ -80,10 +81,12 @@ export default function SuportePocketPage() {
         <div className="relative min-h-[36rem] lg:min-h-[47rem]">
           <div className="absolute inset-0 rotate-2 rounded-[3rem] bg-white/22" />
           <figure className="absolute inset-3 overflow-hidden rounded-[2.6rem] bg-[#f7f1e6] shadow-[0_35px_90px_rgba(58,42,16,.22)] lg:inset-6">
-            <img
+            <ProductColorImage
               className="h-full w-full object-cover"
+              product="suporte-pocket"
               src="/suporte-pocket-capa.png"
               alt="Suporte Pocket preto nas posições aberta e fechada"
+              initialColor="preto"
             />
           </figure>
           <div className="absolute -bottom-5 -left-3 flex size-28 rotate-[-7deg] flex-col items-center justify-center rounded-full border border-white/45 bg-[#0b2447] text-center text-[#fffaf2] shadow-xl lg:size-36">
