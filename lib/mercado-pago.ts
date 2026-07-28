@@ -12,6 +12,10 @@ export type MercadoPagoPayment = {
   status_detail?: string;
   external_reference?: string;
   transaction_amount: number;
+  shipping_amount?: number;
+  transaction_details?: {
+    total_paid_amount?: number;
+  };
   currency_id: string;
   date_last_updated?: string;
 };

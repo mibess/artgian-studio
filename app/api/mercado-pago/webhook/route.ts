@@ -65,7 +65,10 @@ export async function POST(request: Request) {
       return new Response(null, { status: 200 });
     }
 
-    const paidAmountCents = Math.round(payment.transaction_amount * 100);
+    const totalPaidAmount =
+      payment.transaction_details?.total_paid_amount ??
+      payment.transaction_amount + (payment.shipping_amount ?? 0);
+    const paidAmountCents = Math.round(totalPaidAmount * 100);
     const matchesOrder =
       payment.currency_id === "BRL" && paidAmountCents === order.totalCents;
     const requestId = request.headers.get("x-request-id");
