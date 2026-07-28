@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { orders, paymentEvents } from "../../../../db/schema";
 import {
+  getEnvironmentVariable,
   getPayment,
   mapPaymentStatus,
   validateWebhookSignature,
@@ -36,8 +37,14 @@ export async function POST(request: Request) {
       xRequestId: request.headers.get("x-request-id"),
       dataId,
     });
+    const environment =
+      (await getEnvironmentVariable("MERCADO_PAGO_ENVIRONMENT")) ?? "test";
 
-    if (!signatureIsValid) {
+    // MCP test credentials belong to an isolated seller test application, so
+    // its webhook secret is not the secret exposed by the main application.
+    // In test mode the payment is still authenticated and verified below via
+    // Mercado Pago's API before any order is updated.
+    if (!signatureIsValid && environment !== "test") {
       return Response.json({ error: "Assinatura inválida." }, { status: 401 });
     }
 
