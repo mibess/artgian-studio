@@ -1,45 +1,65 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { FormEvent, useState } from "react";
 
-export default function CheckoutForm() {
-  const [completed, setCompleted] = useState(false);
+type CheckoutFormProps = {
+  productId: string;
+  color: string;
+  quantity: number;
+  personalization: string | null;
+};
 
-  if (completed) {
-    return (
-      <div
-        className="rounded-[2rem] border border-[#b88a3b]/25 bg-[#f7f3ea] p-8 text-center sm:p-12"
-        role="status"
-      >
-        <span className="mx-auto grid size-14 place-items-center rounded-full bg-[#0b2447] text-2xl text-[#d8bc7b]">
-          ✓
-        </span>
-        <h2 className="mt-6 font-serif text-3xl font-normal">
-          Pedido de demonstração criado.
-        </h2>
-        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#647087]">
-          Este checkout ainda é uma simulação. Nenhuma cobrança foi realizada e
-          os dados informados não foram enviados.
-        </p>
-        <Link
-          className="mt-7 inline-flex rounded-full bg-[#0b2447] px-6 py-3 text-sm font-semibold text-white"
-          href="/"
-        >
-          Voltar ao estúdio
-        </Link>
-      </div>
-    );
+export default function CheckoutForm({
+  productId,
+  color,
+  quantity,
+  personalization,
+}: CheckoutFormProps) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+
+    const form = new FormData(event.currentTarget);
+    const payload = Object.fromEntries(form.entries());
+
+    try {
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...payload,
+          productId,
+          color,
+          quantity,
+          personalization,
+        }),
+      });
+      const result = (await response.json()) as {
+        checkoutUrl?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !result.checkoutUrl) {
+        throw new Error(result.error || "Não foi possível iniciar o pagamento.");
+      }
+
+      window.location.assign(result.checkoutUrl);
+    } catch (submissionError) {
+      setError(
+        submissionError instanceof Error
+          ? submissionError.message
+          : "Não foi possível iniciar o pagamento.",
+      );
+      setSubmitting(false);
+    }
   }
 
   return (
-    <form
-      className="space-y-9"
-      onSubmit={(event) => {
-        event.preventDefault();
-        setCompleted(true);
-      }}
-    >
+    <form className="space-y-9" onSubmit={handleSubmit}>
       <section>
         <div className="flex items-center gap-3">
           <span className="grid size-8 place-items-center rounded-full border border-[#b88a3b] font-serif text-sm text-[#b88a3b]">
@@ -52,7 +72,7 @@ export default function CheckoutForm() {
             <span className="mb-2 block text-xs font-semibold">Nome completo</span>
             <input
               className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
-              name="name"
+              name="customerName"
               autoComplete="name"
               required
             />
@@ -62,7 +82,7 @@ export default function CheckoutForm() {
             <input
               className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
               type="email"
-              name="email"
+              name="customerEmail"
               autoComplete="email"
               required
             />
@@ -72,7 +92,7 @@ export default function CheckoutForm() {
             <input
               className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
               type="tel"
-              name="phone"
+              name="customerPhone"
               autoComplete="tel"
               placeholder="(00) 00000-0000"
               required
@@ -88,23 +108,66 @@ export default function CheckoutForm() {
           </span>
           <h2 className="font-serif text-2xl font-normal">Entrega</h2>
         </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-[.45fr_1.55fr]">
+        <div className="mt-5 grid gap-4 sm:grid-cols-6">
           <label>
             <span className="mb-2 block text-xs font-semibold">CEP</span>
             <input
               className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
-              name="postal-code"
+              name="postalCode"
               autoComplete="postal-code"
               placeholder="00000-000"
               required
             />
           </label>
-          <label>
+          <label className="sm:col-span-4">
             <span className="mb-2 block text-xs font-semibold">Endereço</span>
             <input
               className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
-              name="address"
-              autoComplete="street-address"
+              name="streetAddress"
+              autoComplete="address-line1"
+              required
+            />
+          </label>
+          <label>
+            <span className="mb-2 block text-xs font-semibold">Número</span>
+            <input
+              className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+              name="addressNumber"
+              required
+            />
+          </label>
+          <label className="sm:col-span-3">
+            <span className="mb-2 block text-xs font-semibold">Complemento</span>
+            <input
+              className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+              name="addressComplement"
+              autoComplete="address-line2"
+            />
+          </label>
+          <label className="sm:col-span-3">
+            <span className="mb-2 block text-xs font-semibold">Bairro</span>
+            <input
+              className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+              name="neighborhood"
+              required
+            />
+          </label>
+          <label className="sm:col-span-5">
+            <span className="mb-2 block text-xs font-semibold">Cidade</span>
+            <input
+              className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+              name="city"
+              autoComplete="address-level2"
+              required
+            />
+          </label>
+          <label>
+            <span className="mb-2 block text-xs font-semibold">UF</span>
+            <input
+              className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 uppercase outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+              name="state"
+              autoComplete="address-level1"
+              maxLength={2}
               required
             />
           </label>
@@ -124,10 +187,10 @@ export default function CheckoutForm() {
               ◇
             </span>
             <div>
-              <strong className="text-sm">Pagamento será integrado em breve</strong>
+              <strong className="text-sm">Pagamento seguro pelo Mercado Pago</strong>
               <p className="mt-1 text-xs leading-5 text-[#647087]">
-                Para esta versão, o botão abaixo apenas confirma um pedido de
-                demonstração.
+                Você será direcionado ao ambiente de testes para escolher Pix,
+                cartão ou outro meio disponível. Nenhuma cobrança real será feita.
               </p>
             </div>
           </div>
@@ -136,15 +199,25 @@ export default function CheckoutForm() {
 
       <label className="flex items-start gap-3 text-xs leading-5 text-[#647087]">
         <input className="mt-1 accent-[#0b2447]" type="checkbox" required />
-        Confirmo que entendi que esta é uma simulação e que nenhuma cobrança
-        será realizada.
+        Confirmo que estou usando o ambiente de testes e que nenhuma cobrança
+        real será realizada.
       </label>
+
+      {error && (
+        <p
+          className="rounded-xl border border-red-700/20 bg-red-50 px-4 py-3 text-sm text-red-800"
+          role="alert"
+        >
+          {error}
+        </p>
+      )}
 
       <button
         className="flex h-14 w-full items-center justify-between rounded-full bg-[#0b2447] pr-2 pl-6 font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-[#173b68] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b]"
         type="submit"
+        disabled={submitting}
       >
-        Criar pedido de demonstração
+        {submitting ? "Abrindo o Mercado Pago…" : "Pagar com Mercado Pago"}
         <span className="grid size-10 place-items-center rounded-full bg-[#d8bc7b] text-xl text-[#0b2447]">
           →
         </span>

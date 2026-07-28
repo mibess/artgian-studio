@@ -98,6 +98,22 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 - `npm run validate:artifact`: recheck an existing artifact's manifest and ESM `default.fetch` export
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 
+## Mercado Pago proof of concept
+
+The checkout uses Mercado Pago Checkout Pro in test mode. Before testing:
+
+1. Create an application in Mercado Pago Developers and enable test credentials.
+2. Copy `.env.example` to `.env.local` and configure the test Access Token,
+   webhook secret, and a public HTTPS `APP_URL`.
+3. In Mercado Pago Developers, configure the test webhook URL as
+   `https://your-domain.example/api/mercado-pago/webhook` and subscribe to
+   payment creation and update events.
+4. Keep `MERCADO_PAGO_ENVIRONMENT=test` until the complete purchase, rejection,
+   pending payment, duplicate webhook, and amount validation flows have passed.
+
+The Access Token and webhook secret are server-only values. Never prefix them
+with `NEXT_PUBLIC_` or expose them in client code.
+
 Use build and validation commands for targeted diagnosis after a remote failure, not as part of the normal checkpoint path.
 
 The timeout defaults can be overridden for a controlled canary with `SITES_INSTALL_TIMEOUT`, `SITES_INSTALL_KILL_AFTER`, `SITES_BUILD_TIMEOUT`, and `SITES_BUILD_KILL_AFTER`. A timeout fails the command; the helpers never retry an unchanged install or build.
