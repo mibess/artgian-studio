@@ -10,27 +10,27 @@ type ProductColorImageProps = {
   className?: string;
 };
 
-const filters: Record<string, Record<string, string>> = {
+const imageSources: Record<string, Record<string, string>> = {
   "bandeja-aurora": {
-    areia: "none",
-    preto: "grayscale(1) brightness(.38) contrast(1.25)",
-    branco: "grayscale(1) brightness(1.18) contrast(.82)",
-    rosa: "sepia(.24) saturate(1.3) hue-rotate(312deg) brightness(1.03)",
+    areia: "/bandeja-aurora-capa.png",
+    preto: "/bandeja-aurora-preto.png",
+    branco: "/bandeja-aurora-branco.png",
+    rosa: "/bandeja-aurora-rosa.png",
   },
   "organizador-arco": {
-    "rosa-marfim": "none",
-    "marrom-branco": "sepia(.5) saturate(.72) hue-rotate(338deg) brightness(.78)",
-    "areia-branco": "sepia(.4) saturate(.62) hue-rotate(355deg) brightness(1.05)",
+    "rosa-marfim": "/organizador-arco-capa.png",
+    "marrom-branco": "/organizador-arco-marrom-branco.png",
+    "areia-branco": "/organizador-arco-areia-branco.png",
   },
   "porta-palhetas-solo": {
-    terracota: "none",
-    preto: "grayscale(1) brightness(.42) contrast(1.22)",
-    branco: "grayscale(1) brightness(1.16) contrast(.8)",
+    terracota: "/porta-palhetas-solo-capa.png",
+    preto: "/porta-palhetas-solo-preto.png",
+    branco: "/porta-palhetas-solo-branco.png",
   },
   "suporte-pocket": {
-    preto: "none",
-    branco: "grayscale(1) invert(.78) brightness(1.18) contrast(.72)",
-    rosa: "sepia(.7) saturate(1.05) hue-rotate(300deg) brightness(1.28)",
+    preto: "/suporte-pocket-capa.png",
+    branco: "/suporte-pocket-branco.png",
+    rosa: "/suporte-pocket-rosa.png",
   },
 };
 
@@ -54,6 +54,11 @@ export default function ProductColorImage({
   const [color, setColor] = useState(initialColor);
 
   useEffect(() => {
+    Object.values(imageSources[product] ?? {}).forEach((source) => {
+      const image = new Image();
+      image.src = source;
+    });
+
     function handleColorChange(event: Event) {
       const detail = (event as CustomEvent<{ product: string; color: string }>)
         .detail;
@@ -68,10 +73,9 @@ export default function ProductColorImage({
 
   return (
     <img
-      className={`${className} transition-[filter] duration-500 ease-out`}
-      src={src}
+      className={className}
+      src={imageSources[product]?.[color] ?? src}
       alt={alt}
-      style={{ filter: filters[product]?.[color] ?? "none" }}
       data-product-color={color}
     />
   );
