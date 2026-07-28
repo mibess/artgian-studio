@@ -18,7 +18,8 @@ export type MercadoPagoPayment = {
 
 export async function getEnvironmentVariable(name: string) {
   try {
-    const { env } = await import("cloudflare:workers");
+    const cloudflareWorkersModule = "cloudflare:workers";
+    const { env } = await import(cloudflareWorkersModule);
     const binding = env[name];
     if (typeof binding === "string" && binding.trim()) {
       return binding.trim();
