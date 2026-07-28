@@ -48,7 +48,6 @@ export default async function PaymentResult({
   orderId,
   returnState,
 }: PaymentResultProps) {
-  const pageContent = content[returnState];
   let order: typeof orders.$inferSelect | null = null;
   let item: typeof orderItems.$inferSelect | null = null;
 
@@ -69,6 +68,21 @@ export default async function PaymentResult({
       // Keep the return page useful even if persistence is temporarily unavailable.
     }
   }
+
+  const failureStatuses = new Set([
+    "rejected",
+    "cancelled",
+    "refunded",
+    "charged_back",
+    "payment_setup_failed",
+  ]);
+  const effectiveReturnState =
+    order?.status === "paid"
+      ? "success"
+      : order && failureStatuses.has(order.status)
+        ? "failure"
+        : returnState;
+  const pageContent = content[effectiveReturnState];
 
   return (
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
