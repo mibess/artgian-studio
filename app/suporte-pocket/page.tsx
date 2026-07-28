@@ -66,8 +66,8 @@ export default function SuportePocketPage() {
                 A partir de
               </span>
               <strong className="mt-1 block font-serif text-4xl font-normal">
-                R$ 69
-                <sup className="ml-1 text-base">,90</sup>
+                R$ 5
+                <sup className="ml-1 text-base">,99</sup>
               </strong>
             </div>
             <span className="mb-1 rounded-full border border-[#0b2447]/20 px-3 py-1 text-[0.62rem] font-bold uppercase tracking-[0.14em]">

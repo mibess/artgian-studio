@@ -41,7 +41,7 @@ const products = [
     name: "Porta-Palhetas Solo",
     description:
       "Sua seleção de palhetas organizada em uma peça escultural que leva seu nome.",
-    price: "R$ 129,90",
+    price: "R$ 29,90",
     image: "/porta-palhetas-solo-capa.png",
     alt: "Porta-Palhetas Solo personalizado com o texto Seu Nome",
     href: "/porta-palhetas-solo",
@@ -54,7 +54,7 @@ const products = [
     name: "Suporte Pocket",
     description:
       "Um apoio articulado que abre para o uso e fecha para acompanhar você sem ocupar espaço.",
-    price: "R$ 69,90",
+    price: "R$ 5,99",
     image: "/suporte-pocket-capa.png",
     alt: "Suporte Pocket preto nas posições aberta e fechada",
     href: "/suporte-pocket",
