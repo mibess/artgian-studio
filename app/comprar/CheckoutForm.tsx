@@ -149,7 +149,7 @@ export default function CheckoutForm({
           <h2 className="font-serif text-2xl font-normal">Entrega</h2>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-6">
-          <label>
+          <label className="sm:col-span-2">
             <span className="mb-2 block text-xs font-semibold">CEP</span>
             <input
               className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
@@ -168,7 +168,7 @@ export default function CheckoutForm({
               required
             />
           </label>
-          <label className="sm:col-span-4">
+          <label className="sm:col-span-3">
             <span className="mb-2 block text-xs font-semibold">Endereço</span>
             <input
               className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
