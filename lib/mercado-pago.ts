@@ -21,17 +21,6 @@ export type MercadoPagoPayment = {
 };
 
 export async function getEnvironmentVariable(name: string) {
-  try {
-    const cloudflareWorkersModule = "cloudflare:workers";
-    const { env } = await import(cloudflareWorkersModule);
-    const binding = env[name];
-    if (typeof binding === "string" && binding.trim()) {
-      return binding.trim();
-    }
-  } catch {
-    // Fall back to process.env when running in a native Node.js environment.
-  }
-
   return process.env[name]?.trim() || undefined;
 }
 
