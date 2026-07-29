@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useState } from "react";
 
 type CheckoutFormProps = {
   productId: string;
@@ -8,6 +8,33 @@ type CheckoutFormProps = {
   quantity: number;
   personalization: string | null;
 };
+
+function onlyDigits(value: string, maxLength: number) {
+  return value.replace(/\D/g, "").slice(0, maxLength);
+}
+
+function formatPhone(value: string) {
+  const digits = onlyDigits(value, 11);
+
+  if (!digits) return "";
+  if (digits.length <= 2) return `(${digits}`;
+
+  const areaCode = digits.slice(0, 2);
+  const number = digits.slice(2);
+
+  if (number.length <= 4) return `(${areaCode}) ${number}`;
+
+  const prefixLength = digits.length === 11 ? 5 : 4;
+  return `(${areaCode}) ${number.slice(0, prefixLength)}-${number.slice(prefixLength)}`;
+}
+
+function formatPostalCode(value: string) {
+  const digits = onlyDigits(value, 8);
+
+  return digits.length > 5
+    ? `${digits.slice(0, 5)}-${digits.slice(5)}`
+    : digits;
+}
 
 export default function CheckoutForm({
   productId,
@@ -25,6 +52,8 @@ export default function CheckoutForm({
 
     const form = new FormData(event.currentTarget);
     const payload = Object.fromEntries(form.entries());
+    const customerPhone = onlyDigits(String(payload.customerPhone ?? ""), 11);
+    const postalCode = onlyDigits(String(payload.postalCode ?? ""), 8);
 
     try {
       const response = await fetch("/api/checkout", {
@@ -32,6 +61,8 @@ export default function CheckoutForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
+          customerPhone,
+          postalCode,
           productId,
           color,
           quantity,
@@ -94,7 +125,16 @@ export default function CheckoutForm({
               type="tel"
               name="customerPhone"
               autoComplete="tel"
+              inputMode="numeric"
+              maxLength={15}
+              pattern="\(\d{2}\) \d{4,5}-\d{4}"
               placeholder="(00) 00000-0000"
+              title="Informe um telefone com DDD"
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                event.currentTarget.value = formatPhone(
+                  event.currentTarget.value,
+                );
+              }}
               required
             />
           </label>
@@ -115,7 +155,16 @@ export default function CheckoutForm({
               className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
               name="postalCode"
               autoComplete="postal-code"
+              inputMode="numeric"
+              maxLength={9}
+              pattern="\d{5}-\d{3}"
               placeholder="00000-000"
+              title="Informe um CEP com 8 dígitos"
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                event.currentTarget.value = formatPostalCode(
+                  event.currentTarget.value,
+                );
+              }}
               required
             />
           </label>

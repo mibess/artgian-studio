@@ -28,6 +28,12 @@ function clean(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
+function digits(value: unknown, maxLength: number) {
+  return typeof value === "string"
+    ? value.replace(/\D/g, "").slice(0, maxLength)
+    : "";
+}
+
 async function resolveAppUrl(request: Request) {
   const configuredUrl = await getEnvironmentVariable("APP_URL");
   const url = new URL(configuredUrl || request.url);
@@ -63,8 +69,8 @@ export async function POST(request: Request) {
 
     const customerName = clean(payload.customerName, 120);
     const customerEmail = clean(payload.customerEmail, 180).toLowerCase();
-    const customerPhone = clean(payload.customerPhone, 30);
-    const postalCode = clean(payload.postalCode, 12);
+    const customerPhone = digits(payload.customerPhone, 11);
+    const postalCode = digits(payload.postalCode, 8);
     const streetAddress = clean(payload.streetAddress, 180);
     const addressNumber = clean(payload.addressNumber, 20);
     const addressComplement = clean(payload.addressComplement, 80);
@@ -75,8 +81,8 @@ export async function POST(request: Request) {
     if (
       !customerName ||
       !customerEmail.includes("@") ||
-      !customerPhone ||
-      !postalCode ||
+      ![10, 11].includes(customerPhone.length) ||
+      postalCode.length !== 8 ||
       !streetAddress ||
       !addressNumber ||
       !neighborhood ||
