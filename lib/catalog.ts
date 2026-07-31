@@ -10,6 +10,16 @@ export const colorNames: Record<string, string> = {
 };
 
 export const products = {
+  "kit-dia-dos-pais": {
+    name: "Kit Especial Dia dos Pais",
+    href: "/dia-dos-pais",
+    image: "/dia-dos-pais-capa-uhd.jpg",
+    alt: "Kit de Dia dos Pais com suporte para lata, chaveiro, cartão e caixa presente",
+    unitPriceCents: 3_990,
+    shippingCents: 1_990,
+    defaultColor: "Preto",
+    customizable: false,
+  },
   "bandeja-aurora": {
     name: "Bandeja Aurora",
     href: "/bandeja-aurora",

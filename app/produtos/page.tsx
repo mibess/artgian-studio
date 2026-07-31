@@ -10,6 +10,19 @@ export const metadata: Metadata = {
 
 const products = [
   {
+    number: "Especial",
+    category: "Dia dos Pais",
+    name: "Kit Especial Dia dos Pais",
+    description:
+      "Suporte para lata de 350 ml, chaveiro, cartão e embalagem premium em um presente completo.",
+    price: "R$ 39,90",
+    image: "/dia-dos-pais-capa-uhd.jpg",
+    alt: "Kit de Dia dos Pais com suporte para lata, chaveiro, cartão e caixa presente",
+    href: "/dia-dos-pais",
+    accent: "#a45d46",
+    feature: "Edição limitada",
+  },
+  {
     number: "01",
     category: "Casa",
     name: "Bandeja Aurora",

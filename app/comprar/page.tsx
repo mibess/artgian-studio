@@ -42,7 +42,7 @@ export default async function CheckoutPage({
         <div className="mb-10 flex flex-col justify-between gap-5 border-b border-[#0b2447]/15 pb-8 sm:flex-row sm:items-end">
           <div>
             <span className="text-[0.65rem] font-bold uppercase tracking-[0.24em] text-[#b88a3b]">
-              Checkout seguro · demonstração
+              Checkout seguro
             </span>
             <h1 className="mt-3 font-serif text-[clamp(3rem,5vw,5rem)] font-normal leading-none tracking-[-0.045em]">
               Finalize seu pedido.

@@ -44,7 +44,7 @@ async function resolveAppUrl(request: Request) {
 
   if (isLocal) {
     throw new Error(
-      "Configure APP_URL com uma URL pública HTTPS para testar o Mercado Pago.",
+      "Configure APP_URL com a URL pública HTTPS da loja.",
     );
   }
 

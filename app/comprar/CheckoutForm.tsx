@@ -238,19 +238,13 @@ export default function CheckoutForm({
             <div>
               <strong className="text-sm">Pagamento seguro pelo Mercado Pago</strong>
               <p className="mt-1 text-xs leading-5 text-[#647087]">
-                Você será direcionado ao ambiente de testes para escolher Pix,
-                cartão ou outro meio disponível. Nenhuma cobrança real será feita.
+                Você será direcionado ao Mercado Pago para escolher Pix, cartão
+                ou outro meio de pagamento disponível.
               </p>
             </div>
           </div>
         </div>
       </section>
-
-      <label className="flex items-start gap-3 text-xs leading-5 text-[#647087]">
-        <input className="mt-1 accent-[#0b2447]" type="checkbox" required />
-        Confirmo que estou usando o ambiente de testes e que nenhuma cobrança
-        real será realizada.
-      </label>
 
       {error && (
         <p
