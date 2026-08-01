@@ -53,7 +53,7 @@ export default function BandejaAuroraPage() {
                 A partir de
               </span>
               <strong className="mt-1 block font-serif text-4xl font-normal">
-                R$ 189
+                R$ 29
                 <sup className="ml-1 text-base">,90</sup>
               </strong>
             </div>
