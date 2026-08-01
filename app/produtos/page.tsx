@@ -28,7 +28,7 @@ const products = [
     name: "Bandeja Aurora",
     description:
       "Uma pequena escultura útil para organizar e compor aparadores, mesas e penteadeiras.",
-    price: "R$ 189,90",
+    price: "R$ 29,90",
     image: "/bandeja-aurora-capa.png",
     alt: "Bandeja Aurora em tom areia",
     href: "/bandeja-aurora",
@@ -41,7 +41,7 @@ const products = [
     name: "Organizador Arco",
     description:
       "Quatro gavetas, dois nichos e uma silhueta delicada para deixar tudo em seu lugar.",
-    price: "R$ 249,90",
+    price: "R$ 54,90",
     image: "/organizador-arco-capa.png",
     alt: "Organizador Arco rosa com gavetas em marfim",
     href: "/organizador-arco",
