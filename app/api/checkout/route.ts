@@ -1,11 +1,17 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { orderItems, orders } from "../../../db/schema";
+import { digitsOnly, isValidCpf } from "../../../lib/brazil";
 import { getProductSelection } from "../../../lib/catalog";
 import {
   createCheckoutPreference,
   getEnvironmentVariable,
 } from "../../../lib/mercado-pago";
+import {
+  ShippingConfigurationError,
+  ShippingProviderError,
+} from "../../../lib/melhor-envio";
+import { quoteProductShipping } from "../../../lib/shipping";
 
 type CheckoutPayload = {
   productId?: string;
@@ -15,6 +21,7 @@ type CheckoutPayload = {
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
+  customerDocument?: string;
   postalCode?: string;
   streetAddress?: string;
   addressNumber?: string;
@@ -22,16 +29,12 @@ type CheckoutPayload = {
   neighborhood?: string;
   city?: string;
   state?: string;
+  shippingServiceId?: string;
+  shippingPriceCents?: number;
 };
 
 function clean(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
-}
-
-function digits(value: unknown, maxLength: number) {
-  return typeof value === "string"
-    ? value.replace(/\D/g, "").slice(0, maxLength)
-    : "";
 }
 
 async function resolveAppUrl(request: Request) {
@@ -69,19 +72,23 @@ export async function POST(request: Request) {
 
     const customerName = clean(payload.customerName, 120);
     const customerEmail = clean(payload.customerEmail, 180).toLowerCase();
-    const customerPhone = digits(payload.customerPhone, 11);
-    const postalCode = digits(payload.postalCode, 8);
+    const customerPhone = digitsOnly(payload.customerPhone, 11);
+    const customerDocument = digitsOnly(payload.customerDocument, 11);
+    const postalCode = digitsOnly(payload.postalCode, 8);
     const streetAddress = clean(payload.streetAddress, 180);
     const addressNumber = clean(payload.addressNumber, 20);
     const addressComplement = clean(payload.addressComplement, 80);
     const neighborhood = clean(payload.neighborhood, 80);
     const city = clean(payload.city, 80);
     const state = clean(payload.state, 2).toUpperCase();
+    const shippingServiceId = clean(payload.shippingServiceId, 40);
+    const claimedShippingPriceCents = Number(payload.shippingPriceCents);
 
     if (
       !customerName ||
       !customerEmail.includes("@") ||
       ![10, 11].includes(customerPhone.length) ||
+      !isValidCpf(customerDocument) ||
       postalCode.length !== 8 ||
       !streetAddress ||
       !addressNumber ||
@@ -95,9 +102,46 @@ export async function POST(request: Request) {
       );
     }
 
+    if (
+      !shippingServiceId ||
+      !Number.isInteger(claimedShippingPriceCents) ||
+      claimedShippingPriceCents <= 0
+    ) {
+      return Response.json(
+        { error: "Calcule e escolha uma modalidade de entrega." },
+        { status: 400 },
+      );
+    }
+
+    const shippingQuote = await quoteProductShipping({
+      productId: selection.productId,
+      color: payload.color,
+      quantity: selection.quantity,
+      personalization: selection.personalization ?? undefined,
+      destinationPostalCode: postalCode,
+    });
+    const shippingOption = shippingQuote?.options.find(
+      (option) => option.serviceId === shippingServiceId,
+    );
+
+    if (!shippingOption) {
+      return Response.json(
+        { error: "A modalidade de entrega não está mais disponível. Calcule novamente." },
+        { status: 409 },
+      );
+    }
+    if (shippingOption.priceCents !== claimedShippingPriceCents) {
+      return Response.json(
+        { error: "O valor da entrega mudou. Calcule novamente antes de pagar." },
+        { status: 409 },
+      );
+    }
+
     const appUrl = await resolveAppUrl(request);
     orderId = crypto.randomUUID();
     const db = await getDb();
+    const totalCents = selection.subtotalCents + shippingOption.priceCents;
+    const shippingQuotedAt = new Date().toISOString();
 
     await db.batch([
       db.insert(orders).values({
@@ -106,6 +150,7 @@ export async function POST(request: Request) {
         customerName,
         customerEmail,
         customerPhone,
+        customerDocument,
         postalCode,
         streetAddress,
         addressNumber,
@@ -114,8 +159,15 @@ export async function POST(request: Request) {
         city,
         state,
         subtotalCents: selection.subtotalCents,
-        shippingCents: selection.shippingCents,
-        totalCents: selection.totalCents,
+        shippingCents: shippingOption.priceCents,
+        shippingProvider: "melhor_envio",
+        shippingServiceId: shippingOption.serviceId,
+        shippingServiceName: shippingOption.serviceName,
+        shippingCompanyId: shippingOption.companyId,
+        shippingCompanyName: shippingOption.companyName,
+        shippingDeliveryTimeDays: shippingOption.deliveryTimeDays,
+        shippingQuotedAt,
+        totalCents,
       }),
       db.insert(orderItems).values({
         orderId,
@@ -136,7 +188,7 @@ export async function POST(request: Request) {
       personalization: selection.personalization,
       quantity: selection.quantity,
       unitPriceCents: selection.product.unitPriceCents,
-      shippingCents: selection.shippingCents,
+      shippingCents: shippingOption.priceCents,
       customerName,
       customerEmail,
       customerPhone,
@@ -168,6 +220,16 @@ export async function POST(request: Request) {
       } catch {
         // Preserve the original integration error.
       }
+    }
+
+    if (error instanceof ShippingConfigurationError) {
+      return Response.json({ error: error.message }, { status: 503 });
+    }
+    if (error instanceof ShippingProviderError) {
+      return Response.json(
+        { error: "Não foi possível confirmar a entrega. Calcule novamente." },
+        { status: 502 },
+      );
     }
 
     const message =

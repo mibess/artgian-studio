@@ -9,6 +9,13 @@ export const colorNames: Record<string, string> = {
   "areia-branco": "Areia & Branco",
 };
 
+export type ShippingPackage = {
+  widthCm: number;
+  heightCm: number;
+  lengthCm: number;
+  weightKg: number;
+};
+
 export const products = {
   "kit-dia-dos-pais": {
     name: "Kit Especial Dia dos Pais",
@@ -16,7 +23,7 @@ export const products = {
     image: "/dia-dos-pais-capa-uhd.jpg",
     alt: "Kit de Dia dos Pais com suporte para lata, chaveiro, cartão e caixa presente",
     unitPriceCents: 3_990,
-    shippingCents: 1_990,
+    shippingPackage: null as ShippingPackage | null,
     defaultColor: "Preto",
     customizable: false,
   },
@@ -26,7 +33,7 @@ export const products = {
     image: "/bandeja-aurora-capa.png",
     alt: "Bandeja Aurora na cor areia",
     unitPriceCents: 2_990,
-    shippingCents: 2_490,
+    shippingPackage: null as ShippingPackage | null,
     defaultColor: "Areia",
     customizable: false,
   },
@@ -36,7 +43,12 @@ export const products = {
     image: "/organizador-arco-capa.png",
     alt: "Organizador Arco rosa com gavetas em marfim",
     unitPriceCents: 5_490,
-    shippingCents: 2_990,
+    shippingPackage: {
+      widthCm: 15,
+      heightCm: 10,
+      lengthCm: 20,
+      weightKg: 0.35,
+    } satisfies ShippingPackage,
     defaultColor: "Rosa & Marfim",
     customizable: false,
   },
@@ -46,7 +58,7 @@ export const products = {
     image: "/porta-palhetas-solo-capa.png",
     alt: "Porta-Palhetas Solo terracota personalizado com o texto Seu Nome",
     unitPriceCents: 2_990,
-    shippingCents: 1_990,
+    shippingPackage: null as ShippingPackage | null,
     defaultColor: "Terracota",
     customizable: true,
   },
@@ -56,7 +68,7 @@ export const products = {
     image: "/suporte-pocket-capa.png",
     alt: "Suporte Pocket preto nas posições aberta e fechada",
     unitPriceCents: 599,
-    shippingCents: 1_690,
+    shippingPackage: null as ShippingPackage | null,
     defaultColor: "Preto",
     customizable: false,
   },
@@ -99,8 +111,6 @@ export function getProductSelection(input: {
     colorKey,
     personalization,
     subtotalCents,
-    shippingCents: product.shippingCents,
-    totalCents: subtotalCents + product.shippingCents,
   };
 }
 
