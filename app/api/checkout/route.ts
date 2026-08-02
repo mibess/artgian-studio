@@ -6,6 +6,11 @@ import {
   createCheckoutPreference,
   getEnvironmentVariable,
 } from "../../../lib/mercado-pago";
+import {
+  ShippingConfigurationError,
+  ShippingProviderError,
+} from "../../../lib/melhor-envio";
+import { quoteProductShipping } from "../../../lib/shipping";
 
 type CheckoutPayload = {
   productId?: string;
@@ -22,6 +27,8 @@ type CheckoutPayload = {
   neighborhood?: string;
   city?: string;
   state?: string;
+  shippingServiceId?: string;
+  shippingPriceCents?: number;
 };
 
 function clean(value: unknown, maxLength: number) {
@@ -77,6 +84,8 @@ export async function POST(request: Request) {
     const neighborhood = clean(payload.neighborhood, 80);
     const city = clean(payload.city, 80);
     const state = clean(payload.state, 2).toUpperCase();
+    const shippingServiceId = clean(payload.shippingServiceId, 40);
+    const claimedShippingPriceCents = Number(payload.shippingPriceCents);
 
     if (
       !customerName ||
@@ -95,9 +104,46 @@ export async function POST(request: Request) {
       );
     }
 
+    if (
+      !shippingServiceId ||
+      !Number.isInteger(claimedShippingPriceCents) ||
+      claimedShippingPriceCents <= 0
+    ) {
+      return Response.json(
+        { error: "Calcule e escolha uma modalidade de entrega." },
+        { status: 400 },
+      );
+    }
+
+    const shippingQuote = await quoteProductShipping({
+      productId: selection.productId,
+      color: payload.color,
+      quantity: selection.quantity,
+      personalization: selection.personalization ?? undefined,
+      destinationPostalCode: postalCode,
+    });
+    const shippingOption = shippingQuote?.options.find(
+      (option) => option.serviceId === shippingServiceId,
+    );
+
+    if (!shippingOption) {
+      return Response.json(
+        { error: "A modalidade de entrega não está mais disponível. Calcule novamente." },
+        { status: 409 },
+      );
+    }
+    if (shippingOption.priceCents !== claimedShippingPriceCents) {
+      return Response.json(
+        { error: "O valor da entrega mudou. Calcule novamente antes de pagar." },
+        { status: 409 },
+      );
+    }
+
     const appUrl = await resolveAppUrl(request);
     orderId = crypto.randomUUID();
     const db = await getDb();
+    const totalCents = selection.subtotalCents + shippingOption.priceCents;
+    const shippingQuotedAt = new Date().toISOString();
 
     await db.batch([
       db.insert(orders).values({
@@ -114,8 +160,15 @@ export async function POST(request: Request) {
         city,
         state,
         subtotalCents: selection.subtotalCents,
-        shippingCents: selection.shippingCents,
-        totalCents: selection.totalCents,
+        shippingCents: shippingOption.priceCents,
+        shippingProvider: "melhor_envio",
+        shippingServiceId: shippingOption.serviceId,
+        shippingServiceName: shippingOption.serviceName,
+        shippingCompanyId: shippingOption.companyId,
+        shippingCompanyName: shippingOption.companyName,
+        shippingDeliveryTimeDays: shippingOption.deliveryTimeDays,
+        shippingQuotedAt,
+        totalCents,
       }),
       db.insert(orderItems).values({
         orderId,
@@ -136,7 +189,7 @@ export async function POST(request: Request) {
       personalization: selection.personalization,
       quantity: selection.quantity,
       unitPriceCents: selection.product.unitPriceCents,
-      shippingCents: selection.shippingCents,
+      shippingCents: shippingOption.priceCents,
       customerName,
       customerEmail,
       customerPhone,
@@ -168,6 +221,16 @@ export async function POST(request: Request) {
       } catch {
         // Preserve the original integration error.
       }
+    }
+
+    if (error instanceof ShippingConfigurationError) {
+      return Response.json({ error: error.message }, { status: 503 });
+    }
+    if (error instanceof ShippingProviderError) {
+      return Response.json(
+        { error: "Não foi possível confirmar a entrega. Calcule novamente." },
+        { status: 502 },
+      );
     }
 
     const message =
