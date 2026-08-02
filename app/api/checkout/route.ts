@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { orderItems, orders } from "../../../db/schema";
+import { digitsOnly, isValidCpf } from "../../../lib/brazil";
 import { getProductSelection } from "../../../lib/catalog";
 import {
   createCheckoutPreference,
@@ -20,6 +21,7 @@ type CheckoutPayload = {
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
+  customerDocument?: string;
   postalCode?: string;
   streetAddress?: string;
   addressNumber?: string;
@@ -33,12 +35,6 @@ type CheckoutPayload = {
 
 function clean(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
-}
-
-function digits(value: unknown, maxLength: number) {
-  return typeof value === "string"
-    ? value.replace(/\D/g, "").slice(0, maxLength)
-    : "";
 }
 
 async function resolveAppUrl(request: Request) {
@@ -76,8 +72,9 @@ export async function POST(request: Request) {
 
     const customerName = clean(payload.customerName, 120);
     const customerEmail = clean(payload.customerEmail, 180).toLowerCase();
-    const customerPhone = digits(payload.customerPhone, 11);
-    const postalCode = digits(payload.postalCode, 8);
+    const customerPhone = digitsOnly(payload.customerPhone, 11);
+    const customerDocument = digitsOnly(payload.customerDocument, 11);
+    const postalCode = digitsOnly(payload.postalCode, 8);
     const streetAddress = clean(payload.streetAddress, 180);
     const addressNumber = clean(payload.addressNumber, 20);
     const addressComplement = clean(payload.addressComplement, 80);
@@ -91,6 +88,7 @@ export async function POST(request: Request) {
       !customerName ||
       !customerEmail.includes("@") ||
       ![10, 11].includes(customerPhone.length) ||
+      !isValidCpf(customerDocument) ||
       postalCode.length !== 8 ||
       !streetAddress ||
       !addressNumber ||
@@ -152,6 +150,7 @@ export async function POST(request: Request) {
         customerName,
         customerEmail,
         customerPhone,
+        customerDocument,
         postalCode,
         streetAddress,
         addressNumber,

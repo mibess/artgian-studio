@@ -15,6 +15,13 @@
       "when": 1785613750599,
       "tag": "0001_clever_sway",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785634132289,
+      "tag": "0002_dear_kinsey_walden",
+      "breakpoints": true
     }
   ]
 }

@@ -178,6 +178,21 @@ export default function CheckoutForm({
               <span className="mb-2 block text-xs font-semibold">Telefone</span>
               <input className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15" type="tel" name="customerPhone" autoComplete="tel" placeholder="(00) 00000-0000" required />
             </label>
+            <label className="sm:col-span-2">
+              <span className="mb-2 block text-xs font-semibold">CPF para emissão da etiqueta</span>
+              <input
+                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                name="customerDocument"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="000.000.000-00"
+                maxLength={14}
+                required
+              />
+              <span className="mt-2 block text-[0.7rem] leading-4 text-[#647087]">
+                Usado somente no processamento do pedido e da entrega.
+              </span>
+            </label>
           </div>
         </section>
 
