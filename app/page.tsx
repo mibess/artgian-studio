@@ -1,7 +1,5 @@
 import Link from "next/link";
 import BrandHeader from "./components/BrandHeader";
-import SeasonalHighlight from "./components/SeasonalHighlight";
-import { seasonalCampaign } from "../lib/seasonal-campaign";
 
 const sectionLabel =
   "flex items-center gap-3 text-[0.68rem] font-bold uppercase tracking-[0.2em]";
@@ -120,8 +118,6 @@ export default function Home() {
           ))}
         </div>
       </section>
-
-      <SeasonalHighlight campaign={seasonalCampaign} />
 
       <section
         className="bg-[#0b2447] px-5 py-24 text-[#f7f3ea] sm:px-10 lg:px-[8vw] lg:py-32"
