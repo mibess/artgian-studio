@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { seasonalCampaign } from "../../lib/seasonal-campaign";
 
 type BrandHeaderProps = {
   fixed?: boolean;
@@ -7,7 +6,6 @@ type BrandHeaderProps = {
 };
 
 const navigation = [
-  [seasonalCampaign.navigationLabel, seasonalCampaign.href],
   ["Produtos", "/produtos"],
   ["Personalizados", "/#personalizados"],
   ["Como funciona", "/#como-funciona"],
