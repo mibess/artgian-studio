@@ -403,6 +403,12 @@ export default function Home() {
           <a className="hover:text-[#b88a3b]" href="#orcamento">
             Contato
           </a>
+          <Link className="hover:text-[#b88a3b]" href="/politica-de-privacidade">
+            Privacidade
+          </Link>
+          <Link className="hover:text-[#b88a3b]" href="/exclusao-de-dados">
+            Exclusão de dados
+          </Link>
         </nav>
         <small className="text-[#647087]">© 2026 Artgian Studio</small>
       </footer>
