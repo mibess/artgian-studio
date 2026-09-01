@@ -1,1 +1,35 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  text-rendering: optimizeLegibility;
+}
+
+button,
+a,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: #f0c568;
+  color: #173244;
+}
+
+.commercial-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(117, 133, 140, 0.35) transparent;
+}
+
+.commercial-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.commercial-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(117, 133, 140, 0.35);
+}

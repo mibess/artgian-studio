@@ -87,3 +87,295 @@ export const paymentEvents = sqliteTable(
     index("payment_events_order_id_idx").on(table.orderId),
   ],
 );
+
+export const leads = sqliteTable(
+  "leads",
+  {
+    id: text("id").primaryKey(),
+    instagramUsername: text("instagram_username").notNull(),
+    name: text("name"),
+    leadType: text("lead_type").notNull().default("consumer"),
+    source: text("source").notNull(),
+    segment: text("segment"),
+    productInterest: text("product_interest"),
+    occasion: text("occasion"),
+    tags: text("tags").notNull().default("[]"),
+    score: integer("score").notNull().default(0),
+    intentScore: integer("intent_score").notNull().default(0),
+    icpScore: integer("icp_score").notNull().default(0),
+    engagementScore: integer("engagement_score").notNull().default(0),
+    commercialPotentialScore: integer("commercial_potential_score").notNull().default(0),
+    urgencyScore: integer("urgency_score").notNull().default(0),
+    pipelineStage: text("pipeline_stage").notNull().default("discovered"),
+    channelState: text("channel_state").notNull().default("waiting_inbound_reply"),
+    lastContactAt: text("last_contact_at"),
+    nextActionAt: text("next_action_at"),
+    whatsappHandoffAt: text("whatsapp_handoff_at"),
+    quoteStatus: text("quote_status").notNull().default("none"),
+    orderStatus: text("order_status").notNull().default("none"),
+    estimatedOrderValueCents: integer("estimated_order_value_cents"),
+    confirmedOrderValueCents: integer("confirmed_order_value_cents"),
+    doNotContact: integer("do_not_contact", { mode: "boolean" }).notNull().default(false),
+    isDemo: integer("is_demo", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("leads_instagram_username_unique").on(table.instagramUsername),
+    index("idx_leads_pipeline_stage").on(table.pipelineStage),
+    index("idx_leads_next_action_at").on(table.nextActionAt),
+    index("idx_leads_source").on(table.source),
+  ],
+);
+
+export const conversations = sqliteTable(
+  "conversations",
+  {
+    id: text("id").primaryKey(),
+    leadId: text("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    channel: text("channel").notNull().default("instagram"),
+    externalId: text("external_id"),
+    status: text("status").notNull().default("active"),
+    lastMessageAt: text("last_message_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("conversations_channel_external_id_unique").on(table.channel, table.externalId),
+    index("idx_conversations_lead_id").on(table.leadId),
+  ],
+);
+
+export const messages = sqliteTable(
+  "messages",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    externalId: text("external_id"),
+    direction: text("direction").notNull(),
+    sender: text("sender").notNull(),
+    body: text("body").notNull(),
+    intent: text("intent"),
+    action: text("action"),
+    status: text("status").notNull().default("received"),
+    sentAt: text("sent_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("messages_external_id_unique").on(table.externalId),
+    index("idx_messages_conversation_sent_at").on(table.conversationId, table.sentAt),
+  ],
+);
+
+export const timelineEvents = sqliteTable(
+  "timeline_events",
+  {
+    id: text("id").primaryKey(),
+    leadId: text("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    metadata: text("metadata").notNull().default("{}"),
+    createdBy: text("created_by").notNull().default("system"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("idx_timeline_events_lead_created").on(table.leadId, table.createdAt)],
+);
+
+export const briefings = sqliteTable(
+  "briefings",
+  {
+    id: text("id").primaryKey(),
+    leadId: text("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    productInterest: text("product_interest"),
+    productCategory: text("product_category"),
+    occasion: text("occasion"),
+    recipient: text("recipient"),
+    referenceDescription: text("reference_description"),
+    referenceUrl: text("reference_url"),
+    customizationText: text("customization_text"),
+    preferredColors: text("preferred_colors"),
+    preferredSize: text("preferred_size"),
+    quantity: integer("quantity"),
+    desiredDeadline: text("desired_deadline"),
+    city: text("city"),
+    state: text("state"),
+    shippingRequired: integer("shipping_required", { mode: "boolean" }),
+    budgetRange: text("budget_range"),
+    additionalNotes: text("additional_notes"),
+    needsQuote: integer("needs_quote", { mode: "boolean" }).notNull().default(true),
+    needsProductionReview: integer("needs_production_review", { mode: "boolean" }).notNull().default(true),
+    status: text("status").notNull().default("collecting"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [uniqueIndex("briefings_lead_id_unique").on(table.leadId)],
+);
+
+export const catalogProducts = sqliteTable(
+  "catalog_products",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    category: text("category"),
+    description: text("description"),
+    images: text("images").notNull().default("[]"),
+    basePriceCents: integer("base_price_cents"),
+    priceFromCents: integer("price_from_cents"),
+    pricingType: text("pricing_type").notNull().default("quote"),
+    materials: text("materials").notNull().default("[]"),
+    availableColors: text("available_colors").notNull().default("[]"),
+    availableSizes: text("available_sizes").notNull().default("[]"),
+    customizationOptions: text("customization_options").notNull().default("[]"),
+    productionTime: text("production_time"),
+    minimumQuantity: integer("minimum_quantity"),
+    maximumQuantity: integer("maximum_quantity"),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    notes: text("notes"),
+    verifiedClaims: text("verified_claims").notNull().default("[]"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [uniqueIndex("catalog_products_name_unique").on(table.name)],
+);
+
+export const quoteRequests = sqliteTable(
+  "quote_requests",
+  {
+    id: text("id").primaryKey(),
+    leadId: text("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    briefingId: text("briefing_id").references(() => briefings.id, { onDelete: "set null" }),
+    status: text("status").notNull().default("requested"),
+    amountCents: integer("amount_cents"),
+    validUntil: text("valid_until"),
+    notes: text("notes"),
+    sentAt: text("sent_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("idx_quote_requests_lead_id").on(table.leadId)],
+);
+
+export const commercialOrders = sqliteTable(
+  "commercial_orders",
+  {
+    id: text("id").primaryKey(),
+    leadId: text("lead_id").notNull().references(() => leads.id, { onDelete: "restrict" }),
+    quoteRequestId: text("quote_request_id").references(() => quoteRequests.id, { onDelete: "set null" }),
+    source: text("source").notNull(),
+    productCategory: text("product_category"),
+    amountCents: integer("amount_cents").notNull(),
+    status: text("status").notNull().default("confirmed"),
+    confirmedAt: text("confirmed_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("idx_commercial_orders_lead_id").on(table.leadId)],
+);
+
+export const jobs = sqliteTable(
+  "jobs",
+  {
+    id: text("id").primaryKey(),
+    type: text("type").notNull(),
+    payload: text("payload").notNull().default("{}"),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    scheduledAt: text("scheduled_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    startedAt: text("started_at"),
+    finishedAt: text("finished_at"),
+    lastError: text("last_error"),
+    idempotencyKey: text("idempotency_key"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("jobs_idempotency_key_unique").on(table.idempotencyKey),
+    index("idx_jobs_status_scheduled").on(table.status, table.scheduledAt),
+  ],
+);
+
+export const aiUsage = sqliteTable(
+  "ai_usage",
+  {
+    id: text("id").primaryKey(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    estimatedCostUsdMicros: integer("estimated_cost_usd_micros").notNull().default(0),
+    leadId: text("lead_id").references(() => leads.id, { onDelete: "set null" }),
+    conversationId: text("conversation_id").references(() => conversations.id, { onDelete: "set null" }),
+    purpose: text("purpose").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("idx_ai_usage_created_at").on(table.createdAt)],
+);
+
+export const campaigns = sqliteTable("campaigns", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  source: text("source").notNull(),
+  segment: text("segment"),
+  status: text("status").notNull().default("draft"),
+  outboundEnabled: integer("outbound_enabled", { mode: "boolean" }).notNull().default(false),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const experiments = sqliteTable("experiments", {
+  id: text("id").primaryKey(),
+  hypothesis: text("hypothesis").notNull(),
+  variant: text("variant").notNull(),
+  control: text("control").notNull(),
+  sampleSize: integer("sample_size").notNull().default(0),
+  minimumSampleSize: integer("minimum_sample_size").notNull().default(30),
+  startedAt: text("started_at"),
+  endedAt: text("ended_at"),
+  primaryMetric: text("primary_metric").notNull(),
+  secondaryMetrics: text("secondary_metrics").notNull().default("[]"),
+  result: text("result"),
+  status: text("status").notNull().default("draft"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const systemSettings = sqliteTable("system_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const exceptions = sqliteTable(
+  "exceptions",
+  {
+    id: text("id").primaryKey(),
+    leadId: text("lead_id").references(() => leads.id, { onDelete: "set null" }),
+    type: text("type").notNull(),
+    severity: text("severity").notNull().default("medium"),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: text("status").notNull().default("open"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    resolvedAt: text("resolved_at"),
+  },
+  (table) => [index("idx_exceptions_status").on(table.status)],
+);
+
+export const auditLogs = sqliteTable(
+  "audit_logs",
+  {
+    id: text("id").primaryKey(),
+    actor: text("actor").notNull(),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    metadata: text("metadata").notNull().default("{}"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("idx_audit_logs_entity").on(table.entityType, table.entityId)],
+);
+
+export const idempotencyKeys = sqliteTable("idempotency_keys", {
+  key: text("key").primaryKey(),
+  scope: text("scope").notNull(),
+  response: text("response"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
