@@ -9,7 +9,7 @@ import { getCommercialDb } from "../../src/db/commercial";
 import { auditLogs, briefings, catalogProducts, commercialOrders, exceptions, leads, quoteRequests, timelineEvents } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { prepareWhatsAppHandoff } from "../../src/integrations/whatsapp/handoff";
-import { approveAndSendInstagramReply, createReplyDraftForLead } from "../../src/features/conversations/replies";
+import { approveAndSendInstagramReply, createReplyDraftForLead, enhanceReplyDraftWithAi } from "../../src/features/conversations/replies";
 import { runInstagramMaintenance } from "../../src/integrations/instagram/maintenance";
 
 export async function updateAutomationSetting(formData: FormData) {
@@ -40,6 +40,12 @@ export async function simulateInbound(formData: FormData) {
     text,
     source: "Simulação inbound",
   });
+  if (result.draftMessageId) {
+    await enhanceReplyDraftWithAi({
+      leadId: result.leadId,
+      messageId: result.draftMessageId,
+    });
+  }
   revalidatePath("/comercial", "layout");
   redirect(`/comercial/leads/${result.leadId}?simulado=1`);
 }

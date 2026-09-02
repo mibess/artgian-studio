@@ -93,64 +93,92 @@ export async function generateCommercialDecision(
   const budget = await getAiBudgetStatus();
   if (!budget.available) return { ...fallback, source: "rules" };
 
-  const business = getBusinessConfig();
-  const client = new OpenAI({ apiKey });
-  const completion = await client.chat.completions.create({
-    model,
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "commercial_decision",
-        strict: true,
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          required: ["intent", "action", "reason", "message", "requiresHuman"],
-          properties: {
-            intent: { type: "string", enum: [...INTENTS] },
-            action: { type: "string", enum: [...AI_ACTIONS] },
-            reason: { type: "string" },
-            message: { type: "string" },
-            requiresHuman: { type: "boolean" },
+  try {
+    const business = getBusinessConfig();
+    const client = new OpenAI({ apiKey, timeout: 12_000, maxRetries: 1 });
+    const completion = await client.chat.completions.create({
+      model,
+      store: false,
+      reasoning_effort: "minimal",
+      max_completion_tokens: 1_200,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "commercial_decision",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["intent", "action", "reason", "message", "requiresHuman"],
+            properties: {
+              intent: { type: "string", enum: [...INTENTS] },
+              action: { type: "string", enum: [...AI_ACTIONS] },
+              reason: { type: "string" },
+              message: { type: "string" },
+              requiresHuman: { type: "boolean" },
+            },
           },
         },
       },
-    },
-    messages: [
-      {
-        role: "system",
-        content: `Você é o assistente comercial da ${business.company.name}. Tom: ${business.brand.voice}. Descubra a intenção por trás do produto. Só use estes claims: ${business.verifiedClaims.join(" | ")}. Nunca invente preço, prazo, frete, material, viabilidade, desconto ou garantia. Na dúvida, escale para humano.`,
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          inbound: context.message,
-          recentMessages: context.recentMessages?.slice(-6) || [],
-          product: context.product || null,
-        }),
-      },
-    ],
-  });
-  const raw = completion.choices[0]?.message.content;
-  if (!raw) return { ...fallback, source: "rules" };
-  const parsed = decisionSchema.safeParse(JSON.parse(raw));
-  if (!parsed.success || unsafeCommercialClaim(parsed.data.message, context.product, business.unverifiedClaims)) {
-    return { ...decideNextAction("needs_human"), source: "rules" };
-  }
+      messages: [
+        {
+          role: "system",
+          content: `Você é o assistente comercial da ${business.company.name}. Tom: ${business.brand.voice}. Escreva uma única resposta curta e natural em português do Brasil, adequada para uma DM do Instagram. Descubra a intenção por trás do produto e faça no máximo uma pergunta por mensagem. Só use estes claims: ${business.verifiedClaims.join(" | ")}. Nunca invente preço, prazo, frete, material, viabilidade, desconto ou garantia. Na dúvida, escale para humano.`,
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            inbound: context.message.slice(0, 2_000),
+            recentMessages: (context.recentMessages?.slice(-6) || []).map((message) => ({
+              direction: message.direction,
+              body: message.body.slice(0, 1_000),
+            })),
+            product: context.product || null,
+          }),
+        },
+      ],
+    });
+    const raw = completion.choices[0]?.message.content;
+    if (!raw) {
+      console.warn("OpenAI não retornou conteúdo; usando regras locais.");
+      return { ...fallback, source: "rules" };
+    }
+    const parsed = decisionSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) {
+      console.warn("OpenAI retornou uma decisão inválida; usando regras locais.");
+      return { ...fallback, source: "rules" };
+    }
+    if (
+      unsafeCommercialClaim(
+        parsed.data.message,
+        context.product,
+        business.unverifiedClaims,
+      )
+    ) {
+      console.warn("OpenAI retornou um claim não verificado; escalando para revisão humana.");
+      return { ...decideNextAction("needs_human"), source: "rules" };
+    }
 
-  const inputTokens = completion.usage?.prompt_tokens || 0;
-  const outputTokens = completion.usage?.completion_tokens || 0;
-  const db = await getCommercialDb();
-  await db.insert(aiUsage).values({
-    id: crypto.randomUUID(),
-    model,
-    inputTokens,
-    outputTokens,
-    estimatedCostUsdMicros: estimateCostMicros(inputTokens, outputTokens),
-    leadId: context.leadId,
-    conversationId: context.conversationId,
-    purpose: "commercial_decision",
-    createdAt: new Date().toISOString(),
-  });
-  return { ...parsed.data, source: "openai" };
+    const inputTokens = completion.usage?.prompt_tokens || 0;
+    const outputTokens = completion.usage?.completion_tokens || 0;
+    const db = await getCommercialDb();
+    await db.insert(aiUsage).values({
+      id: crypto.randomUUID(),
+      model,
+      inputTokens,
+      outputTokens,
+      estimatedCostUsdMicros: estimateCostMicros(inputTokens, outputTokens),
+      leadId: context.leadId,
+      conversationId: context.conversationId,
+      purpose: "commercial_decision",
+      createdAt: new Date().toISOString(),
+    });
+    return { ...parsed.data, source: "openai" };
+  } catch (error) {
+    console.error(
+      "Falha ao gerar decisão comercial pela OpenAI; usando regras locais.",
+      error instanceof Error ? error.message : "Erro desconhecido",
+    );
+    return { ...fallback, source: "rules" };
+  }
 }

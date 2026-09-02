@@ -84,6 +84,12 @@ Consulte os preços oficiais do modelo no momento da configuração e informe os
 
 O modelo principal decide a próxima ação e redige mensagens. O modelo rápido é reservado a classificação e extração. Toda saída é validada; preço e prazo não cadastrados causam fallback seguro ou revisão humana.
 
+No piloto, cada mensagem recebida cria primeiro uma sugestão local segura. Em
+seguida, a sugestão é aprimorada pela OpenAI em segundo plano, desde que ainda
+esteja como rascunho. Simulações pelo painel aguardam a geração para facilitar
+a validação. A OpenAI nunca aciona o envio: a resposta só sai do sistema depois
+do clique **Aprovar e enviar**.
+
 ## 5. Instagram oficial
 
 Em agosto de 2026, a coleção oficial da Meta documenta a Conversations API para contas profissionais, com token de usuário capaz de gerenciar mensagens e permissões como `instagram_business_basic` e `instagram_business_manage_messages`. Webhooks devem ser usados para mensagens inbound e a aplicação precisa deduplicar retries. Confirme novamente as regras antes de qualquer piloto, pois a plataforma pode mudar:

@@ -1,4 +1,5 @@
 import { processInboundMessage, type InboundMessage } from "../../features/conversations/process-inbound";
+import { enhanceReplyDraftWithAi } from "../../features/conversations/replies";
 import { getInstagramAccessToken } from "./token-store";
 
 const DEFAULT_GRAPH_API_VERSION = "v26.0";
@@ -172,7 +173,15 @@ export async function syncInstagramConversations(input: {
     for (const message of inboundMessages) {
       const result = await processInboundMessage(message);
       if (result.duplicate) duplicateMessages += 1;
-      else recoveredMessages += 1;
+      else {
+        recoveredMessages += 1;
+        if (result.draftMessageId) {
+          await enhanceReplyDraftWithAi({
+            leadId: result.leadId,
+            messageId: result.draftMessageId,
+          });
+        }
+      }
     }
   }
 

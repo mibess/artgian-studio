@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { processInboundMessage } from "../../../../src/features/conversations/process-inbound";
+import { enhanceReplyDraftWithAi } from "../../../../src/features/conversations/replies";
 import { extractInstagramMessages, verifyMetaSignature } from "../../../../src/integrations/instagram/webhook";
 
 export async function GET(request: NextRequest) {
@@ -26,7 +27,26 @@ export async function POST(request: NextRequest) {
   const inboundMessages = extractInstagramMessages(payload);
   const results = [];
   for (const message of inboundMessages) {
-    results.push(await processInboundMessage({ ...message, source: "Instagram · Webhook" }));
+    const result = await processInboundMessage({
+      ...message,
+      source: "Instagram · Webhook",
+    });
+    results.push(result);
+    if (!result.duplicate && result.draftMessageId) {
+      after(async () => {
+        try {
+          await enhanceReplyDraftWithAi({
+            leadId: result.leadId,
+            messageId: result.draftMessageId!,
+          });
+        } catch (error) {
+          console.error(
+            "Falha ao aprimorar rascunho do Instagram; mantendo sugestão local.",
+            error instanceof Error ? error.message : "Erro desconhecido",
+          );
+        }
+      });
+    }
   }
   return NextResponse.json({ received: inboundMessages.length, results });
 }
