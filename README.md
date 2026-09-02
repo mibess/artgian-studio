@@ -3,30 +3,36 @@
 Loja da Artgian Studio desenvolvida com Next.js (App Router), React e
 TypeScript.
 
+O projeto também inclui o **Artgian Comercial**, um assistente local em
+`/comercial` para leads, conversas inbound, briefings, orçamentos, catálogo,
+jobs e métricas. Consulte [SETUP.md](./SETUP.md) para a operação completa.
+
 ## Requisitos
 
-- Node.js 22
-- npm
+- Node.js 24
+- pnpm 11
 
 ## Desenvolvimento
 
 Instale as dependências e inicie o servidor local:
 
 ```bash
-npm ci
-npm run dev
+pnpm install
+pnpm db:setup
+pnpm dev
 ```
 
 Abra [http://localhost:3000](http://localhost:3000).
 
 ## Comandos
 
-- `npm run dev`: inicia o Next.js em modo de desenvolvimento
-- `npm run build`: gera a versão de produção
-- `npm run start`: executa a versão de produção
-- `npm run lint`: verifica a qualidade do código
-- `npm test`: executa lint e build
-- `npm run db:generate`: gera migrações do Drizzle
+- `pnpm dev`: inicia o Next.js em modo de desenvolvimento
+- `pnpm build`: gera a versão de produção
+- `pnpm lint`: verifica a qualidade do código
+- `pnpm typecheck`: valida os tipos
+- `pnpm test`: executa os testes automatizados
+- `pnpm test:e2e`: valida o fluxo local no navegador
+- `pnpm db:generate`: gera migrações do Drizzle
 
 ## Variáveis de ambiente
 

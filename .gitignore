@@ -30,6 +30,17 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+config/business.json
+.chrome-profile/
+*.db
+*.db-shm
+*.db-wal
+data/
+backups/
+screenshots/
+traces/
+test-results/
+playwright-report/
 
 # vercel
 .vercel

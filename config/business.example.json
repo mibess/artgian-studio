@@ -1,0 +1,30 @@
+{
+  "owner": { "name": "NOME_DO_RESPONSAVEL", "role": "FUNCAO_DO_RESPONSAVEL" },
+  "company": {
+    "name": "NOME_DA_EMPRESA",
+    "website": "https://exemplo.com.br",
+    "instagramHandle": "@perfil",
+    "whatsappLink": "A_DEFINIR"
+  },
+  "brand": {
+    "tagline": "SUA_TAGLINE",
+    "voice": "DESCREVA_O_TOM_DE_VOZ",
+    "oneLinePitch": "DESCREVA_A_EMPRESA_EM_UMA_FRASE"
+  },
+  "howItWorks": [],
+  "revenueModel": "",
+  "primaryProducts": [],
+  "customizationOptions": [],
+  "marketJargon": {},
+  "verifiedClaims": [],
+  "unverifiedClaims": [],
+  "icpSegments": [],
+  "icpKeywords": [],
+  "partnershipSegments": [],
+  "partnershipsEnabled": false,
+  "partnershipLink": "N/A",
+  "targetGeography": "Brasil",
+  "fulfillmentGeography": "A_DEFINIR",
+  "defaultCurrency": "BRL",
+  "defaultTimezone": "America/Sao_Paulo"
+}
