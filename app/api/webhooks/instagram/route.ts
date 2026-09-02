@@ -30,7 +30,8 @@ export async function POST(request: NextRequest) {
   for (const message of inboundMessages) {
     const result = await processInboundMessage({
       ...message,
-      source: "Instagram · Webhook",
+      source: message.kind === "comment" ? "Instagram · Comentário" : "Instagram · Webhook",
+      forceHumanReview: message.kind === "comment",
     });
     results.push(result);
     if (!result.duplicate && result.draftMessageId) {
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
             leadId: result.leadId,
             messageId: result.draftMessageId!,
           });
-          if (enhanced.status === "enhanced") {
+          if (enhanced.status === "enhanced" && message.kind === "dm") {
             await tryAutoSendInstagramReply({
               leadId: result.leadId,
               messageId: enhanced.messageId,

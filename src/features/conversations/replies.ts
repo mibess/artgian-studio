@@ -271,6 +271,10 @@ export async function approveAndSendInstagramReply(input: {
     .limit(1);
   if (!conversation) return { status: "not_found" as const };
 
+  if (conversation.externalId?.startsWith("comment:")) {
+    return { status: "comment_review_only" as const };
+  }
+
   const recipientId = getInstagramRecipientId(conversation.externalId);
   if (!recipientId) return { status: "invalid_recipient" as const };
   const [latestInbound] = await db

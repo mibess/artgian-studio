@@ -29,6 +29,7 @@ export type InboundMessage = {
   text: string;
   source?: string;
   receivedAt?: string;
+  forceHumanReview?: boolean;
 };
 
 function stageForIntent(intent: ReturnType<typeof classifyIntent>) {
@@ -93,7 +94,7 @@ export async function processInboundMessage(input: InboundMessage) {
   const conversationId = crypto.randomUUID();
   const pipelineStage = stageForIntent(intent);
   const doNotContact = intent === "opt_out";
-  const requiresHuman = decision.requiresHuman || intent === "business_opportunity" || intent === "partnership_interest";
+  const requiresHuman = Boolean(input.forceHumanReview) || decision.requiresHuman || intent === "business_opportunity" || intent === "partnership_interest";
   const draftMessageId = !doNotContact && intent !== "not_interested" ? crypto.randomUUID() : null;
 
   const response = await db.transaction(async (tx) => {

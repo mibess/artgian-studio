@@ -18,7 +18,20 @@ type MetaMessagingEvent = {
 
 type MetaWebhookPayload = {
   object?: string;
-  entry?: Array<{ id?: string; messaging?: MetaMessagingEvent[] }>;
+  entry?: Array<{
+    id?: string;
+    time?: number;
+    messaging?: MetaMessagingEvent[];
+    changes?: Array<{
+      field?: string;
+      value?: {
+        id?: string;
+        text?: string;
+        from?: { id?: string; username?: string };
+        media?: { id?: string };
+      };
+    }>;
+  }>;
 };
 
 export function extractInstagramMessages(input: unknown) {
@@ -29,6 +42,7 @@ export function extractInstagramMessages(input: unknown) {
     instagramUsername: string;
     text: string;
     receivedAt: string;
+    kind: "dm" | "comment";
   }> = [];
   for (const entry of payload.entry || []) {
     for (const event of entry.messaging || []) {
@@ -39,6 +53,26 @@ export function extractInstagramMessages(input: unknown) {
         instagramUsername: event.sender.id,
         text: event.message.text,
         receivedAt: new Date(event.timestamp || Date.now()).toISOString(),
+        kind: "dm",
+      });
+    }
+    for (const change of entry.changes || []) {
+      const value = change.value;
+      if (
+        change.field !== "comments" ||
+        !value?.id ||
+        !value.text ||
+        !value.from?.id
+      ) continue;
+      result.push({
+        externalMessageId: `comment:${value.id}`,
+        externalConversationId: `comment:${value.id}`,
+        instagramUsername: value.from.username || value.from.id,
+        text: value.text,
+        receivedAt: new Date(
+          entry.time ? entry.time * 1_000 : Date.now(),
+        ).toISOString(),
+        kind: "comment",
       });
     }
   }
