@@ -6,11 +6,11 @@ import { processInboundMessage } from "../../src/features/conversations/process-
 import { setSystemSetting } from "../../src/db/commercial";
 import { saveBusinessFields } from "../../src/config/business";
 import { getCommercialDb } from "../../src/db/commercial";
-import { auditLogs, briefings, catalogProducts, commercialOrders, leads, quoteRequests, timelineEvents } from "../../db/schema";
+import { auditLogs, briefings, catalogProducts, commercialOrders, exceptions, leads, quoteRequests, timelineEvents } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { prepareWhatsAppHandoff } from "../../src/integrations/whatsapp/handoff";
 import { approveAndSendInstagramReply, createReplyDraftForLead } from "../../src/features/conversations/replies";
-import { exceptions } from "../../db/schema";
+import { runInstagramMaintenance } from "../../src/integrations/instagram/maintenance";
 
 export async function updateAutomationSetting(formData: FormData) {
   const allowed = new Set([
@@ -220,4 +220,17 @@ export async function escalateInstagramConversation(formData: FormData) {
   revalidatePath(`/comercial/leads/${leadId}`);
   revalidatePath("/comercial/excecoes");
   redirect(`/comercial/leads/${leadId}?escalado=1`);
+}
+
+export async function runInstagramReliabilityCheck() {
+  const result = await runInstagramMaintenance();
+  revalidatePath("/comercial/configuracoes");
+  revalidatePath("/comercial/conversas");
+  if (result.status === "error") {
+    redirect(`/comercial/configuracoes?erro=${encodeURIComponent(result.error)}`);
+  }
+  if (result.status === "locked") {
+    redirect("/comercial/configuracoes?erro=Uma+verificação+já+está+em+andamento");
+  }
+  redirect(`/comercial/configuracoes?verificado=${result.status}`);
 }

@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { saveInstagramAccessToken } from "../../../src/integrations/instagram/token-store";
 
 export const dynamic = "force-dynamic";
 
@@ -139,9 +140,21 @@ export async function GET(request: NextRequest) {
   const days = longToken.expires_in
     ? Math.max(1, Math.round(longToken.expires_in / 86400))
     : 60;
+  try {
+    await saveInstagramAccessToken({
+      accessToken: longToken.access_token,
+      expiresInSeconds: longToken.expires_in,
+      refreshedAt: new Date().toISOString(),
+    });
+  } catch {
+    return htmlResponse(
+      '<p class="error">O Instagram foi autorizado, mas o servidor não conseguiu armazenar o token com segurança. Tente conectar novamente.</p>',
+      500,
+    );
+  }
 
   const response = htmlResponse(
-    `<p>Integração do Instagram</p><h1>${escapeHtml(accountName)} conectado.</h1><p>O token de longa duração foi gerado e validado. Copie o valor abaixo e use-o em <strong>INSTAGRAM_PAGE_ACCESS_TOKEN</strong>.</p><textarea readonly aria-label="Token de acesso">${escapeHtml(longToken.access_token)}</textarea><div class="notice">Validade aproximada: ${days} dias. Não envie este token por mensagem e não o compartilhe com terceiros.</div>`,
+    `<p>Integração do Instagram</p><h1>${escapeHtml(accountName)} conectado.</h1><p>O token de longa duração foi gerado, validado e armazenado de forma criptografada. Você não precisa copiar nenhuma credencial.</p><div class="notice">Validade aproximada: ${days} dias. A renovação será feita automaticamente antes do vencimento.</div>`,
   );
   response.cookies.set("instagram_oauth_state", "", {
     httpOnly: true,

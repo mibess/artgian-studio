@@ -379,3 +379,18 @@ export const idempotencyKeys = sqliteTable("idempotency_keys", {
   response: text("response"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const integrationStates = sqliteTable("integration_states", {
+  key: text("key").primaryKey(),
+  status: text("status").notNull().default("unknown"),
+  encryptedAccessToken: text("encrypted_access_token"),
+  tokenExpiresAt: text("token_expires_at"),
+  lastTokenRefreshAt: text("last_token_refresh_at"),
+  lastHealthCheckAt: text("last_health_check_at"),
+  lastSuccessfulSyncAt: text("last_successful_sync_at"),
+  lastRunStartedAt: text("last_run_started_at"),
+  lockUntil: text("lock_until"),
+  lastError: text("last_error"),
+  metadata: text("metadata").notNull().default("{}"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});

@@ -100,6 +100,8 @@ INSTAGRAM_PAGE_ACCESS_TOKEN=
 INSTAGRAM_WEBHOOK_VERIFY_TOKEN=
 INSTAGRAM_BUSINESS_ACCOUNT_ID=
 INSTAGRAM_GRAPH_API_VERSION=v26.0
+INSTAGRAM_TOKEN_ENCRYPTION_KEY=
+CRON_SECRET=
 ```
 
 Endpoint de verificação e eventos:
@@ -109,6 +111,22 @@ https://SEU_HOST/api/webhooks/instagram
 ```
 
 O POST exige `X-Hub-Signature-256`. Eventos repetidos usam o ID externo como chave idempotente.
+
+### Confiabilidade e renovação
+
+- O webhook continua sendo o caminho em tempo real.
+- A rota `/api/cron/instagram` executa diariamente uma reconciliação das
+  conversas recentes e recupera eventos eventualmente perdidos.
+- A rota exige `Authorization: Bearer CRON_SECRET`; a Vercel envia esse header
+  automaticamente nos Cron Jobs.
+- Tokens renovados são armazenados no Turso com AES-256-GCM. A chave é derivada
+  do `INSTAGRAM_APP_SECRET` ou, quando definida, de
+  `INSTAGRAM_TOKEN_ENCRYPTION_KEY`.
+- A renovação é tentada quando a validade é desconhecida ou faltam 14 dias para
+  o vencimento. O painel em `/comercial/configuracoes` mostra o último estado,
+  sincronização e erro sem revelar credenciais.
+- No plano Hobby, mantenha o cron em uma execução por dia. O webhook cobre o
+  tempo real e o cron funciona como reconciliação de segurança.
 
 ## 6. Dry-run inbound
 

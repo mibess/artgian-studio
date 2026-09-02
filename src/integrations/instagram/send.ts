@@ -46,11 +46,12 @@ type InstagramSendResponse = {
 export async function sendInstagramText({
   recipientId,
   text,
-  accessToken = process.env.INSTAGRAM_PAGE_ACCESS_TOKEN?.trim(),
+  accessToken,
   apiVersion = process.env.INSTAGRAM_GRAPH_API_VERSION?.trim() ||
     DEFAULT_GRAPH_API_VERSION,
   fetchImpl = fetch,
 }: SendInstagramTextOptions) {
+  accessToken ||= await getInstagramAccessToken();
   if (!accessToken) {
     throw new InstagramSendError(
       "Token de acesso do Instagram não configurado.",
@@ -118,3 +119,4 @@ export async function sendInstagramText({
     messageId: payload.message_id,
   };
 }
+import { getInstagramAccessToken } from "./token-store";
