@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   briefings,
   catalogProducts,
@@ -94,6 +94,7 @@ export async function processInboundMessage(input: InboundMessage) {
   const pipelineStage = stageForIntent(intent);
   const doNotContact = intent === "opt_out";
   const requiresHuman = decision.requiresHuman || intent === "business_opportunity" || intent === "partnership_interest";
+  const draftMessageId = !doNotContact && intent !== "not_interested" ? crypto.randomUUID() : null;
 
   const response = await db.transaction(async (tx) => {
     await tx
@@ -165,6 +166,16 @@ export async function processInboundMessage(input: InboundMessage) {
       await tx.update(conversations).set({ lastMessageAt: now, updatedAt: now }).where(eq(conversations.id, conversation.id));
     }
 
+    await tx
+      .update(messages)
+      .set({ status: "superseded" })
+      .where(
+        and(
+          eq(messages.conversationId, activeConversationId),
+          inArray(messages.status, ["draft", "failed"]),
+        ),
+      );
+
     await tx.insert(messages).values({
       id: crypto.randomUUID(),
       conversationId: activeConversationId,
@@ -178,6 +189,21 @@ export async function processInboundMessage(input: InboundMessage) {
       sentAt: now,
       createdAt: now,
     });
+
+    if (draftMessageId) {
+      await tx.insert(messages).values({
+        id: draftMessageId,
+        conversationId: activeConversationId,
+        direction: "outbound",
+        sender: "assistant",
+        body: decision.message,
+        intent,
+        action: decision.action,
+        status: "draft",
+        sentAt: now,
+        createdAt: now,
+      });
+    }
 
     if (Object.keys(extracted).length > 0 || ["asked_price", "wants_quote", "sent_reference"].includes(intent)) {
       await tx
@@ -239,8 +265,8 @@ export async function processInboundMessage(input: InboundMessage) {
       await tx.insert(jobs).values({
         id: crypto.randomUUID(),
         type: decision.action === "prepare_briefing" ? "prepare_briefing" : "generate_reply",
-        payload: JSON.stringify({ leadId: lead.id, conversationId: activeConversationId, suggestedMessage: decision.message }),
-        status: requiresHuman ? "waiting_review" : "pending",
+        payload: JSON.stringify({ leadId: lead.id, conversationId: activeConversationId, suggestedMessage: decision.message, draftMessageId }),
+        status: "waiting_review",
         maxAttempts: 3,
         scheduledAt: now,
         idempotencyKey: `reply:${input.externalMessageId}`,
@@ -256,6 +282,7 @@ export async function processInboundMessage(input: InboundMessage) {
       action: decision.action,
       reason: decision.reason,
       suggestedMessage: decision.message,
+      draftMessageId,
       score,
       doNotContact,
       requiresHuman,

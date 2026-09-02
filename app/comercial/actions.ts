@@ -9,6 +9,8 @@ import { getCommercialDb } from "../../src/db/commercial";
 import { auditLogs, briefings, catalogProducts, commercialOrders, leads, quoteRequests, timelineEvents } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { prepareWhatsAppHandoff } from "../../src/integrations/whatsapp/handoff";
+import { approveAndSendInstagramReply, createReplyDraftForLead } from "../../src/features/conversations/replies";
+import { exceptions } from "../../db/schema";
 
 export async function updateAutomationSetting(formData: FormData) {
   const allowed = new Set([
@@ -159,4 +161,63 @@ export async function registerWhatsappHandoff(formData: FormData) {
   });
   revalidatePath(`/comercial/leads/${leadId}`);
   redirect(handoff.url);
+}
+
+export async function createInstagramReplyDraft(formData: FormData) {
+  const leadId = String(formData.get("leadId") || "");
+  if (!leadId) throw new Error("Lead inválido.");
+  const result = await createReplyDraftForLead(leadId);
+  revalidatePath(`/comercial/leads/${leadId}`);
+  if (result.status === "blocked") {
+    redirect(`/comercial/leads/${leadId}?erro=Contato+bloqueado+por+opt-out`);
+  }
+  if (result.status === "not_found") {
+    redirect(`/comercial/leads/${leadId}?erro=Não+há+mensagem+recebida+para+responder`);
+  }
+  if (result.status === "already_replied") {
+    redirect(`/comercial/leads/${leadId}?erro=A+última+mensagem+já+foi+respondida`);
+  }
+  redirect(`/comercial/leads/${leadId}?rascunho=1`);
+}
+
+export async function approveInstagramReply(formData: FormData) {
+  const leadId = String(formData.get("leadId") || "");
+  const messageId = String(formData.get("messageId") || "");
+  const body = String(formData.get("body") || "");
+  if (!leadId || !messageId) throw new Error("Resposta inválida.");
+
+  const result = await approveAndSendInstagramReply({ leadId, messageId, body });
+  revalidatePath(`/comercial/leads/${leadId}`);
+  const errors: Record<string, string> = {
+    invalid_text: "Revise+o+texto+da+mensagem",
+    not_found: "Rascunho+ou+conversa+não+encontrado",
+    blocked: "Contato+bloqueado+por+opt-out",
+    invalid_recipient: "Esta+é+uma+conversa+simulada+e+não+pode+ser+enviada",
+    outside_window: "A+janela+de+24+horas+para+resposta+foi+encerrada",
+    already_processed: "Esta+resposta+já+foi+processada",
+    failed: "O+Instagram+recusou+o+envio;+revise+a+integração+e+tente+novamente",
+    send_uncertain: "Envio+incerto;+confira+o+Instagram+antes+de+qualquer+nova+tentativa",
+  };
+  if (result.status !== "sent") {
+    redirect(`/comercial/leads/${leadId}?erro=${errors[result.status] || "Falha+no+envio"}`);
+  }
+  redirect(`/comercial/leads/${leadId}?enviado=1`);
+}
+
+export async function escalateInstagramConversation(formData: FormData) {
+  const leadId = String(formData.get("leadId") || "");
+  if (!leadId) throw new Error("Lead inválido.");
+  const db = await getCommercialDb();
+  const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+  if (!lead) throw new Error("Lead não encontrado.");
+  const now = new Date().toISOString();
+  await db.transaction(async (tx) => {
+    await tx.update(leads).set({ channelState: "human_review_required", updatedAt: now }).where(eq(leads.id, leadId));
+    await tx.insert(exceptions).values({ id: crypto.randomUUID(), leadId, type: "human_review", severity: "medium", title: "Conversa encaminhada para atendimento humano", description: "Encaminhamento manual registrado pelo operador.", status: "open", createdAt: now });
+    await tx.insert(timelineEvents).values({ id: crypto.randomUUID(), leadId, type: "human_review", title: "Conversa encaminhada para atendimento humano", createdBy: "operator", createdAt: now });
+    await tx.insert(auditLogs).values({ id: crypto.randomUUID(), actor: "operator", action: "instagram_conversation_escalated", entityType: "lead", entityId: leadId, createdAt: now });
+  });
+  revalidatePath(`/comercial/leads/${leadId}`);
+  revalidatePath("/comercial/excecoes");
+  redirect(`/comercial/leads/${leadId}?escalado=1`);
 }

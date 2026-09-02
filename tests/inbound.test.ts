@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
 
@@ -47,5 +48,40 @@ describe("processamento inbound persistente", () => {
     expect(result.action).toBe("show_product");
     expect(result.suggestedMessage).toContain("R$ 89,00");
     expect(result.suggestedMessage).not.toMatch(/prazo|dias úteis/i);
+  });
+
+  it("envia um rascunho aprovado uma única vez", async () => {
+    const [{ processInboundMessage }, { approveAndSendInstagramReply }, { getCommercialDb }, { messages }] = await Promise.all([
+      import("../src/features/conversations/process-inbound"),
+      import("../src/features/conversations/replies"),
+      import("../src/db/commercial"),
+      import("../db/schema"),
+    ]);
+    const inbound = await processInboundMessage({
+      externalMessageId: "external-send-1",
+      externalConversationId: "17841412290657201:9988776655",
+      instagramUsername: "9988776655",
+      text: "Olá, vocês fazem peças personalizadas?",
+    });
+    expect(inbound.draftMessageId).toBeTruthy();
+    const sendText = async ({ recipientId }: { recipientId: string; text: string }) => ({
+      recipientId,
+      messageId: "meta-message-1",
+    });
+
+    const first = await approveAndSendInstagramReply(
+      { leadId: inbound.leadId, messageId: inbound.draftMessageId!, body: "Olá! Fazemos sob análise. Pode enviar sua referência?" },
+      { sendText },
+    );
+    const duplicate = await approveAndSendInstagramReply(
+      { leadId: inbound.leadId, messageId: inbound.draftMessageId!, body: "Olá! Fazemos sob análise. Pode enviar sua referência?" },
+      { sendText },
+    );
+    expect(first.status).toBe("sent");
+    expect(duplicate.status).toBe("already_processed");
+
+    const db = await getCommercialDb();
+    const [saved] = await db.select().from(messages).where(eq(messages.id, inbound.draftMessageId!)).limit(1);
+    expect(saved).toMatchObject({ status: "sent", externalId: "meta-message-1" });
   });
 });
