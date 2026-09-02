@@ -1,5 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { processInboundMessage } from "../../../../src/features/conversations/process-inbound";
+import { tryAutoSendInstagramReply } from "../../../../src/features/conversations/automation";
 import { enhanceReplyDraftWithAi } from "../../../../src/features/conversations/replies";
 import { extractInstagramMessages, verifyMetaSignature } from "../../../../src/integrations/instagram/webhook";
 
@@ -35,10 +36,17 @@ export async function POST(request: NextRequest) {
     if (!result.duplicate && result.draftMessageId) {
       after(async () => {
         try {
-          await enhanceReplyDraftWithAi({
+          const enhanced = await enhanceReplyDraftWithAi({
             leadId: result.leadId,
             messageId: result.draftMessageId!,
           });
+          if (enhanced.status === "enhanced") {
+            await tryAutoSendInstagramReply({
+              leadId: result.leadId,
+              messageId: enhanced.messageId,
+              decision: enhanced.decision,
+            });
+          }
         } catch (error) {
           console.error(
             "Falha ao aprimorar rascunho do Instagram; mantendo sugestão local.",

@@ -33,6 +33,13 @@ const isoOffset = (hoursAgo: number) =>
 
 let seedPromise: Promise<void> | undefined;
 
+const DEFAULT_SYSTEM_SETTINGS = [
+  { key: "automation_paused", value: "false" },
+  { key: "outbound_paused", value: "true" },
+  { key: "followups_paused", value: "true" },
+  { key: "auto_replies_paused", value: "true" },
+] as const;
+
 async function getCommercialDatabaseConnection() {
   const mode = process.env.COMMERCIAL_DATABASE_MODE?.trim() || "local";
   if (mode === "local") return getLocalCommercialDb();
@@ -144,10 +151,28 @@ async function seedDemoData() {
   });
 }
 
+async function ensureSystemSettings() {
+  const db = await getCommercialDatabaseConnection();
+  const now = new Date().toISOString();
+  await db
+    .insert(systemSettings)
+    .values(DEFAULT_SYSTEM_SETTINGS.map((setting) => ({ ...setting, updatedAt: now })))
+    .onConflictDoNothing();
+}
+
 export async function getCommercialDb() {
-  seedPromise ??= seedDemoData();
+  seedPromise ??= (async () => {
+    await seedDemoData();
+    await ensureSystemSettings();
+  })();
   await seedPromise;
   return getCommercialDatabaseConnection();
+}
+
+export async function getSystemSettings() {
+  const db = await getCommercialDb();
+  const rows = await db.select().from(systemSettings);
+  return Object.fromEntries(rows.map((row) => [row.key, row.value]));
 }
 
 export async function getDashboardData() {

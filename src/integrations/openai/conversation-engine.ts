@@ -94,7 +94,7 @@ export async function generateCommercialDecision(
   if (!budget.available) return { ...fallback, source: "rules" };
 
   try {
-    const business = getBusinessConfig();
+    const business = await getBusinessConfig();
     const client = new OpenAI({ apiKey, timeout: 12_000, maxRetries: 1 });
     const completion = await client.chat.completions.create({
       model,

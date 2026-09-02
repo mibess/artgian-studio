@@ -64,7 +64,7 @@ export async function updateBusinessConfiguration(formData: FormData) {
       redirect("/comercial/configuracoes?erro=Use+um+link+oficial+do+WhatsApp");
     }
   }
-  saveBusinessFields({
+  await saveBusinessFields({
     whatsappLink: whatsappLink || "A_DEFINIR",
     fulfillmentGeography: fulfillmentGeography || "A_DEFINIR",
   });
@@ -157,7 +157,7 @@ export async function registerWhatsappHandoff(formData: FormData) {
   const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
   if (!lead) throw new Error("Lead não encontrado.");
   const [briefing] = await db.select().from(briefings).where(eq(briefings.leadId, leadId)).limit(1);
-  const handoff = prepareWhatsAppHandoff(lead.instagramUsername, briefing || { productInterest: lead.productInterest, occasion: lead.occasion });
+  const handoff = await prepareWhatsAppHandoff(lead.instagramUsername, briefing || { productInterest: lead.productInterest, occasion: lead.occasion });
   if (!handoff.enabled) redirect("/comercial/configuracoes?erro=Configure+o+WhatsApp+antes+do+handoff");
   const now = new Date().toISOString();
   await db.transaction(async (tx) => {

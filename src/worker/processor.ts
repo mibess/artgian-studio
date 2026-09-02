@@ -1,13 +1,18 @@
 import { and, asc, eq, lte } from "drizzle-orm";
-import { jobs, leads, messages, systemSettings } from "../../db/schema";
+import { jobs, leads, systemSettings } from "../../db/schema";
 import { getCommercialDb } from "../db/commercial";
+import { tryAutoSendInstagramReply } from "../features/conversations/automation";
+import {
+  createReplyDraftForLead,
+  enhanceReplyDraftWithAi,
+} from "../features/conversations/replies";
 import { canScheduleFollowup } from "../features/leads/domain";
-import { generateCommercialDecision } from "../integrations/openai/conversation-engine";
 
 type JobPayload = {
   leadId?: string;
   conversationId?: string;
   suggestedMessage?: string;
+  draftMessageId?: string;
   followupsSent?: number;
 };
 
@@ -48,22 +53,44 @@ export async function runWorkerOnce() {
     if (lead.doNotContact) throw new Error("Contato está em do_not_contact.");
 
     if (job.type === "generate_reply") {
-      if (pauses.auto_replies_paused) {
-        await db.update(jobs).set({ status: "waiting_review", finishedAt: now }).where(eq(jobs.id, job.id));
-        return { processed: true as const, waitingReview: true as const };
+      let draftMessageId = payload.draftMessageId;
+      if (!draftMessageId) {
+        const draft = await createReplyDraftForLead(lead.id);
+        if (draft.status === "created" || draft.status === "exists") {
+          draftMessageId = draft.messageId;
+        } else if (draft.status === "already_replied") {
+          await db
+            .update(jobs)
+            .set({ status: "completed", finishedAt: now, lastError: null })
+            .where(eq(jobs.id, job.id));
+          return { processed: true as const, alreadyReplied: true as const };
+        } else {
+          throw new Error(`Não foi possível criar o rascunho: ${draft.status}`);
+        }
       }
-      const conversationId = payload.conversationId;
-      if (!conversationId) throw new Error("Job sem conversationId.");
-      const recent = await db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(asc(messages.sentAt));
-      const inbound = [...recent].reverse().find((message) => message.direction === "inbound");
-      if (!inbound) throw new Error("Nenhuma mensagem inbound encontrada.");
-      const decision = await generateCommercialDecision({
-        message: inbound.body,
-        recentMessages: recent.slice(-6).map((message) => ({ direction: message.direction as "inbound" | "outbound", body: message.body })),
+      const enhanced = await enhanceReplyDraftWithAi({
         leadId: lead.id,
-        conversationId,
+        messageId: draftMessageId,
       });
-      await db.insert(messages).values({ id: crypto.randomUUID(), conversationId, direction: "outbound", sender: "assistant", body: decision.message, intent: decision.intent, action: decision.action, status: "draft", sentAt: now, createdAt: now });
+      if (enhanced.status === "enhanced") {
+        const automatic = await tryAutoSendInstagramReply({
+          leadId: lead.id,
+          messageId: enhanced.messageId,
+          decision: enhanced.decision,
+        });
+        if (automatic.status === "sent") {
+          await db
+            .update(jobs)
+            .set({ status: "completed", finishedAt: now, lastError: null })
+            .where(eq(jobs.id, job.id));
+          return { processed: true as const, sent: true as const };
+        }
+      }
+      await db
+        .update(jobs)
+        .set({ status: "waiting_review", finishedAt: now, lastError: null })
+        .where(eq(jobs.id, job.id));
+      return { processed: true as const, waitingReview: true as const };
     }
 
     if (job.type === "execute_followup") {

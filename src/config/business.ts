@@ -1,6 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { systemSettings } from "../../db/schema";
+import { getCommercialDb } from "../db/commercial";
 
 const businessSchema = z.object({
   owner: z.object({ name: z.string(), role: z.string() }),
@@ -36,8 +39,9 @@ const businessSchema = z.object({
 export type BusinessConfig = z.infer<typeof businessSchema>;
 
 let cachedBusiness: BusinessConfig | undefined;
+const BUSINESS_CONFIG_KEY = "business_config";
 
-export function getBusinessConfig(): BusinessConfig {
+function getFileBusinessConfig(): BusinessConfig {
   if (cachedBusiness) return cachedBusiness;
 
   const realPath = path.join(process.cwd(), "config", "business.json");
@@ -61,15 +65,36 @@ export function getBusinessConfig(): BusinessConfig {
   return cachedBusiness;
 }
 
+export async function getBusinessConfig(): Promise<BusinessConfig> {
+  const fallback = getFileBusinessConfig();
+  const db = await getCommercialDb();
+  const [stored] = await db
+    .select({ value: systemSettings.value })
+    .from(systemSettings)
+    .where(eq(systemSettings.key, BUSINESS_CONFIG_KEY))
+    .limit(1);
+  if (stored) return businessSchema.parse(JSON.parse(stored.value));
+
+  await db
+    .insert(systemSettings)
+    .values({
+      key: BUSINESS_CONFIG_KEY,
+      value: JSON.stringify(fallback),
+      updatedAt: new Date().toISOString(),
+    })
+    .onConflictDoNothing();
+  return fallback;
+}
+
 export function isDefinedBusinessValue(value: string | undefined | null) {
   return Boolean(value && value !== "A_DEFINIR" && value !== "N/A");
 }
 
-export function saveBusinessFields(fields: {
+export async function saveBusinessFields(fields: {
   whatsappLink?: string;
   fulfillmentGeography?: string;
 }) {
-  const current = getBusinessConfig();
+  const current = await getBusinessConfig();
   const next = businessSchema.parse({
     ...current,
     company: {
@@ -79,11 +104,22 @@ export function saveBusinessFields(fields: {
     fulfillmentGeography:
       fields.fulfillmentGeography ?? current.fulfillmentGeography,
   });
-  writeFileSync(
-    path.join(process.cwd(), "config", "business.json"),
-    `${JSON.stringify(next, null, 2)}\n`,
-    { mode: 0o600 },
-  );
+  const now = new Date().toISOString();
+  const db = await getCommercialDb();
+  await db
+    .insert(systemSettings)
+    .values({ key: BUSINESS_CONFIG_KEY, value: JSON.stringify(next), updatedAt: now })
+    .onConflictDoUpdate({
+      target: systemSettings.key,
+      set: { value: JSON.stringify(next), updatedAt: now },
+    });
+  if ((process.env.COMMERCIAL_DATABASE_MODE?.trim() || "local") === "local") {
+    writeFileSync(
+      path.join(process.cwd(), "config", "business.json"),
+      `${JSON.stringify(next, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+  }
   cachedBusiness = next;
   return next;
 }

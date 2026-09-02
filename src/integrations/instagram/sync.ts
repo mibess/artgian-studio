@@ -1,4 +1,5 @@
 import { processInboundMessage, type InboundMessage } from "../../features/conversations/process-inbound";
+import { tryAutoSendInstagramReply } from "../../features/conversations/automation";
 import { enhanceReplyDraftWithAi } from "../../features/conversations/replies";
 import { getInstagramAccessToken } from "./token-store";
 
@@ -176,10 +177,17 @@ export async function syncInstagramConversations(input: {
       else {
         recoveredMessages += 1;
         if (result.draftMessageId) {
-          await enhanceReplyDraftWithAi({
+          const enhanced = await enhanceReplyDraftWithAi({
             leadId: result.leadId,
             messageId: result.draftMessageId,
           });
+          if (enhanced.status === "enhanced") {
+            await tryAutoSendInstagramReply({
+              leadId: result.leadId,
+              messageId: enhanced.messageId,
+              decision: enhanced.decision,
+            });
+          }
         }
       }
     }

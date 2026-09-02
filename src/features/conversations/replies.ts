@@ -133,7 +133,12 @@ export async function enhanceReplyDraftWithAi(
       action: "instagram_reply_ai_drafted",
       entityType: "message",
       entityId: draft.id,
-      metadata: JSON.stringify({ source: decision.source }),
+      metadata: JSON.stringify({
+        source: decision.source,
+        intent: decision.intent,
+        action: decision.action,
+        requiresHuman: decision.requiresHuman,
+      }),
       createdAt: now,
     });
     await tx.insert(timelineEvents).values({
@@ -141,12 +146,12 @@ export async function enhanceReplyDraftWithAi(
       leadId: lead.id,
       type: "ai_draft",
       title: "Rascunho aprimorado pela OpenAI",
-      description: "A resposta permanece aguardando aprovação humana.",
+      description: "A resposta aguarda a política de envio automático ou revisão humana.",
       metadata: JSON.stringify({ messageId: draft.id }),
       createdAt: now,
     });
   });
-  return { status: "enhanced" as const, messageId: draft.id };
+  return { status: "enhanced" as const, messageId: draft.id, decision };
 }
 
 export async function createReplyDraftForLead(leadId: string) {
@@ -234,6 +239,9 @@ export async function approveAndSendInstagramReply(input: {
   body: string;
 }, dependencies: {
   sendText?: typeof sendInstagramText;
+  actor?: "operator" | "assistant";
+  auditAction?: string;
+  timelineTitle?: string;
 } = {}) {
   const body = input.body.trim();
   if (!body || body.length > 1_000) return { status: "invalid_text" as const };
@@ -292,6 +300,7 @@ export async function approveAndSendInstagramReply(input: {
   if (!claimed.length) return { status: "already_processed" as const };
 
   let sent: Awaited<ReturnType<typeof sendInstagramText>>;
+  const actor = dependencies.actor || "operator";
   try {
     sent = await (dependencies.sendText || sendInstagramText)({ recipientId, text: body });
   } catch (error) {
@@ -305,8 +314,10 @@ export async function approveAndSendInstagramReply(input: {
       await tx.update(messages).set({ status }).where(eq(messages.id, message.id));
       await tx.insert(auditLogs).values({
         id: crypto.randomUUID(),
-        actor: "operator",
-        action: "instagram_reply_failed",
+        actor,
+        action: dependencies.auditAction
+          ? `${dependencies.auditAction}_failed`
+          : "instagram_reply_failed",
         entityType: "message",
         entityId: message.id,
         metadata: JSON.stringify({ kind: instagramError.kind, status: instagramError.status }),
@@ -347,15 +358,17 @@ export async function approveAndSendInstagramReply(input: {
       id: crypto.randomUUID(),
       leadId: lead.id,
       type: "outbound_message",
-      title: "Resposta aprovada e enviada pelo Instagram",
+      title:
+        dependencies.timelineTitle ||
+        "Resposta aprovada e enviada pelo Instagram",
       metadata: JSON.stringify({ messageId: message.id }),
-      createdBy: "operator",
+      createdBy: actor,
       createdAt: now,
     });
     await tx.insert(auditLogs).values({
       id: crypto.randomUUID(),
-      actor: "operator",
-      action: "instagram_reply_sent",
+      actor,
+      action: dependencies.auditAction || "instagram_reply_sent",
       entityType: "message",
       entityId: message.id,
       metadata: JSON.stringify({ recipientId: sent.recipientId }),
