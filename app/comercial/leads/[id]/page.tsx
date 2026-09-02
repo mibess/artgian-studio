@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowLeft, AtSign as Instagram, Bot, CheckCircle2, Clipb
 import { getLeadDetail } from "../../../../src/db/commercial";
 import { getBusinessConfig, isDefinedBusinessValue } from "../../../../src/config/business";
 import { buildBriefingSummary, CHANNEL_STATE_LABELS, CONSUMER_PIPELINE, INTENT_LABELS, PIPELINE_LABELS, type Intent } from "../../../../src/features/leads/domain";
+import { isConversationMessageVisible } from "../../../../src/features/conversations/presentation";
 import { Avatar, StatusBadge, formatBrl, formatDateTime } from "../../_components";
 import { approveInstagramReply, confirmCommercialOrder, createInstagramReplyDraft, escalateInstagramConversation, registerQuote, registerWhatsappHandoff, updateLeadStage } from "../../actions";
 
@@ -12,6 +13,7 @@ export default async function LeadDetailPage({ params, searchParams }: { params:
   const [detail, business] = await Promise.all([getLeadDetail(id), getBusinessConfig()]);
   if (!detail) notFound();
   const { lead, conversation, messages, briefing, timeline } = detail;
+  const visibleMessages = messages.filter(isConversationMessageVisible);
   const whatsappReady = isDefinedBusinessValue(business.company.whatsappLink);
   const summary = buildBriefingSummary(lead.instagramUsername, briefing || { productInterest: lead.productInterest, occasion: lead.occasion });
   const scores = [
@@ -36,13 +38,13 @@ export default async function LeadDetailPage({ params, searchParams }: { params:
     <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
       <div className="space-y-5">
         <section className="overflow-hidden rounded-[22px] border border-[#e1e1db] bg-white">
-          <header className="flex items-center justify-between border-b border-[#ecece7] px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8b979d]">Histórico completo</p><h2 className="mt-1 text-base font-semibold">Conversa no Instagram</h2></div><span className="text-[9px] font-bold text-[#7c8a90]">{messages.length} mensagens</span></header>
-          <div className="max-h-[620px] space-y-4 overflow-y-auto bg-[#f8f7f3] p-5">{messages.map((message)=>{
+          <header className="flex items-center justify-between border-b border-[#ecece7] px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8b979d]">Histórico completo</p><h2 className="mt-1 text-base font-semibold">Conversa no Instagram</h2></div><span className="text-[9px] font-bold text-[#7c8a90]">{visibleMessages.length} mensagens</span></header>
+          <div className="max-h-[620px] space-y-4 overflow-y-auto bg-[#f8f7f3] p-5">{visibleMessages.map((message)=>{
             const editable=message.direction==="outbound"&&["draft","failed"].includes(message.status);
             const uncertain=message.status==="send_uncertain";
             if(editable)return <form action={approveInstagramReply} className="ml-auto max-w-[92%] rounded-2xl rounded-br-md border border-[#c9d9df] bg-white p-4 shadow-sm" key={message.id}><input type="hidden" name="leadId" value={lead.id}/><input type="hidden" name="messageId" value={message.id}/><div className="mb-2 flex items-center justify-between gap-3"><span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wide text-[#4f7180]"><Bot size={12}/>Rascunho para revisão</span>{message.status==="failed"&&<span className="text-[9px] font-bold text-red-600">Último envio recusado</span>}</div><textarea name="body" required maxLength={1000} defaultValue={message.body} aria-label="Texto da resposta" rows={5} className="w-full resize-y rounded-xl border border-[#dfe5e7] bg-[#fafcfc] p-3 text-xs leading-5 text-[#344f5c] outline-none focus:border-[#4f7b8d]"/><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className="text-[9px] text-[#8a959b]">Edite livremente antes da aprovação.</span><button className="flex items-center gap-2 rounded-xl bg-[#2f7c60] px-4 py-2.5 text-[10px] font-bold text-white"><Send size={13}/>Aprovar e enviar</button></div></form>;
             return <div className={`flex ${message.direction==="outbound"?"justify-end":"justify-start"}`} key={message.id}><div className={`max-w-[82%] rounded-2xl px-4 py-3 text-xs leading-5 shadow-sm ${message.direction==="outbound"?"rounded-br-md bg-[#193848] text-white":"rounded-bl-md border border-[#e3e2dc] bg-white text-[#435966]"}`}><p>{message.body}</p><div className={`mt-2 flex items-center justify-between gap-4 text-[8px] ${message.direction==="outbound"?"text-white/50":"text-[#9aa3a7]"}`}><span>{uncertain?"Envio incerto — confira no Instagram":message.status==="sending"?"Enviando…":message.intent ? INTENT_LABELS[message.intent as Intent] || "Intenção não classificada" : "Sem classificação"}</span><span>{formatDateTime(message.sentAt)}</span></div></div></div>;
-          })}{!messages.length&&<p className="py-8 text-center text-xs text-[#8d989c]">A conversa ainda não possui mensagens.</p>}</div>
+          })}{!visibleMessages.length&&<p className="py-8 text-center text-xs text-[#8d989c]">A conversa ainda não possui mensagens.</p>}</div>
           {conversation && <footer className="flex items-center gap-3 border-t border-[#ecece7] px-5 py-3 text-[10px] text-[#809097]"><ShieldCheck size={14} className="text-[#5aa483]"/>Canal: Instagram · {CHANNEL_STATE_LABELS[lead.channelState] || "Estado não identificado"}</footer>}
         </section>
         {canPrepareReply&&<section className="rounded-[22px] border border-[#d9e3e7] bg-white p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold text-[#344f5c]">Preparar resposta assistida</p><p className="mt-1 text-[10px] text-[#7c8a90]">A sugestão ficará como rascunho e não será enviada automaticamente.</p></div><form action={createInstagramReplyDraft}><input type="hidden" name="leadId" value={lead.id}/><button className="flex items-center gap-2 rounded-xl bg-[#193848] px-4 py-3 text-[10px] font-bold text-white"><Bot size={14}/>Gerar rascunho</button></form></div></section>}
