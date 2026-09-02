@@ -41,6 +41,19 @@ export type BusinessConfig = z.infer<typeof businessSchema>;
 let cachedBusiness: BusinessConfig | undefined;
 const BUSINESS_CONFIG_KEY = "business_config";
 
+function getEnvironmentBusinessConfig() {
+  const raw = process.env.BUSINESS_CONFIG_JSON?.trim();
+  if (!raw) return undefined;
+  return businessSchema.parse(JSON.parse(raw));
+}
+
+function hasPlaceholderIdentity(config: BusinessConfig) {
+  return (
+    config.company.name.startsWith("NOME_") ||
+    config.owner.name.startsWith("NOME_")
+  );
+}
+
 function getFileBusinessConfig(): BusinessConfig {
   if (cachedBusiness) return cachedBusiness;
 
@@ -66,24 +79,35 @@ function getFileBusinessConfig(): BusinessConfig {
 }
 
 export async function getBusinessConfig(): Promise<BusinessConfig> {
-  const fallback = getFileBusinessConfig();
+  const bootstrap = getEnvironmentBusinessConfig() || getFileBusinessConfig();
   const db = await getCommercialDb();
   const [stored] = await db
     .select({ value: systemSettings.value })
     .from(systemSettings)
     .where(eq(systemSettings.key, BUSINESS_CONFIG_KEY))
     .limit(1);
-  if (stored) return businessSchema.parse(JSON.parse(stored.value));
+  if (stored) {
+    const parsed = businessSchema.parse(JSON.parse(stored.value));
+    if (!hasPlaceholderIdentity(parsed) || hasPlaceholderIdentity(bootstrap)) {
+      return parsed;
+    }
+    const now = new Date().toISOString();
+    await db
+      .update(systemSettings)
+      .set({ value: JSON.stringify(bootstrap), updatedAt: now })
+      .where(eq(systemSettings.key, BUSINESS_CONFIG_KEY));
+    return bootstrap;
+  }
 
   await db
     .insert(systemSettings)
     .values({
       key: BUSINESS_CONFIG_KEY,
-      value: JSON.stringify(fallback),
+      value: JSON.stringify(bootstrap),
       updatedAt: new Date().toISOString(),
     })
     .onConflictDoNothing();
-  return fallback;
+  return bootstrap;
 }
 
 export function isDefinedBusinessValue(value: string | undefined | null) {
