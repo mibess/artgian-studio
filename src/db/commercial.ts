@@ -13,6 +13,7 @@ import {
   jobs,
   leads,
   messages,
+  outboundProspects,
   quoteRequests,
   systemSettings,
   timelineEvents,
@@ -318,6 +319,16 @@ export async function getOperationsData() {
     db.select().from(systemSettings),
   ]);
   return { campaigns: campaignRows, experiments: experimentRows, jobs: jobRows, exceptions: exceptionRows, aiUsage: usageRows, settings: Object.fromEntries(settingRows.map((row) => [row.key, row.value])) };
+}
+
+export async function getOutboundProspects() {
+  const db = await getCommercialDb();
+  return db
+    .select({ prospect: outboundProspects, campaign: campaigns, lead: leads })
+    .from(outboundProspects)
+    .innerJoin(campaigns, eq(outboundProspects.campaignId, campaigns.id))
+    .leftJoin(leads, eq(outboundProspects.leadId, leads.id))
+    .orderBy(desc(outboundProspects.updatedAt));
 }
 
 export async function setSystemSetting(key: string, value: string) {

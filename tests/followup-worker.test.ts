@@ -24,16 +24,17 @@ describe("follow-up compatível com a janela do Instagram", () => {
     const { getFollowupSchedule } = await import(
       "../src/features/conversations/followups"
     );
-    const sentAt = "2026-09-02T12:00:00.000Z";
+    const lastInboundAt = "2026-09-02T12:00:00.000Z";
     process.env.FOLLOWUP_INTERVAL_HOURS = "48";
-    expect(getFollowupSchedule(sentAt)).toBe("2026-09-03T08:00:00.000Z");
+    expect(getFollowupSchedule(lastInboundAt, new Date("2026-09-02T13:00:00.000Z"))).toBe("2026-09-03T08:00:00.000Z");
   });
 
   it("prepara rascunho para revisão quando não houve nova resposta", async () => {
-    const [{ getCommercialDb }, schema, { runWorkerOnce }] = await Promise.all([
+    const [{ getCommercialDb }, schema, { runWorkerOnce }, { approveAndSendInstagramReply }] = await Promise.all([
       import("../src/db/commercial"),
       import("../db/schema"),
       import("../src/worker/processor"),
+      import("../src/features/conversations/replies"),
     ]);
     const db = await getCommercialDb();
     const now = Date.now();
@@ -51,7 +52,7 @@ describe("follow-up compatível com a janela do Instagram", () => {
     await db.insert(schema.conversations).values({
       id: "followup-conversation",
       leadId: "followup-lead",
-      externalId: "business:test-recipient",
+      externalId: "123:456",
       lastMessageAt: outboundAt,
       createdAt: inboundAt,
       updatedAt: outboundAt,
@@ -94,6 +95,7 @@ describe("follow-up compatível com a janela do Instagram", () => {
         conversationId: "followup-conversation",
         sourceMessageId: "followup-source",
         followupsSent: 0,
+        lastInboundAt: inboundAt,
       }),
       status: "pending",
       scheduledAt: new Date(now - 1_000).toISOString(),
@@ -112,6 +114,17 @@ describe("follow-up compatível com a janela do Instagram", () => {
       .from(schema.messages)
       .where(eq(schema.messages.status, "draft"));
     expect(drafts).toHaveLength(1);
-    expect(drafts[0].body).toContain("Ficou alguma dúvida");
+    expect(drafts[0].body).toContain("continuar essa conversa");
+
+    process.env.FOLLOWUP_REVIEW_ENABLED = "true";
+    process.env.MAX_FOLLOWUPS = "1";
+    const approved = await approveAndSendInstagramReply(
+      { leadId: "followup-lead", messageId: drafts[0].id, body: drafts[0].body },
+      { sendText: async ({ recipientId }) => ({ recipientId, messageId: "followup-sent-1" }) },
+    );
+    expect(approved.status).toBe("sent");
+    const followupJobs = (await db.select().from(schema.jobs)).filter((item) => item.type === "execute_followup");
+    expect(followupJobs).toHaveLength(1);
+    expect(followupJobs[0].status).toBe("completed");
   });
 });

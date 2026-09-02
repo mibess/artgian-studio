@@ -337,15 +337,32 @@ export async function approveAndSendInstagramReply(input: {
     .select()
     .from(jobs)
     .where(eq(jobs.status, "waiting_review"));
-  const relatedJobIds = reviewJobs
+  const relatedJobs = reviewJobs
     .filter((job) => {
       try {
         return JSON.parse(job.payload).draftMessageId === message.id;
       } catch {
         return false;
       }
-    })
-    .map((job) => job.id);
+    });
+  const relatedJobIds = relatedJobs.map((job) => job.id);
+  const followupJob = relatedJobs.find((job) => job.type === "execute_followup");
+  let previousFollowupsSent = 0;
+  if (followupJob) {
+    try {
+      previousFollowupsSent = Number(JSON.parse(followupJob.payload).followupsSent || 0);
+    } catch {
+      previousFollowupsSent = 0;
+    }
+  }
+  const auditAction =
+    dependencies.auditAction ||
+    (followupJob ? "instagram_followup_sent" : "instagram_reply_sent");
+  const timelineTitle =
+    dependencies.timelineTitle ||
+    (followupJob
+      ? "Follow-up aprovado e enviado pelo Instagram"
+      : "Resposta aprovada e enviada pelo Instagram");
   await db.transaction(async (tx) => {
     await tx
       .update(messages)
@@ -363,9 +380,7 @@ export async function approveAndSendInstagramReply(input: {
       id: crypto.randomUUID(),
       leadId: lead.id,
       type: "outbound_message",
-      title:
-        dependencies.timelineTitle ||
-        "Resposta aprovada e enviada pelo Instagram",
+      title: timelineTitle,
       metadata: JSON.stringify({ messageId: message.id }),
       createdBy: actor,
       createdAt: now,
@@ -373,7 +388,7 @@ export async function approveAndSendInstagramReply(input: {
     await tx.insert(auditLogs).values({
       id: crypto.randomUUID(),
       actor,
-      action: dependencies.auditAction || "instagram_reply_sent",
+      action: auditAction,
       entityType: "message",
       entityId: message.id,
       metadata: JSON.stringify({ recipientId: sent.recipientId }),
@@ -386,18 +401,27 @@ export async function approveAndSendInstagramReply(input: {
         .where(inArray(jobs.id, relatedJobIds));
     }
   });
-  try {
-    await scheduleFollowupReview({
-      leadId: lead.id,
-      conversationId: conversation.id,
-      sourceMessageId: message.id,
-      sentAt: now,
-    });
-  } catch (error) {
-    console.error(
-      "Resposta enviada, mas o follow-up não pôde ser agendado.",
-      error instanceof Error ? error.message : "Erro desconhecido",
-    );
+  const followupsSent = followupJob ? previousFollowupsSent + 1 : 0;
+  const configuredMax = Number(process.env.MAX_FOLLOWUPS || 1);
+  const maxFollowups = Number.isFinite(configuredMax)
+    ? Math.min(1, Math.max(0, Math.trunc(configuredMax)))
+    : 1;
+  if (followupsSent < maxFollowups) {
+    try {
+      await scheduleFollowupReview({
+        leadId: lead.id,
+        conversationId: conversation.id,
+        sourceMessageId: message.id,
+        sentAt: now,
+        lastInboundAt: latestInbound.sentAt,
+        followupsSent,
+      });
+    } catch (error) {
+      console.error(
+        "Resposta enviada, mas o follow-up não pôde ser agendado.",
+        error instanceof Error ? error.message : "Erro desconhecido",
+      );
+    }
   }
   return { status: "sent" as const };
 }

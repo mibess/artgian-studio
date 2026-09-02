@@ -15,7 +15,9 @@ import {
   enhanceReplyDraftWithAi,
 } from "../features/conversations/replies";
 import { canScheduleFollowup } from "../features/leads/domain";
+import { buildFollowupDraft } from "../features/conversations/followups";
 import { isInstagramReplyWindowOpen } from "../integrations/instagram/send";
+import { scheduleFollowupWake } from "./followup-scheduler";
 
 type JobPayload = {
   leadId?: string;
@@ -24,6 +26,7 @@ type JobPayload = {
   draftMessageId?: string;
   sourceMessageId?: string;
   followupsSent?: number;
+  lastInboundAt?: string;
 };
 
 async function getPauseState() {
@@ -32,13 +35,21 @@ async function getPauseState() {
   return Object.fromEntries(rows.map((row) => [row.key, row.value === "true"]));
 }
 
-export async function runWorkerOnce() {
+export async function runWorkerOnce(targetJobId?: string) {
   const db = await getCommercialDb();
   const now = new Date().toISOString();
   const [job] = await db
     .select()
     .from(jobs)
-    .where(and(eq(jobs.status, "pending"), lte(jobs.scheduledAt, now)))
+    .where(
+      targetJobId
+        ? and(
+            eq(jobs.id, targetJobId),
+            eq(jobs.status, "pending"),
+            lte(jobs.scheduledAt, now),
+          )
+        : and(eq(jobs.status, "pending"), lte(jobs.scheduledAt, now)),
+    )
     .orderBy(asc(jobs.scheduledAt))
     .limit(1);
   if (!job) return { processed: false as const };
@@ -53,7 +64,11 @@ export async function runWorkerOnce() {
   try {
     const pauses = await getPauseState();
     if (pauses.automation_paused) {
-      await db.update(jobs).set({ status: "pending", startedAt: null }).where(eq(jobs.id, job.id));
+      const retryAt = new Date(Date.now() + 60 * 60 * 1_000).toISOString();
+      await db.update(jobs).set({ status: "pending", attempts: job.attempts, startedAt: null, scheduledAt: retryAt }).where(eq(jobs.id, job.id));
+      if (job.type === "execute_followup") {
+        await scheduleFollowupWake({ jobId: job.id, scheduledAt: retryAt }).catch(() => undefined);
+      }
       return { processed: true as const, paused: true as const };
     }
     const payload = JSON.parse(job.payload) as JobPayload;
@@ -118,8 +133,9 @@ export async function runWorkerOnce() {
         const retryAt = new Date(Date.now() + 60 * 60 * 1_000).toISOString();
         await db
           .update(jobs)
-          .set({ status: "pending", startedAt: null, scheduledAt: retryAt, lastError: "Follow-ups pausados" })
+          .set({ status: "pending", attempts: job.attempts, startedAt: null, scheduledAt: retryAt, lastError: "Follow-ups pausados" })
           .where(eq(jobs.id, job.id));
+        await scheduleFollowupWake({ jobId: job.id, scheduledAt: retryAt }).catch(() => undefined);
         return { processed: true as const, paused: true as const };
       }
       if (!payload.conversationId || !payload.sourceMessageId) {
@@ -136,6 +152,10 @@ export async function runWorkerOnce() {
         )
         .limit(1);
       if (!conversation) throw new Error("Conversa do follow-up não encontrada.");
+      if (conversation.externalId?.startsWith("comment:")) {
+        await db.update(jobs).set({ status: "completed", finishedAt: now, lastError: "Follow-up cancelado: comentários exigem tratamento separado" }).where(eq(jobs.id, job.id));
+        return { processed: true as const, cancelled: true as const };
+      }
       const recent = await db
         .select()
         .from(messages)
@@ -151,6 +171,9 @@ export async function runWorkerOnce() {
           latestInbound &&
           Date.parse(latestInbound.sentAt) > Date.parse(source.sentAt),
       );
+      const sameInboundContext = Boolean(
+        !payload.lastInboundAt || latestInbound?.sentAt === payload.lastInboundAt,
+      );
       const allowed = canScheduleFollowup({
         doNotContact: lead.doNotContact,
         explicitRefusal: lead.pipelineStage === "closed",
@@ -160,10 +183,11 @@ export async function runWorkerOnce() {
       });
       if (
         !allowed ||
+        !sameInboundContext ||
         !latestInbound ||
         !isInstagramReplyWindowOpen(latestInbound.sentAt)
       ) {
-        await db.update(jobs).set({ status: "completed", finishedAt: now, lastError: !allowed ? "Follow-up cancelado pelas regras comerciais" : "Follow-up cancelado: janela de 24 horas encerrada" }).where(eq(jobs.id, job.id));
+        await db.update(jobs).set({ status: "completed", finishedAt: now, lastError: !allowed || !sameInboundContext ? "Follow-up cancelado pelas regras comerciais" : "Follow-up cancelado: janela de 24 horas encerrada" }).where(eq(jobs.id, job.id));
         return { processed: true as const, cancelled: true as const };
       }
       const existingDraft = recent.find(
@@ -179,7 +203,7 @@ export async function runWorkerOnce() {
             conversationId: conversation.id,
             direction: "outbound",
             sender: "assistant",
-            body: "Oi! Ficou alguma dúvida sobre o que estávamos preparando para você?",
+            body: buildFollowupDraft(lead.productInterest),
             intent: "general_question",
             action: "ask_question",
             status: "draft",

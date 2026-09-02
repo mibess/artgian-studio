@@ -1,12 +1,23 @@
-import { jobs } from "../../../db/schema";
+import { eq } from "drizzle-orm";
+import { auditLogs, jobs } from "../../../db/schema";
 import { getCommercialDb, getSystemSettings } from "../../db/commercial";
+import { scheduleFollowupWake } from "../../worker/followup-scheduler";
 
-export function getFollowupSchedule(sentAt: string) {
-  const configured = Number(process.env.FOLLOWUP_INTERVAL_HOURS || 20);
+export function getFollowupSchedule(lastInboundAt: string, now = new Date()) {
+  const configured = Number(process.env.FOLLOWUP_INTERVAL_HOURS || 18);
   const hours = Number.isFinite(configured)
     ? Math.min(20, Math.max(1, configured))
-    : 20;
-  return new Date(Date.parse(sentAt) + hours * 60 * 60 * 1_000).toISOString();
+    : 18;
+  const inboundTime = Date.parse(lastInboundAt);
+  if (!Number.isFinite(inboundTime)) throw new Error("Data inbound inválida.");
+  return new Date(Math.max(now.getTime(), inboundTime + hours * 60 * 60 * 1_000)).toISOString();
+}
+
+export function buildFollowupDraft(productInterest?: string | null) {
+  const subject = productInterest?.trim();
+  return subject
+    ? `Oi! Você ainda gostaria de continuar falando sobre ${subject}? Se quiser, posso ajudar com o próximo passo.`
+    : "Oi! Você ainda gostaria de continuar essa conversa? Se quiser, posso ajudar com o próximo passo.";
 }
 
 export async function scheduleFollowupReview(input: {
@@ -14,6 +25,8 @@ export async function scheduleFollowupReview(input: {
   conversationId: string;
   sourceMessageId: string;
   sentAt: string;
+  lastInboundAt: string;
+  followupsSent?: number;
 }) {
   const settings = await getSystemSettings();
   if (
@@ -25,17 +38,19 @@ export async function scheduleFollowupReview(input: {
   }
 
   const db = await getCommercialDb();
-  const scheduledAt = getFollowupSchedule(input.sentAt);
+  const scheduledAt = getFollowupSchedule(input.lastInboundAt);
+  const jobId = crypto.randomUUID();
   const inserted = await db
     .insert(jobs)
     .values({
-      id: crypto.randomUUID(),
+      id: jobId,
       type: "execute_followup",
       payload: JSON.stringify({
         leadId: input.leadId,
         conversationId: input.conversationId,
         sourceMessageId: input.sourceMessageId,
-        followupsSent: 0,
+        followupsSent: input.followupsSent || 0,
+        lastInboundAt: input.lastInboundAt,
       }),
       status: "pending",
       maxAttempts: 2,
@@ -45,7 +60,29 @@ export async function scheduleFollowupReview(input: {
     })
     .onConflictDoNothing()
     .returning({ id: jobs.id });
-  return inserted.length
-    ? { status: "scheduled" as const, scheduledAt }
-    : { status: "exists" as const, scheduledAt };
+  if (!inserted.length) return { status: "exists" as const, scheduledAt };
+
+  let wake: { status: "qstash" | "database_only" };
+  try {
+    wake = await scheduleFollowupWake({ jobId, scheduledAt });
+  } catch {
+    wake = { status: "database_only" };
+    await db.update(jobs).set({
+      lastError: "Agendador externo indisponível; job preservado no banco",
+    }).where(eq(jobs.id, jobId));
+  }
+  await db.insert(auditLogs).values({
+    id: crypto.randomUUID(),
+    actor: "system",
+    action: "instagram_followup_scheduled",
+    entityType: "job",
+    entityId: jobId,
+    metadata: JSON.stringify({
+      scheduledAt,
+      scheduler: wake.status,
+      followupsSent: input.followupsSent || 0,
+    }),
+    createdAt: input.sentAt,
+  });
+  return { status: "scheduled" as const, scheduledAt, scheduler: wake.status };
 }

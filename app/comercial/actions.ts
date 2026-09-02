@@ -5,12 +5,14 @@ import { redirect } from "next/navigation";
 import { processInboundMessage } from "../../src/features/conversations/process-inbound";
 import { setSystemSetting } from "../../src/db/commercial";
 import { saveBusinessFields } from "../../src/config/business";
-import { getCommercialDb } from "../../src/db/commercial";
-import { auditLogs, briefings, campaigns, catalogProducts, commercialOrders, exceptions, experiments, leads, quoteRequests, timelineEvents } from "../../db/schema";
-import { eq } from "drizzle-orm";
+import { getCommercialDb, getSystemSettings } from "../../src/db/commercial";
+import { auditLogs, briefings, campaigns, catalogProducts, commercialOrders, conversations, exceptions, experiments, leads, messages, outboundProspects, quoteRequests, timelineEvents } from "../../db/schema";
+import { and, desc, eq } from "drizzle-orm";
 import { prepareWhatsAppHandoff } from "../../src/integrations/whatsapp/handoff";
 import { approveAndSendInstagramReply, createReplyDraftForLead, enhanceReplyDraftWithAi } from "../../src/features/conversations/replies";
 import { runInstagramMaintenance } from "../../src/integrations/instagram/maintenance";
+import { canonicalInstagramUsername } from "../../src/features/leads/domain";
+import { isInstagramReplyWindowOpen } from "../../src/integrations/instagram/send";
 
 export async function updateAutomationSetting(formData: FormData) {
   const allowed = new Set([
@@ -131,6 +133,195 @@ export async function createCampaign(formData: FormData) {
   });
   revalidatePath("/comercial/campanhas");
   redirect("/comercial/campanhas?salvo=1");
+}
+
+function validInstagramProfileUrl(value: string) {
+  if (!value) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && ["instagram.com", "www.instagram.com"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export async function addOutboundProspect(formData: FormData) {
+  const campaignId = String(formData.get("campaignId") || "");
+  const instagramUsername = canonicalInstagramUsername(String(formData.get("instagramUsername") || ""));
+  const name = String(formData.get("name") || "").trim();
+  const sourceUrl = String(formData.get("sourceUrl") || "").trim();
+  const qualificationReason = String(formData.get("qualificationReason") || "").trim();
+  if (!campaignId || !/^[a-z0-9._]{1,30}$/.test(instagramUsername)) {
+    redirect("/comercial/campanhas?erro=Informe+um+perfil+válido+do+Instagram");
+  }
+  if (!validInstagramProfileUrl(sourceUrl)) {
+    redirect("/comercial/campanhas?erro=A+fonte+deve+ser+um+link+oficial+do+Instagram");
+  }
+  if (qualificationReason.length < 10 || qualificationReason.length > 500) {
+    redirect("/comercial/campanhas?erro=Explique+em+10+a+500+caracteres+por+que+o+perfil+é+relevante");
+  }
+
+  const db = await getCommercialDb();
+  const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1);
+  if (!campaign) redirect("/comercial/campanhas?erro=Campanha+não+encontrada");
+
+  const [lead] = await db.select().from(leads).where(eq(leads.instagramUsername, instagramUsername)).limit(1);
+  let contactPolicy = "manual_only";
+  if (lead && !lead.doNotContact) {
+    const [conversation] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.leadId, lead.id))
+      .orderBy(desc(conversations.updatedAt))
+      .limit(1);
+    if (conversation && !conversation.externalId?.startsWith("comment:")) {
+      const [latestInbound] = await db
+        .select()
+        .from(messages)
+        .where(and(eq(messages.conversationId, conversation.id), eq(messages.direction, "inbound")))
+        .orderBy(desc(messages.sentAt))
+        .limit(1);
+      if (latestInbound?.direction === "inbound" && isInstagramReplyWindowOpen(latestInbound.sentAt)) {
+        contactPolicy = "inbound_window";
+      }
+    }
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const inserted = await db.transaction(async (tx) => {
+    const created = await tx.insert(outboundProspects).values({
+      id,
+      campaignId,
+      leadId: lead?.id,
+      instagramUsername,
+      name: name || null,
+      sourceUrl: sourceUrl || null,
+      qualificationReason,
+      contactPolicy,
+      status: "identified",
+      createdAt: now,
+      updatedAt: now,
+    }).onConflictDoNothing().returning({ id: outboundProspects.id });
+    if (!created.length) return false;
+    await tx.insert(auditLogs).values({
+      id: crypto.randomUUID(),
+      actor: "operator",
+      action: "outbound_prospect_identified",
+      entityType: "outbound_prospect",
+      entityId: id,
+      metadata: JSON.stringify({ campaignId, contactPolicy }),
+      createdAt: now,
+    });
+    return true;
+  });
+  if (!inserted) redirect("/comercial/campanhas?erro=Este+perfil+já+está+na+campanha");
+  revalidatePath("/comercial/campanhas");
+  redirect("/comercial/campanhas?prospecto=1");
+}
+
+export async function prepareOutboundProspectDraft(formData: FormData) {
+  const prospectId = String(formData.get("prospectId") || "");
+  const db = await getCommercialDb();
+  const [row] = await db
+    .select({ prospect: outboundProspects, campaign: campaigns, lead: leads })
+    .from(outboundProspects)
+    .innerJoin(campaigns, eq(outboundProspects.campaignId, campaigns.id))
+    .leftJoin(leads, eq(outboundProspects.leadId, leads.id))
+    .where(eq(outboundProspects.id, prospectId))
+    .limit(1);
+  if (!row) redirect("/comercial/campanhas?erro=Prospecto+não+encontrado");
+  if (row.lead?.doNotContact) redirect("/comercial/campanhas?erro=Contato+bloqueado+por+opt-out");
+
+  const firstName = row.prospect.name?.split(/\s+/)[0];
+  const greeting = firstName ? `Oi, ${firstName}!` : "Oi!";
+  const draftBody = `${greeting} Conheci seu perfil por meio de ${row.campaign.source}. Vi uma possível conexão com ${row.campaign.segment || "o trabalho da Artgian Studio"}. Posso te contar brevemente sobre uma ideia?`;
+  const now = new Date().toISOString();
+  await db.transaction(async (tx) => {
+    await tx.update(outboundProspects).set({
+      draftBody,
+      status: "waiting_review",
+      reviewedAt: null,
+      updatedAt: now,
+    }).where(eq(outboundProspects.id, prospectId));
+    await tx.insert(auditLogs).values({
+      id: crypto.randomUUID(),
+      actor: "assistant",
+      action: "outbound_draft_prepared",
+      entityType: "outbound_prospect",
+      entityId: prospectId,
+      metadata: JSON.stringify({ contactPolicy: row.prospect.contactPolicy, sent: false }),
+      createdAt: now,
+    });
+  });
+  revalidatePath("/comercial/campanhas");
+  redirect("/comercial/campanhas?rascunho=1");
+}
+
+export async function setOutboundCampaignEnabled(formData: FormData) {
+  const campaignId = String(formData.get("campaignId") || "");
+  const enabled = String(formData.get("enabled") || "false") === "true";
+  const settings = await getSystemSettings();
+  if (
+    enabled &&
+    (process.env.OUTBOUND_AUTOMATION_ENABLED !== "true" ||
+      settings.automation_paused === "true" ||
+      settings.outbound_paused !== "false")
+  ) {
+    redirect("/comercial/campanhas?erro=Liberação+global+de+outbound+ainda+está+bloqueada");
+  }
+  const db = await getCommercialDb();
+  const now = new Date().toISOString();
+  await db.transaction(async (tx) => {
+    await tx.update(campaigns).set({
+      outboundEnabled: enabled,
+      status: enabled ? "active" : "paused",
+      updatedAt: now,
+    }).where(eq(campaigns.id, campaignId));
+    await tx.insert(auditLogs).values({
+      id: crypto.randomUUID(),
+      actor: "operator",
+      action: enabled ? "outbound_campaign_enabled" : "outbound_campaign_paused",
+      entityType: "campaign",
+      entityId: campaignId,
+      metadata: JSON.stringify({ enabled }),
+      createdAt: now,
+    });
+  });
+  revalidatePath("/comercial/campanhas");
+  redirect("/comercial/campanhas?campanha=1");
+}
+
+export async function saveOutboundProspectDraft(formData: FormData) {
+  const prospectId = String(formData.get("prospectId") || "");
+  const draftBody = String(formData.get("draftBody") || "").trim();
+  if (!prospectId || draftBody.length < 10 || draftBody.length > 1_000) {
+    redirect("/comercial/campanhas?erro=Revise+o+rascunho+(10+a+1000+caracteres)");
+  }
+  const db = await getCommercialDb();
+  const now = new Date().toISOString();
+  const updated = await db.transaction(async (tx) => {
+    const rows = await tx.update(outboundProspects).set({
+      draftBody,
+      status: "approved_manual",
+      reviewedAt: now,
+      updatedAt: now,
+    }).where(eq(outboundProspects.id, prospectId)).returning({ id: outboundProspects.id });
+    if (!rows.length) return false;
+    await tx.insert(auditLogs).values({
+      id: crypto.randomUUID(),
+      actor: "operator",
+      action: "outbound_draft_approved_manual",
+      entityType: "outbound_prospect",
+      entityId: prospectId,
+      metadata: JSON.stringify({ sent: false }),
+      createdAt: now,
+    });
+    return true;
+  });
+  if (!updated) redirect("/comercial/campanhas?erro=Prospecto+não+encontrado");
+  revalidatePath("/comercial/campanhas");
+  redirect("/comercial/campanhas?revisado=1");
 }
 
 export async function createExperiment(formData: FormData) {

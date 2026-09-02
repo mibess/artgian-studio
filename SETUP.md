@@ -228,7 +228,9 @@ Antes de mudar:
 5. manter opt-out e pausa geral testados;
 6. realizar um smoke test pequeno e supervisionado.
 
-Esta versão não implementa clique de envio de primeiro contato; somente a inspeção segura em dry-run está preparada.
+Esta versão não implementa clique nem chamada de API para primeiro contato. A
+inspeção segura em dry-run e a fila de prospecção assistida estão disponíveis
+para qualificação, rascunho, revisão e auditoria.
 
 ### Agendamento de follow-ups dentro de 24 horas
 
@@ -244,11 +246,14 @@ janela do Instagram no momento de preparar e no momento de enviar. Recomenda-se
 preparar o rascunho 16 a 18 horas após a última mensagem, deixando margem para
 revisão humana antes das 24 horas.
 
-Se a migração de plano não for desejada, a alternativa adequada é publicar um
-evento individual com atraso no QStash e receber a chamada em uma rota que
-valide a assinatura `Upstash-Signature`. O endpoint deve apenas acordar o job
-persistido; o banco continua sendo a fonte de verdade e cancela o follow-up se
-houver nova resposta, opt-out, recusa ou janela encerrada. Referências:
+O projeto implementa a alternativa por evento individual com atraso no QStash.
+Configure `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY` e
+`QSTASH_NEXT_SIGNING_KEY`. A rota `POST /api/tasks/followups` valida a assinatura
+`Upstash-Signature` e acorda somente o job informado. O banco continua sendo a
+fonte de verdade e cancela o follow-up se houver nova resposta, opt-out, recusa
+ou janela encerrada. Sem QStash, o job é persistido como `database_only`, mas
+depende do worker local ou do cron diário e não tem precisão operacional.
+Referências:
 <https://upstash.com/docs/qstash/features/delay> e
 <https://upstash.com/docs/qstash/howto/signature>.
 
@@ -256,6 +261,27 @@ Não use a tag `HUMAN_AGENT` para follow-ups automáticos. Ela é destinada a um
 agente humano tratando uma solicitação do usuário fora da janela padrão. Até
 autorização explícita, mantenha `FOLLOWUP_REVIEW_ENABLED=false` e
 `followups_paused=true`.
+
+O horário é calculado a partir da última mensagem inbound, não da resposta da
+empresa. O padrão é 18 horas (`FOLLOWUP_INTERVAL_HOURS=18`) e o código limita a
+configuração a no máximo 20 horas. Todo follow-up nasce como rascunho para
+revisão humana; a janela de 24 horas é validada novamente no envio. Por
+segurança, esta versão limita cada ciclo inbound a um único follow-up, mesmo se
+`MAX_FOLLOWUPS` for configurado acima de 1.
+
+### Prospecção outbound assistida
+
+A página **Campanhas e prospecção** permite cadastrar perfis, registrar a fonte
+e a justificativa de qualificação, preparar um rascunho e salvar a revisão. Nada
+nessa fila envia mensagens. Um perfil já associado a uma DM inbound dentro de
+24 horas recebe a política `inbound_window`; os demais ficam como
+`manual_only`.
+
+Ativar uma campanha exige simultaneamente
+`OUTBOUND_AUTOMATION_ENABLED=true`, pausa geral aberta e
+`outbound_paused=false`. Mesmo ativa, uma campanha não autoriza primeiro contato
+frio pela API oficial. Comentários também continuam isolados e não são
+convertidos automaticamente em DM.
 
 ## 9. WhatsApp
 

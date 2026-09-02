@@ -321,6 +321,36 @@ export const campaigns = sqliteTable("campaigns", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const outboundProspects = sqliteTable(
+  "outbound_prospects",
+  {
+    id: text("id").primaryKey(),
+    campaignId: text("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    leadId: text("lead_id").references(() => leads.id, { onDelete: "set null" }),
+    instagramUsername: text("instagram_username").notNull(),
+    name: text("name"),
+    sourceUrl: text("source_url"),
+    qualificationReason: text("qualification_reason").notNull(),
+    contactPolicy: text("contact_policy").notNull().default("manual_only"),
+    status: text("status").notNull().default("identified"),
+    draftBody: text("draft_body"),
+    reviewedAt: text("reviewed_at"),
+    contactedAt: text("contacted_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("outbound_prospects_campaign_username_unique").on(
+      table.campaignId,
+      table.instagramUsername,
+    ),
+    index("outbound_prospects_status_idx").on(table.status),
+    index("outbound_prospects_lead_idx").on(table.leadId),
+  ],
+);
+
 export const experiments = sqliteTable("experiments", {
   id: text("id").primaryKey(),
   hypothesis: text("hypothesis").notNull(),
