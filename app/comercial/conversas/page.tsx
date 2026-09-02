@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { AtSign as Instagram, Bot, MessageSquareText, Sparkles } from "lucide-react";
-import { getConversationsOverview } from "../../../src/db/commercial";
+import { getConversationsOverview, getSystemSettings } from "../../../src/db/commercial";
 import { Avatar, PageHeader, StatusBadge, formatDateTime } from "../_components";
 import { simulateInbound } from "../actions";
 
 export default async function ConversationsPage({ searchParams }: { searchParams: Promise<{ erro?: string }> }) {
-  const params = await searchParams;
-  const rows = await getConversationsOverview();
+  const [params, rows, settings] = await Promise.all([
+    searchParams,
+    getConversationsOverview(),
+    getSystemSettings(),
+  ]);
+  const autoRepliesActive =
+    process.env.INSTAGRAM_AUTO_REPLY_ENABLED === "true" &&
+    settings.automation_paused !== "true" &&
+    settings.auto_replies_paused === "false";
   return <>
     <PageHeader eyebrow="Instagram inbound" title="Conversas" description="Mensagens organizadas por intenção, com sugestão de resposta e escalada quando a informação não é segura." />
     {params.erro && <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">{params.erro}</p>}
@@ -25,7 +32,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
             <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#f1c865] px-4 py-3 text-xs font-extrabold text-[#193848]"><Bot size={15}/>Processar em dry-run</button>
           </form>
         </section>
-        <section className="rounded-[20px] border border-[#e1e1db] bg-white p-5"><div className="flex items-center gap-3"><MessageSquareText className="text-[#d96245]" size={18}/><div><p className="text-xs font-bold text-[#344f5c]">Respostas automáticas pausadas</p><p className="mt-0.5 text-[10px] text-[#8a959b]">Sugestões são criadas como jobs, sem envio.</p></div></div></section>
+        <section className="rounded-[20px] border border-[#e1e1db] bg-white p-5"><div className="flex items-center gap-3"><MessageSquareText className={autoRepliesActive?"text-[#3f8b6d]":"text-[#d96245]"} size={18}/><div><p className="text-xs font-bold text-[#344f5c]">{autoRepliesActive?"Respostas automáticas ativas":"Respostas automáticas pausadas"}</p><p className="mt-0.5 text-[10px] text-[#8a959b]">{autoRepliesActive?"DMs comerciais seguras podem ser respondidas; casos ambíguos continuam em revisão.":"Sugestões são criadas como jobs, sem envio automático."}</p></div></div></section>
       </aside>
     </div>
   </>;
