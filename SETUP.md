@@ -67,6 +67,56 @@ configure `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN` e execute `pnpm db:migrate`
 antes de habilitar o webhook. Mantenha `COMMERCIAL_DEMO_MODE=false` nesse
 ambiente para não inserir dados demonstrativos.
 
+### Backup e recuperação em produção (Turso)
+
+O comando `pnpm db:backup` cobre somente SQLite local e recusa bancos remotos.
+Em produção, use duas camadas independentes:
+
+1. **PITR gerenciado:** a Turso cria pontos de recuperação a cada `COMMIT`.
+   A retenção publicada é de 24 horas no plano Free e de 10, 30 ou 90 dias nos
+   planos Developer, Scaler e Pro. Consulte a política atual antes de depender
+   desse prazo: <https://docs.turso.tech/features/point-in-time-recovery>.
+2. **Exportação lógica externa:** gere regularmente um `.dump`, armazene-o
+   criptografado fora da conta Turso e aplique retenção compatível com a LGPD.
+   O dump contém dados comerciais e pessoais e deve ter acesso restrito.
+
+Exemplo de exportação, em uma estação autenticada na Turso:
+
+```bash
+turso db shell NOME_DO_BANCO .dump > artgian-AAAA-MM-DDTHH-MM-SSZ.sql
+```
+
+Runbook de recuperação por PITR:
+
+1. pause as automações e bloqueie temporariamente as fontes de escrita;
+2. registre em UTC o instante imediatamente anterior ao incidente;
+3. crie um banco novo, sem alterar ou apagar o original:
+
+   ```bash
+   turso db create artgian-recovery-AAAAMMDD \
+     --from-db NOME_DO_BANCO_ORIGINAL \
+     --timestamp INSTANTE_RFC3339
+   ```
+
+4. crie uma credencial exclusiva para o banco recuperado e valide schema,
+   contagens, pedidos, mensagens, auditoria e integridade referencial;
+5. atualize `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN` na Vercel, faça um novo
+   deployment e execute um smoke test somente leitura;
+6. libere as escritas e automações gradualmente;
+7. preserve o banco original até encerrar a análise do incidente. A exclusão
+   nunca faz parte do procedimento de restauração.
+
+Para recuperar a partir do dump, crie outro banco em vez de importar sobre o
+original:
+
+```bash
+turso db create artgian-recovery-AAAAMMDD --from-dump ./artgian-backup.sql
+```
+
+A restauração deve ser ensaiada periodicamente em um banco descartável. A
+documentação oficial dos comandos de dump e carga está em
+<https://docs.turso.tech/cli/db/shell>.
+
 ## 4. OpenAI
 
 Preencha:
@@ -179,6 +229,33 @@ Antes de mudar:
 6. realizar um smoke test pequeno e supervisionado.
 
 Esta versão não implementa clique de envio de primeiro contato; somente a inspeção segura em dry-run está preparada.
+
+### Agendamento de follow-ups dentro de 24 horas
+
+O cron diário atual serve para reconciliação do Instagram, mas não para
+follow-ups: no plano Hobby ele executa no máximo uma vez por dia e pode variar
+até 59 minutos dentro da hora configurada. Também não há retry automático do
+cron. Referência: <https://vercel.com/docs/cron-jobs/usage-and-pricing>.
+
+A opção operacional mais simples é migrar o projeto comercial para Vercel Pro
+e criar uma rota de cron separada, exclusiva para o worker, executada a cada
+cinco minutos. Mantenha lock distribuído, idempotência e a revalidação da
+janela do Instagram no momento de preparar e no momento de enviar. Recomenda-se
+preparar o rascunho 16 a 18 horas após a última mensagem, deixando margem para
+revisão humana antes das 24 horas.
+
+Se a migração de plano não for desejada, a alternativa adequada é publicar um
+evento individual com atraso no QStash e receber a chamada em uma rota que
+valide a assinatura `Upstash-Signature`. O endpoint deve apenas acordar o job
+persistido; o banco continua sendo a fonte de verdade e cancela o follow-up se
+houver nova resposta, opt-out, recusa ou janela encerrada. Referências:
+<https://upstash.com/docs/qstash/features/delay> e
+<https://upstash.com/docs/qstash/howto/signature>.
+
+Não use a tag `HUMAN_AGENT` para follow-ups automáticos. Ela é destinada a um
+agente humano tratando uma solicitação do usuário fora da janela padrão. Até
+autorização explícita, mantenha `FOLLOWUP_REVIEW_ENABLED=false` e
+`followups_paused=true`.
 
 ## 9. WhatsApp
 

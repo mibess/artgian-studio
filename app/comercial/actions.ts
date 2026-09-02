@@ -282,6 +282,7 @@ export async function approveInstagramReply(formData: FormData) {
     not_found: "Rascunho+ou+conversa+não+encontrado",
     blocked: "Contato+bloqueado+por+opt-out",
     invalid_recipient: "Esta+é+uma+conversa+simulada+e+não+pode+ser+enviada",
+    comment_review_only: "Comentários+ficam+somente+em+revisão+e+não+são+enviados+como+DM",
     outside_window: "A+janela+de+24+horas+para+resposta+foi+encerrada",
     already_processed: "Esta+resposta+já+foi+processada",
     failed: "O+Instagram+recusou+o+envio;+revise+a+integração+e+tente+novamente",

@@ -148,7 +148,14 @@ export async function processInboundMessage(input: InboundMessage) {
     const existingConversations = await tx
       .select()
       .from(conversations)
-      .where(eq(conversations.leadId, lead.id))
+      .where(
+        input.externalConversationId
+          ? and(
+              eq(conversations.leadId, lead.id),
+              eq(conversations.externalId, input.externalConversationId),
+            )
+          : eq(conversations.leadId, lead.id),
+      )
       .limit(1);
     const conversation = existingConversations[0];
     const activeConversationId = conversation?.id || conversationId;
@@ -165,6 +172,47 @@ export async function processInboundMessage(input: InboundMessage) {
       });
     } else {
       await tx.update(conversations).set({ lastMessageAt: now, updatedAt: now }).where(eq(conversations.id, conversation.id));
+    }
+
+    const supersededDrafts = await tx
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.conversationId, activeConversationId),
+          inArray(messages.status, ["draft", "failed"]),
+        ),
+      );
+
+    if (supersededDrafts.length) {
+      const supersededDraftIds = new Set(
+        supersededDrafts.map((message) => message.id),
+      );
+      const waitingReviewJobs = await tx
+        .select({ id: jobs.id, payload: jobs.payload })
+        .from(jobs)
+        .where(eq(jobs.status, "waiting_review"));
+      const supersededJobIds = waitingReviewJobs
+        .filter((job) => {
+          try {
+            const payload = JSON.parse(job.payload) as {
+              draftMessageId?: string;
+            };
+            return Boolean(
+              payload.draftMessageId &&
+                supersededDraftIds.has(payload.draftMessageId),
+            );
+          } catch {
+            return false;
+          }
+        })
+        .map((job) => job.id);
+      if (supersededJobIds.length) {
+        await tx
+          .update(jobs)
+          .set({ status: "completed", finishedAt: now, lastError: null })
+          .where(inArray(jobs.id, supersededJobIds));
+      }
     }
 
     await tx
