@@ -6,7 +6,7 @@ import { processInboundMessage } from "../../src/features/conversations/process-
 import { setSystemSetting } from "../../src/db/commercial";
 import { saveBusinessFields } from "../../src/config/business";
 import { getCommercialDb } from "../../src/db/commercial";
-import { auditLogs, briefings, catalogProducts, commercialOrders, exceptions, leads, quoteRequests, timelineEvents } from "../../db/schema";
+import { auditLogs, briefings, campaigns, catalogProducts, commercialOrders, exceptions, experiments, leads, quoteRequests, timelineEvents } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { prepareWhatsAppHandoff } from "../../src/integrations/whatsapp/handoff";
 import { approveAndSendInstagramReply, createReplyDraftForLead, enhanceReplyDraftWithAi } from "../../src/features/conversations/replies";
@@ -96,6 +96,89 @@ export async function addCatalogProduct(formData: FormData) {
   });
   revalidatePath("/comercial/produtos");
   redirect("/comercial/produtos?salvo=1");
+}
+
+export async function createCampaign(formData: FormData) {
+  const name = String(formData.get("name") || "").trim();
+  const source = String(formData.get("source") || "").trim();
+  const segment = String(formData.get("segment") || "").trim();
+  if (name.length < 3 || source.length < 2) {
+    redirect("/comercial/campanhas?erro=Informe+nome+e+origem+da+campanha");
+  }
+  const db = await getCommercialDb();
+  const now = new Date().toISOString();
+  await db.transaction(async (tx) => {
+    const id = crypto.randomUUID();
+    await tx.insert(campaigns).values({
+      id,
+      name,
+      source,
+      segment: segment || null,
+      status: "draft",
+      outboundEnabled: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await tx.insert(auditLogs).values({
+      id: crypto.randomUUID(),
+      actor: "operator",
+      action: "campaign_created",
+      entityType: "campaign",
+      entityId: id,
+      metadata: JSON.stringify({ outboundEnabled: false }),
+      createdAt: now,
+    });
+  });
+  revalidatePath("/comercial/campanhas");
+  redirect("/comercial/campanhas?salvo=1");
+}
+
+export async function createExperiment(formData: FormData) {
+  const hypothesis = String(formData.get("hypothesis") || "").trim();
+  const control = String(formData.get("control") || "").trim();
+  const variant = String(formData.get("variant") || "").trim();
+  const primaryMetric = String(formData.get("primaryMetric") || "").trim();
+  const minimumSampleSize = Math.max(
+    20,
+    Math.min(1_000, Number(formData.get("minimumSampleSize") || 30)),
+  );
+  if (
+    hypothesis.length < 10 ||
+    control.length < 3 ||
+    variant.length < 3 ||
+    primaryMetric.length < 3 ||
+    !Number.isFinite(minimumSampleSize)
+  ) {
+    redirect("/comercial/experimentos?erro=Preencha+todos+os+campos+do+experimento");
+  }
+  const db = await getCommercialDb();
+  const now = new Date().toISOString();
+  await db.transaction(async (tx) => {
+    const id = crypto.randomUUID();
+    await tx.insert(experiments).values({
+      id,
+      hypothesis,
+      control,
+      variant,
+      sampleSize: 0,
+      minimumSampleSize: Math.trunc(minimumSampleSize),
+      primaryMetric,
+      secondaryMetrics: "[]",
+      status: "draft",
+      createdAt: now,
+    });
+    await tx.insert(auditLogs).values({
+      id: crypto.randomUUID(),
+      actor: "operator",
+      action: "experiment_created",
+      entityType: "experiment",
+      entityId: id,
+      metadata: JSON.stringify({ minimumSampleSize: Math.trunc(minimumSampleSize) }),
+      createdAt: now,
+    });
+  });
+  revalidatePath("/comercial/experimentos");
+  redirect("/comercial/experimentos?salvo=1");
 }
 
 export async function updateLeadStage(formData: FormData) {

@@ -6,12 +6,15 @@ import { getBusinessConfig } from "../../config/business";
 import { getCommercialDb } from "../../db/commercial";
 import {
   AI_ACTIONS,
+  CircuitBreaker,
   INTENTS,
   classifyIntent,
   decideNextAction,
   type CatalogTruth,
   type IntentDecision,
 } from "../../features/leads/domain";
+
+const openAiCircuitBreaker = new CircuitBreaker(3, 60_000);
 
 const decisionSchema = z.object({
   intent: z.enum(INTENTS),
@@ -87,8 +90,14 @@ export async function generateCommercialDecision(
 ): Promise<IntentDecision & { source: "rules" | "openai" }> {
   const fallback = decideNextAction(classifyIntent(context.message));
   const apiKey = process.env.OPENAI_API_KEY?.trim();
-  const model = process.env.OPENAI_MODEL?.trim();
+  const primaryModel = process.env.OPENAI_MODEL?.trim();
+  const fastModel = process.env.OPENAI_MODEL_FAST?.trim();
+  const model =
+    context.message.length <= 180 && fastModel ? fastModel : primaryModel;
   if (!apiKey || !model) return { ...fallback, source: "rules" };
+  if (!openAiCircuitBreaker.canExecute()) {
+    return { ...fallback, source: "rules" };
+  }
 
   const budget = await getAiBudgetStatus();
   if (!budget.available) return { ...fallback, source: "rules" };
@@ -173,8 +182,10 @@ export async function generateCommercialDecision(
       purpose: "commercial_decision",
       createdAt: new Date().toISOString(),
     });
+    openAiCircuitBreaker.recordSuccess();
     return { ...parsed.data, source: "openai" };
   } catch (error) {
+    openAiCircuitBreaker.recordFailure();
     console.error(
       "Falha ao gerar decisão comercial pela OpenAI; usando regras locais.",
       error instanceof Error ? error.message : "Erro desconhecido",

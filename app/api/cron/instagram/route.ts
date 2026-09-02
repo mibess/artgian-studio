@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { runInstagramMaintenance } from "../../../../src/integrations/instagram/maintenance";
+import { runWorkerBatch } from "../../../../src/worker/processor";
 
 export const maxDuration = 60;
 
@@ -21,9 +22,12 @@ export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
-  const result = await runInstagramMaintenance();
-  return NextResponse.json(result, {
-    status: result.status === "error" ? 500 : 200,
+  const [instagram, commercial] = await Promise.all([
+    runInstagramMaintenance(),
+    runWorkerBatch(3),
+  ]);
+  return NextResponse.json({ instagram, commercial }, {
+    status: instagram.status === "error" ? 500 : 200,
     headers: { "Cache-Control": "no-store" },
   });
 }

@@ -4,7 +4,6 @@ import {
   Bot,
   CalendarDays,
   ChevronRight,
-  CircleDollarSign,
   Clock3,
   MessageCircle,
   MoreHorizontal,
@@ -18,7 +17,7 @@ import {
 } from "lucide-react";
 import { getBusinessConfig } from "../../src/config/business";
 import { getDashboardData } from "../../src/db/commercial";
-import { PIPELINE_LABELS, type ConsumerPipelineStage } from "../../src/features/leads/domain";
+import { JOB_TYPE_LABELS, PIPELINE_LABELS, type ConsumerPipelineStage } from "../../src/features/leads/domain";
 
 const formatBrl = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 const formatDate = () => new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long" }).format(new Date());
@@ -48,6 +47,43 @@ export default async function CommercialDashboard() {
     { title: "Convertidos", stages: ["order_confirmed"], color: "#79b99f" },
   ];
   const topLeads = data.leads.filter((lead) => lead.pipelineStage !== "order_confirmed").slice(0, 4);
+  const topLead = topLeads[0];
+  const topBriefing = data.briefings.find((briefing) => briefing.leadId === topLead?.id);
+  const knownSignals = [
+    topBriefing?.referenceDescription ? "referência" : null,
+    topBriefing?.quantity ? "quantidade" : null,
+    topBriefing?.desiredDeadline ? "prazo desejado" : null,
+    topBriefing?.customizationText ? "personalização" : null,
+  ].filter(Boolean) as string[];
+  const radarTitle = topLead
+    ? knownSignals.length
+      ? `${topLead.name?.split(" ")[0] || `@${topLead.instagramUsername}`} já informou ${new Intl.ListFormat("pt-BR").format(knownSignals)}.`
+      : `${topLead.name?.split(" ")[0] || `@${topLead.instagramUsername}`} tem uma conversa ativa aguardando o próximo passo.`
+    : "Nenhuma oportunidade ativa no momento.";
+  const radarDescription = topLead
+    ? topBriefing?.needsProductionReview
+      ? "A próxima ação segura é validar a viabilidade e completar o briefing antes de confirmar prazo ou orçamento."
+      : "Use os dados registrados no briefing para avançar sem repetir perguntas já respondidas."
+    : "Novas mensagens inbound aparecerão aqui quando forem recebidas pelo Instagram.";
+  const nextActions = data.jobs
+    .filter((job) => ["pending", "waiting_review", "dead_letter"].includes(job.status))
+    .slice(0, 4)
+    .map((job) => {
+      let lead = null;
+      try {
+        const payload = JSON.parse(job.payload) as { leadId?: string };
+        lead = data.leads.find((item) => item.id === payload.leadId) || null;
+      } catch {
+        lead = null;
+      }
+      return {
+        job,
+        lead,
+        title: JOB_TYPE_LABELS[job.type] || "Automação interna",
+        detail: lead?.name || (lead ? `@${lead.instagramUsername}` : "Registro operacional"),
+        time: job.status === "waiting_review" ? "Revisar" : job.status === "dead_letter" ? "Falha" : "Pendente",
+      };
+    });
 
   return (
     <div className="space-y-7">
@@ -71,12 +107,12 @@ export default async function CommercialDashboard() {
         <div className="relative grid gap-6 lg:grid-cols-[1.2fr_.8fr] lg:items-center">
           <div>
             <div className="mb-3 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#f1c865]"><WandSparkles size={14} /> Radar de oportunidades</div>
-            <h2 className="max-w-2xl text-xl font-semibold tracking-[-0.025em] sm:text-2xl">{topLeads[0]?.name?.split(" ")[0] || "Um novo contato"} está pronta para avançar: referência, quantidade e prazo já foram informados.</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/58">O briefing está organizado. A próxima ação segura é validar a viabilidade e preparar o orçamento — sem repetir perguntas para a cliente.</p>
+            <h2 className="max-w-2xl text-xl font-semibold tracking-[-0.025em] sm:text-2xl">{radarTitle}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/58">{radarDescription}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-            <Link href={`/comercial/leads/${topLeads[0]?.id || ""}`} className="inline-flex items-center gap-2 rounded-xl bg-[#f1c865] px-4 py-3 text-xs font-bold text-[#193244] transition hover:-translate-y-0.5">Ver oportunidade <ArrowRight size={15} /></Link>
-            <span className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/65"><strong className="text-white">Score {topLeads[0]?.score || 0}</strong> · alta intenção</span>
+            {topLead&&<Link href={`/comercial/leads/${topLead.id}`} className="inline-flex items-center gap-2 rounded-xl bg-[#f1c865] px-4 py-3 text-xs font-bold text-[#193244] transition hover:-translate-y-0.5">Ver oportunidade <ArrowRight size={15} /></Link>}
+            <span className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/65"><strong className="text-white">Score {topLead?.score || 0}</strong> · {topLead&&topLead.score>=70?"prioridade alta":topLead?"acompanhar":"sem dados"}</span>
           </div>
         </div>
       </section>
@@ -84,7 +120,7 @@ export default async function CommercialDashboard() {
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Oportunidades ativas", value: data.leads.filter((lead) => !["closed", "order_confirmed"].includes(lead.pipelineStage)).length, detail: `${data.leads.filter((lead) => today.getTime() - new Date(lead.createdAt).getTime() <= 7 * 86_400_000).length} em 7 dias`, icon: UsersRound, accent: "bg-[#dbe9e6] text-[#2e7160]" },
-          { label: "Interesse real", value: interested, detail: `${Math.round((interested / data.leads.length) * 100)}% dos contatos`, icon: Target, accent: "bg-[#fff0c9] text-[#8b6718]" },
+          { label: "Interesse real", value: interested, detail: `${data.leads.length?Math.round((interested / data.leads.length) * 100):0}% dos contatos`, icon: Target, accent: "bg-[#fff0c9] text-[#8b6718]" },
           { label: "Handoffs qualificados", value: handoffs, detail: "WhatsApp pendente", icon: MessageCircle, accent: "bg-[#f8ded5] text-[#a24d36]" },
           { label: "Pedidos confirmados", value: formatBrl(confirmedValue), detail: `${conversion.toFixed(1).replace(".", ",")}% de conversão`, icon: PackageCheck, accent: "bg-[#dce5f5] text-[#425d91]" },
         ].map((metric) => {
@@ -113,12 +149,8 @@ export default async function CommercialDashboard() {
         <section className="rounded-[22px] border border-[#e2e2dc] bg-white p-5 shadow-[0_8px_28px_rgba(32,52,60,.04)] sm:p-6">
           <div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#8b979d]">Próximas ações</p><h2 className="mt-1 text-lg font-semibold tracking-[-0.025em]">Fila inteligente</h2></div><Link href="/comercial/jobs" className="text-[10px] font-bold text-[#d96245]">Ver todas</Link></div>
           <div className="mt-4 divide-y divide-[#ecece7]">
-            {[
-              { icon: CircleDollarSign, title: "Preparar orçamento", detail: "Mariana · miniatura", time: "Agora", color: "bg-[#f8ded5] text-[#a24d36]" },
-              { icon: UserRoundCheck, title: "Revisar oportunidade B2B", detail: "Ateliê Pequenina", time: "Hoje", color: "bg-[#fff0c9] text-[#8b6718]" },
-              { icon: MessageCircle, title: "Responder contexto", detail: "Lucas · nova referência", time: "13:30", color: "bg-[#dbe9e6] text-[#2e7160]" },
-              { icon: Clock3, title: "Follow-up contextual", detail: "Camila · decoração", time: "Amanhã", color: "bg-[#dce5f5] text-[#425d91]" },
-            ].map((item)=>{const Icon=item.icon;return <div className="flex items-center gap-3 py-3.5" key={item.title}><span className={`grid size-9 shrink-0 place-items-center rounded-xl ${item.color}`}><Icon size={16}/></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-[#264252]">{item.title}</p><p className="mt-0.5 truncate text-[10px] text-[#8a959b]">{item.detail}</p></div><span className="text-[9px] font-bold uppercase tracking-wide text-[#9aa3a7]">{item.time}</span></div>})}
+            {nextActions.map((item)=>{const Icon=item.job.type==="execute_followup"?Clock3:item.job.status==="dead_letter"?UserRoundCheck:MessageCircle;const color=item.job.status==="dead_letter"?"bg-[#f8ded5] text-[#a24d36]":item.job.type==="execute_followup"?"bg-[#dce5f5] text-[#425d91]":"bg-[#dbe9e6] text-[#2e7160]";return <div className="flex items-center gap-3 py-3.5" key={item.job.id}><span className={`grid size-9 shrink-0 place-items-center rounded-xl ${color}`}><Icon size={16}/></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-[#264252]">{item.title}</p><p className="mt-0.5 truncate text-[10px] text-[#8a959b]">{item.detail}</p></div><span className="text-[9px] font-bold uppercase tracking-wide text-[#9aa3a7]">{item.time}</span></div>})}
+            {!nextActions.length&&<p className="py-8 text-center text-[10px] text-[#99a2a6]">Nenhuma ação pendente.</p>}
           </div>
         </section>
       </div>

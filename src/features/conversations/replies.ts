@@ -16,6 +16,7 @@ import {
   isInstagramReplyWindowOpen,
   sendInstagramText,
 } from "../../integrations/instagram/send";
+import { scheduleFollowupReview } from "./followups";
 
 const EDITABLE_STATUSES = ["draft", "failed"];
 
@@ -381,5 +382,18 @@ export async function approveAndSendInstagramReply(input: {
         .where(inArray(jobs.id, relatedJobIds));
     }
   });
+  try {
+    await scheduleFollowupReview({
+      leadId: lead.id,
+      conversationId: conversation.id,
+      sourceMessageId: message.id,
+      sentAt: now,
+    });
+  } catch (error) {
+    console.error(
+      "Resposta enviada, mas o follow-up não pôde ser agendado.",
+      error instanceof Error ? error.message : "Erro desconhecido",
+    );
+  }
   return { status: "sent" as const };
 }
