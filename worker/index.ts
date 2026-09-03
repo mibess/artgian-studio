@@ -16,8 +16,22 @@ process.on("SIGINT", () => { running = false; });
 process.on("SIGTERM", () => { running = false; });
 
 console.log("Worker comercial iniciado. Pressione Ctrl+C para encerrar.");
+let consecutiveFailures = 0;
 while (running) {
-  const result = await runWorkerOnce(undefined, { executeOutboundBrowserJob });
-  if (!result.processed) await new Promise((resolve) => setTimeout(resolve, 2_000));
+  try {
+    const result = await runWorkerOnce(undefined, { executeOutboundBrowserJob });
+    consecutiveFailures = 0;
+    if (!result.processed) {
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+  } catch (error) {
+    consecutiveFailures += 1;
+    const retryDelay = Math.min(60_000, 2_000 * 2 ** Math.min(5, consecutiveFailures - 1));
+    console.error(
+      `Worker encontrou uma falha transitória; nova tentativa em ${Math.round(retryDelay / 1_000)}s.`,
+      error instanceof Error ? error.message : "Erro desconhecido",
+    );
+    await new Promise((resolve) => setTimeout(resolve, retryDelay));
+  }
 }
 console.log("Worker comercial encerrado com segurança.");

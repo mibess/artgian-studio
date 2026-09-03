@@ -302,6 +302,11 @@ falha de forma segura se a CLI da Turso não estiver disponível. Mantenha essa
 estação bloqueada, o Chrome dedicado aberto e monitore o processo; não execute
 duas instâncias do worker outbound ao mesmo tempo.
 
+Falhas transitórias de rede com o banco não encerram o processo: o worker
+aplica backoff exponencial de 2 a 60 segundos e volta a consultar a fila. O
+`launchd` fica responsável apenas por reiniciar o processo em caso de falha
+definitiva ou reinicialização da estação.
+
 O comando inicia com envio bloqueado. Depois da autorização explícita e das
 aprovações no painel, use `WORKER_ENABLE_OUTBOUND=true pnpm worker:production`.
 O piloto aplica, por padrão, teto de 3 DMs/dia e intervalo aleatório de 5 a 15
