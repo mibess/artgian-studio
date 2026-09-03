@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lte } from "drizzle-orm";
+import { and, asc, desc, eq, lte, ne } from "drizzle-orm";
 import {
   auditLogs,
   conversations,
@@ -18,6 +18,7 @@ import { canScheduleFollowup } from "../features/leads/domain";
 import { buildFollowupDraft } from "../features/conversations/followups";
 import { isInstagramReplyWindowOpen } from "../integrations/instagram/send";
 import { scheduleFollowupWake } from "./followup-scheduler";
+import { executeOutboundBrowserJob } from "../features/outbound/execute";
 
 type JobPayload = {
   leadId?: string;
@@ -27,6 +28,7 @@ type JobPayload = {
   sourceMessageId?: string;
   followupsSent?: number;
   lastInboundAt?: string;
+  prospectId?: string;
 };
 
 async function getPauseState() {
@@ -35,9 +37,57 @@ async function getPauseState() {
   return Object.fromEntries(rows.map((row) => [row.key, row.value === "true"]));
 }
 
+export async function recoverStaleJobs(now = new Date()) {
+  const db = await getCommercialDb();
+  const staleBefore = new Date(now.getTime() - 10 * 60 * 1_000).toISOString();
+  const stale = await db
+    .select()
+    .from(jobs)
+    .where(and(eq(jobs.status, "running"), lte(jobs.startedAt, staleBefore)));
+  if (!stale.length) return { recovered: 0, uncertain: 0 };
+  const recoveredAt = now.toISOString();
+  await db.transaction(async (tx) => {
+    for (const job of stale) {
+      const outbound = job.type === "send_outbound";
+      await tx
+        .update(jobs)
+        .set({
+          status: outbound ? "waiting_review" : "pending",
+          startedAt: null,
+          scheduledAt: recoveredAt,
+          lastError: outbound
+            ? "Worker reiniciado durante o envio. Confira o Instagram antes de tentar novamente."
+            : "Job recuperado após reinício do worker.",
+        })
+        .where(and(eq(jobs.id, job.id), eq(jobs.status, "running")));
+      await tx.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        actor: "system",
+        action: outbound ? "outbound_send_recovery_requires_review" : "job_recovered_after_restart",
+        entityType: "job",
+        entityId: job.id,
+        metadata: JSON.stringify({ previousStartedAt: job.startedAt }),
+        createdAt: recoveredAt,
+      });
+    }
+  });
+  return {
+    recovered: stale.filter((job) => job.type !== "send_outbound").length,
+    uncertain: stale.filter((job) => job.type === "send_outbound").length,
+  };
+}
+
 export async function runWorkerOnce(targetJobId?: string) {
   const db = await getCommercialDb();
   const now = new Date().toISOString();
+  await recoverStaleJobs(new Date(now));
+  const defaultQueueFilter = process.env.VERCEL
+    ? and(
+        eq(jobs.status, "pending"),
+        lte(jobs.scheduledAt, now),
+        ne(jobs.type, "send_outbound"),
+      )
+    : and(eq(jobs.status, "pending"), lte(jobs.scheduledAt, now));
   const [job] = await db
     .select()
     .from(jobs)
@@ -48,7 +98,7 @@ export async function runWorkerOnce(targetJobId?: string) {
             eq(jobs.status, "pending"),
             lte(jobs.scheduledAt, now),
           )
-        : and(eq(jobs.status, "pending"), lte(jobs.scheduledAt, now)),
+        : defaultQueueFilter,
     )
     .orderBy(asc(jobs.scheduledAt))
     .limit(1);
@@ -85,6 +135,44 @@ export async function runWorkerOnce(targetJobId?: string) {
         })
         .where(eq(jobs.id, job.id));
       return { processed: true as const, cancelled: true as const };
+    }
+
+    if (job.type === "send_outbound") {
+      if (!payload.prospectId) throw new Error("Job outbound sem prospectId.");
+      const outbound = await executeOutboundBrowserJob({
+        jobId: job.id,
+        prospectId: payload.prospectId,
+      });
+      if (outbound.status === "sent") {
+        return { processed: true as const, sent: true as const };
+      }
+      if (outbound.status === "uncertain") {
+        await db
+          .update(jobs)
+          .set({
+            status: "waiting_review",
+            finishedAt: now,
+            lastError: "Envio incerto: confira o Instagram antes de qualquer nova tentativa.",
+          })
+          .where(eq(jobs.id, job.id));
+        return { processed: true as const, waitingReview: true as const };
+      }
+      if (outbound.status === "paused" || outbound.status === "reschedule") {
+        const retryAt =
+          outbound.retryAt || new Date(Date.now() + 15 * 60 * 1_000).toISOString();
+        await db
+          .update(jobs)
+          .set({
+            status: "pending",
+            attempts: job.attempts,
+            startedAt: null,
+            scheduledAt: retryAt,
+            lastError: `Aguardando liberação: ${outbound.reason}`,
+          })
+          .where(eq(jobs.id, job.id));
+        return { processed: true as const, paused: true as const };
+      }
+      throw new Error(`Job outbound inválido: ${outbound.status}`);
     }
 
     if (job.type === "generate_reply") {

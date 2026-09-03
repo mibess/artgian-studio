@@ -66,7 +66,7 @@ describe("confiabilidade do Instagram", () => {
       expect.objectContaining({
         externalMessageId: "inbound-1",
         externalConversationId: "business-1:customer-1",
-        instagramUsername: "customer-1",
+        instagramUsername: "cliente",
         text: "Olá",
       }),
     ]);

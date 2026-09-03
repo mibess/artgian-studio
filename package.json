@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:all": "node scripts/dev-all.mjs",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
@@ -18,6 +19,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:setup": "tsx scripts/setup-commercial-db.ts",
     "db:backup": "tsx scripts/backup-commercial-db.ts",
+    "db:backup:production": "node scripts/backup-turso.mjs",
     "worker": "tsx worker/index.ts"
   },
   "dependencies": {
@@ -25,8 +27,9 @@
     "@upstash/qstash": "^2.11.3",
     "drizzle-orm": "0.45.2",
     "lucide-react": "^1.37.0",
-    "next": "^16.2.12",
+    "next": "^16.3.4",
     "openai": "^7.8.0",
+    "playwright-core": "^1.62.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "zod": "^4.5.4"
@@ -39,7 +42,7 @@
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
-    "eslint-config-next": "^16.2.12",
+    "eslint-config-next": "^16.3.4",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
     "typescript": "5.9.3",

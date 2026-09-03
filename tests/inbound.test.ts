@@ -18,7 +18,11 @@ describe("processamento inbound persistente", () => {
   });
 
   it("deduplica eventos e respeita opt-out", async () => {
-    const { processInboundMessage } = await import("../src/features/conversations/process-inbound");
+    const [{ processInboundMessage }, { getCommercialDb }, { leads }] = await Promise.all([
+      import("../src/features/conversations/process-inbound"),
+      import("../src/db/commercial"),
+      import("../db/schema"),
+    ]);
     const first = await processInboundMessage({ externalMessageId: "external-optout-1", instagramUsername: "@Cliente.Unico", text: "Não quero receber mensagens" });
     const duplicate = await processInboundMessage({ externalMessageId: "external-optout-1", instagramUsername: "cliente.unico", text: "Não quero receber mensagens" });
     expect(first.duplicate).toBe(false);
@@ -26,6 +30,22 @@ describe("processamento inbound persistente", () => {
     expect(first.doNotContact).toBe(true);
     expect(duplicate.duplicate).toBe(true);
     expect(duplicate.leadId).toBe(first.leadId);
+
+    const laterInbound = await processInboundMessage({
+      externalMessageId: "external-optout-2",
+      instagramUsername: "cliente.unico",
+      text: "Tenho uma dúvida sobre os produtos",
+    });
+    const db = await getCommercialDb();
+    const [savedLead] = await db
+      .select()
+      .from(leads)
+      .where(eq(leads.id, first.leadId))
+      .limit(1);
+    expect(laterInbound.doNotContact).toBe(true);
+    expect(laterInbound.draftMessageId).toBeNull();
+    expect(savedLead.doNotContact).toBe(true);
+    expect(savedLead.channelState).toBe("do_not_contact");
   });
 
   it("cria briefing para pedido de preço com quantidade e prazo", async () => {

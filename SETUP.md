@@ -16,7 +16,7 @@ Na pasta do projeto:
 pnpm install
 cp .env.example .env.local
 pnpm db:setup
-pnpm dev
+pnpm dev:all
 ```
 
 Acesse `http://localhost:3000/comercial`. A área administrativa usa o usuário e a senha definidos em `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
@@ -80,6 +80,18 @@ Em produção, use duas camadas independentes:
    criptografado fora da conta Turso e aplique retenção compatível com a LGPD.
    O dump contém dados comerciais e pessoais e deve ter acesso restrito.
 
+O projeto inclui um exportador que cifra o dump com `age` antes de gravá-lo.
+Instale `age`, configure `TURSO_BACKUP_DATABASE_NAME` e a chave pública em
+`BACKUP_AGE_RECIPIENT`, então execute:
+
+```bash
+pnpm db:backup:production
+```
+
+Agende esse comando diariamente no computador operacional e copie o arquivo
+`.sql.age` para um armazenamento externo com retenção. A chave privada de
+recuperação não deve permanecer na Vercel nem no mesmo diretório dos backups.
+
 Exemplo de exportação, em uma estação autenticada na Turso:
 
 ```bash
@@ -110,6 +122,8 @@ Para recuperar a partir do dump, crie outro banco em vez de importar sobre o
 original:
 
 ```bash
+age --decrypt --identity /CAMINHO/CHAVE-PRIVADA \
+  --output ./artgian-backup.sql ./artgian-backup.sql.age
 turso db create artgian-recovery-AAAAMMDD --from-dump ./artgian-backup.sql
 ```
 
@@ -208,8 +222,55 @@ Regras implementadas:
 - mutex para impedir jobs simultâneos;
 - aba fechada em `finally`;
 - nenhum fingerprint falso ou API privada.
+- primeiro contato somente depois de o texto ser aprovado no painel;
+- duas travas de ambiente (`OUTBOUND_AUTOMATION_ENABLED` e
+  `BROWSER_SEND_ENABLED`), além das pausas do painel;
+- intervalo aleatório, horário, teto diário e aquecimento gradual;
+- screenshot, snapshot de acessibilidade e diagnóstico local em falhas;
+- envio incerto nunca é repetido automaticamente;
+- falhas consecutivas abrem o circuit breaker e pausam outbound.
 
 O perfil pessoal do Chrome nunca deve ser usado.
+
+Exemplo no macOS, com o Chrome encerrado antes de iniciar:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$PWD/.chrome-profile"
+```
+
+No Linux, ajuste o executável se a distribuição usar outro caminho:
+
+```bash
+google-chrome \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$PWD/.chrome-profile"
+```
+
+No Windows PowerShell, execute a partir da raiz do projeto:
+
+```powershell
+& "$env:ProgramFiles\Google\Chrome\Application\chrome.exe" `
+  --remote-debugging-address=127.0.0.1 `
+  --remote-debugging-port=9222 `
+  --user-data-dir="$PWD\.chrome-profile"
+```
+
+Configure somente na máquina do worker:
+
+```text
+CHROME_CDP_URL=http://127.0.0.1:9222
+CHROME_PROFILE_DIR=.chrome-profile
+```
+
+Faça login manualmente no Instagram nesse perfil. A porta CDP controla a
+sessão inteira: mantenha-a em `127.0.0.1`, nunca exponha em `0.0.0.0` e não use
+uma máquina compartilhada. A Vercel não acessa esse Chrome; jobs
+`send_outbound` são deliberadamente ignorados pelo worker serverless e
+processados apenas por `pnpm worker` na máquina autorizada.
 
 ## 8. Ativação do outbound
 
@@ -228,9 +289,32 @@ Antes de mudar:
 5. manter opt-out e pausa geral testados;
 6. realizar um smoke test pequeno e supervisionado.
 
-Esta versão não implementa clique nem chamada de API para primeiro contato. A
-inspeção segura em dry-run e a fila de prospecção assistida estão disponíveis
-para qualificação, rascunho, revisão e auditoria.
+O primeiro contato nunca usa a API oficial. Ele segue este fluxo:
+
+1. cadastre o perfil e somente sinais públicos verdadeiros;
+2. o sistema calcula o score ICP e cria o lead sem duplicidade;
+3. gere o rascunho; a OpenAI é usada apenas quando orçamento e custos estão
+   válidos, com fallback local seguro;
+4. revise e aprove o texto;
+5. após autorização operacional, abra as duas travas de ambiente, retire a
+   pausa de outbound, ative uma campanha e coloque o contato na fila;
+6. o worker local abre uma aba própria, envia e fecha somente essa aba;
+7. quando a pessoa responder, o webhook troca a propriedade do fio de
+   `browser` para `api`; o navegador nunca responde novamente naquele fio.
+
+A coleção oficial da Meta informa que conversas da Send API começam quando a
+pessoa envia uma mensagem ao perfil profissional. Por isso, DM fria pela API
+permanece bloqueada no código. O envio pelo navegador usa a interface comum da
+conta, sem API privada, mascaramento ou evasão; a operadora deve revisar as
+regras da plataforma antes de cada piloto.
+
+Estados de segurança importantes:
+
+- `browser_contact_pending`: prospecto identificado, sem contato;
+- `waiting_inbound_reply`: primeiro contato confirmado pelo navegador;
+- `api_active`: resposta recebida pelo webhook e API oficial proprietária;
+- `human_review_required`: ação separada para análise;
+- `do_not_contact`: bloqueio permanente em todas as campanhas.
 
 ### Agendamento de follow-ups dentro de 24 horas
 
@@ -277,11 +361,62 @@ nessa fila envia mensagens. Um perfil já associado a uma DM inbound dentro de
 24 horas recebe a política `inbound_window`; os demais ficam como
 `manual_only`.
 
-Ativar uma campanha exige simultaneamente
-`OUTBOUND_AUTOMATION_ENABLED=true`, pausa geral aberta e
-`outbound_paused=false`. Mesmo ativa, uma campanha não autoriza primeiro contato
-frio pela API oficial. Comentários também continuam isolados e não são
-convertidos automaticamente em DM.
+Campanhas são separadas entre **Clientes** e **Parceiros**. O cadastro registra
+categoria, bio, localização e um sinal público verificável; esses dados
+alimentam score ICP, prioridade e personalização. Perfis em `do_not_contact` ou
+já presentes em outra campanha ativa são recusados.
+
+Ativar uma campanha exige simultaneamente:
+
+```text
+OUTBOUND_AUTOMATION_ENABLED=true
+BROWSER_SEND_ENABLED=true
+automation_paused=false
+outbound_paused=false
+```
+
+Também são obrigatórios campanha ativa, rascunho aprovado, horário válido,
+limite diário disponível e worker local conectado. Mesmo ativa, uma campanha
+não autoriza primeiro contato frio pela API oficial. Comentários continuam
+isolados e não são convertidos automaticamente em DM.
+
+Valores iniciais recomendados para o piloto:
+
+```text
+MAX_DMS_PER_DAY=5
+MIN_SECONDS_BETWEEN_DMS=300
+MAX_SECONDS_BETWEEN_DMS=900
+OPERATING_HOURS=09:00-18:00
+OPERATING_TIMEZONE=America/Sao_Paulo
+OUTBOUND_WARMUP_STARTED_AT=AAAA-MM-DDTHH:MM:SSZ
+OUTBOUND_WARMUP_START_DAILY=5
+OUTBOUND_WARMUP_WEEKLY_INCREASE=5
+OUTBOUND_FAILURE_THRESHOLD=3
+OUTBOUND_OPT_OUT_MIN_SAMPLE=5
+OUTBOUND_OPT_OUT_RATE_THRESHOLD=0.2
+```
+
+Experimentos distribuem controle/variante de modo determinístico, registram
+contatos e respostas e não declaram vencedor antes da amostra mínima. Apenas um
+experimento pode ficar ativo por vez. A estratégia não altera claims, regras
+financeiras ou limites sozinha.
+
+### Homologação do primeiro contato
+
+1. mantenha `BROWSER_SEND_ENABLED=false` e execute os testes automatizados;
+2. inicie o Chrome dedicado e confira no painel que a conexão está configurada;
+3. cadastre uma conta de teste autorizada e aprove um texto sem promessa;
+4. somente com autorização explícita, defina `BROWSER_SEND_ENABLED=true`, abra
+   as pausas e ative a campanha de teste;
+5. inicie `pnpm worker` e acompanhe o contato no Instagram;
+6. envie uma resposta pela conta de teste e confirme `channel_handoff` na
+   timeline, `instagram_channel_handoff_completed` na auditoria e
+   `inbound_reply_received` nas métricas;
+7. pause novamente a campanha após o smoke test.
+
+Se o worker cair durante a confirmação de envio, o job passa para revisão e
+exige conferência manual no Instagram. Nunca altere esse job diretamente para
+`pending`, pois isso pode duplicar a mensagem.
 
 ## 9. WhatsApp
 
@@ -297,11 +432,15 @@ Cadastre um link `wa.me` ou `api.whatsapp.com` em **Configurações**. Enquanto 
 6. Registre o orçamento e confirme o pedido no lead.
 7. Confira custo de IA, jobs esgotados e opt-outs.
 
-Inicie o worker persistente em outro terminal:
+Para subir painel e worker em desenvolvimento com um único comando:
 
 ```bash
-pnpm worker
+pnpm dev:all
 ```
+
+Em produção, mantenha a aplicação na Vercel e execute `pnpm worker` somente no
+computador dedicado ao primeiro contato. Follow-ups por QStash e DMs inbound
+continuam independentes desse computador.
 
 ## 11. Pausas e falhas
 

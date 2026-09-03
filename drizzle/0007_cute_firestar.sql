@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `outbound_prospects_username_unique` ON `outbound_prospects` (`instagram_username`);

@@ -41,4 +41,27 @@ describe("webhook do Instagram", () => {
       }),
     ]);
   });
+
+  it("aceita o formato direto de comentários do Instagram Login", () => {
+    const messages = extractInstagramMessages({
+      entry: [{
+        id: "business",
+        time: 1_800_000_000,
+        field: "comments",
+        value: {
+          id: "comment-direct-1",
+          text: "Quero saber mais",
+          from: { id: "lead-3", username: "cliente.formato.direto" },
+          media: { id: "media-2" },
+        },
+      }],
+    });
+    expect(messages).toEqual([
+      expect.objectContaining({
+        externalMessageId: "comment:comment-direct-1",
+        instagramUsername: "cliente.formato.direto",
+        kind: "comment",
+      }),
+    ]);
+  });
 });

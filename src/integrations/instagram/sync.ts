@@ -112,7 +112,7 @@ export function extractInboundMessagesFromConversation(input: {
       (message): InboundMessage => ({
         externalMessageId: message.id!,
         externalConversationId: `${businessId}:${message.from!.id}`,
-        instagramUsername: message.from!.id!,
+        instagramUsername: message.from?.username || message.from!.id!,
         name: message.from?.username,
         text: message.message!.trim(),
         source: "Instagram · Reconciliação",

@@ -21,6 +21,13 @@ type MetaWebhookPayload = {
   entry?: Array<{
     id?: string;
     time?: number;
+    field?: string;
+    value?: {
+      id?: string;
+      text?: string;
+      from?: { id?: string; username?: string };
+      media?: { id?: string };
+    };
     messaging?: MetaMessagingEvent[];
     changes?: Array<{
       field?: string;
@@ -56,7 +63,11 @@ export function extractInstagramMessages(input: unknown) {
         kind: "dm",
       });
     }
-    for (const change of entry.changes || []) {
+    const changes = [
+      ...(entry.changes || []),
+      ...(entry.field ? [{ field: entry.field, value: entry.value }] : []),
+    ];
+    for (const change of changes) {
       const value = change.value;
       if (
         change.field !== "comments" ||

@@ -27,17 +27,27 @@ test("prospecção prepara e revisa rascunho sem enviar mensagem", async ({ page
   await page.getByPlaceholder("Parcerias locais").fill(`Campanha E2E ${suffix}`);
   await page.getByRole("textbox", { name: "Origem", exact: true }).fill("Instagram");
   await page.getByPlaceholder("Arquitetura e decoração").fill("Decoração local");
+  await page.locator('select[name="funnelType"]').selectOption("partner");
   await page.getByRole("button", { name: "Criar campanha segura" }).click();
   await expect(page.getByText("Nenhuma mensagem externa foi enviada.")).toBeVisible();
 
   await page.locator('select[name="campaignId"]').selectOption({ label: `Campanha E2E ${suffix}` });
   await page.getByPlaceholder("@perfil").fill(`prospecto.e2e.${suffix}`.slice(0, 30));
+  await page.getByPlaceholder("Categoria pública").fill("Arquitetura");
+  await page.getByPlaceholder("Localização pública").fill("Brasil");
+  await page.getByPlaceholder("Sinal público verdadeiro").fill("seu projeto recente de organização de ambientes");
   await page.getByPlaceholder("Por que este perfil é relevante para a campanha?").fill("Perfil público alinhado ao segmento local da campanha de teste.");
   await page.getByRole("button", { name: "Adicionar sem contatar" }).click();
   await expect(page.getByText("Primeiro contato somente manual").last()).toBeVisible();
+  await expect(page.getByText(/Parceiros/).last()).toBeVisible();
 
   await page.getByRole("button", { name: "Preparar rascunho" }).last().click();
   await expect(page.getByText("Aprovação registra o texto; não envia.").last()).toBeVisible();
   await page.getByRole("button", { name: "Salvar revisão" }).last().click();
   await expect(page.getByText("Nenhuma mensagem externa foi enviada.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Agendar no worker local" }).last()).toBeDisabled();
+
+  await page.getByRole("link", { name: "Funil" }).click();
+  await expect(page.getByRole("heading", { name: "Funil de consumidores" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Funil de parceiros" })).toBeVisible();
 });

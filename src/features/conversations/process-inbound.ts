@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
+  auditLogs,
   briefings,
   catalogProducts,
   commercialOrders,
@@ -9,6 +10,8 @@ import {
   jobs,
   leads,
   messages,
+  outboundEvents,
+  outboundProspects,
   timelineEvents,
 } from "../../../db/schema";
 import { getCommercialDb } from "../../db/commercial";
@@ -20,6 +23,7 @@ import {
   evaluateCatalogTruth,
   extractBriefingFields,
 } from "../leads/domain";
+import { monitorOutboundOptOutRate } from "../outbound/safety";
 
 export type InboundMessage = {
   externalMessageId: string;
@@ -32,8 +36,15 @@ export type InboundMessage = {
   forceHumanReview?: boolean;
 };
 
-function stageForIntent(intent: ReturnType<typeof classifyIntent>) {
+function stageForIntent(intent: ReturnType<typeof classifyIntent>, leadType?: string) {
   if (intent === "opt_out" || intent === "not_interested") return "closed";
+  if (leadType === "partner") {
+    if (intent === "partnership_interest" || intent === "wants_whatsapp") {
+      return "partnership_review";
+    }
+    if (intent === "interested") return "interested";
+    return "replied";
+  }
   if (intent === "ready_to_order") return "order_pending";
   if (intent === "wants_whatsapp") return "requirements_collection";
   if (intent === "wants_quote") return "quote_requested";
@@ -53,9 +64,30 @@ export async function processInboundMessage(input: InboundMessage) {
     return { ...JSON.parse(processed.response || "{}"), duplicate: true };
   }
 
-  const username = canonicalInstagramUsername(input.instagramUsername);
+  const suppliedUsername = canonicalInstagramUsername(input.instagramUsername);
   const now = input.receivedAt || new Date().toISOString();
   const source = input.source || "Instagram · DM";
+  const [knownConversationLead] = input.externalConversationId
+    ? await db
+        .select({
+          instagramUsername: leads.instagramUsername,
+          leadType: leads.leadType,
+          doNotContact: leads.doNotContact,
+        })
+        .from(conversations)
+        .innerJoin(leads, eq(conversations.leadId, leads.id))
+        .where(eq(conversations.externalId, input.externalConversationId))
+        .limit(1)
+    : [];
+  const username = knownConversationLead?.instagramUsername || suppliedUsername;
+  const [knownLeadByUsername] = knownConversationLead
+    ? []
+    : await db
+        .select({ leadType: leads.leadType, doNotContact: leads.doNotContact })
+        .from(leads)
+        .where(eq(leads.instagramUsername, username))
+        .limit(1);
+  const knownLead = knownConversationLead || knownLeadByUsername;
   const [history] = await db
     .select({ total: sql<number>`count(*)` })
     .from(commercialOrders)
@@ -92,8 +124,11 @@ export async function processInboundMessage(input: InboundMessage) {
   });
   const leadId = crypto.randomUUID();
   const conversationId = crypto.randomUUID();
-  const pipelineStage = stageForIntent(intent);
-  const doNotContact = intent === "opt_out";
+  const receivedOptOut = intent === "opt_out";
+  const doNotContact = Boolean(knownLead?.doNotContact) || receivedOptOut;
+  const pipelineStage = doNotContact
+    ? "closed"
+    : stageForIntent(intent, knownLead?.leadType);
   const requiresHuman = Boolean(input.forceHumanReview) || decision.requiresHuman || intent === "business_opportunity" || intent === "partnership_interest";
   const draftMessageId = !doNotContact && intent !== "not_interested" ? crypto.randomUUID() : null;
 
@@ -157,7 +192,25 @@ export async function processInboundMessage(input: InboundMessage) {
           : eq(conversations.leadId, lead.id),
       )
       .limit(1);
-    const conversation = existingConversations[0];
+    let conversation = existingConversations[0];
+    const isDirectMessage = !input.externalConversationId?.startsWith("comment:");
+    let browserHandoff = false;
+    if (!conversation && isDirectMessage) {
+      const [browserConversation] = await tx
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.leadId, lead.id),
+            eq(conversations.externalId, `browser:${username}`),
+          ),
+        )
+        .limit(1);
+      if (browserConversation) {
+        conversation = browserConversation;
+        browserHandoff = true;
+      }
+    }
     const activeConversationId = conversation?.id || conversationId;
     if (!conversation) {
       await tx.insert(conversations).values({
@@ -165,13 +218,68 @@ export async function processInboundMessage(input: InboundMessage) {
         leadId: lead.id,
         channel: "instagram",
         externalId: input.externalConversationId || `ig:${username}`,
+        channelOwner: isDirectMessage ? "api" : "human_review",
+        lastInboundAt: now,
         status: "active",
         lastMessageAt: now,
         createdAt: now,
         updatedAt: now,
       });
     } else {
-      await tx.update(conversations).set({ lastMessageAt: now, updatedAt: now }).where(eq(conversations.id, conversation.id));
+      await tx
+        .update(conversations)
+        .set({
+          externalId:
+            browserHandoff && input.externalConversationId
+              ? input.externalConversationId
+              : conversation.externalId,
+          channelOwner: isDirectMessage ? "api" : conversation.channelOwner,
+          handedOffAt: browserHandoff ? now : conversation.handedOffAt,
+          lastInboundAt: now,
+          lastMessageAt: now,
+          updatedAt: now,
+        })
+        .where(eq(conversations.id, conversation.id));
+    }
+
+    const relatedProspects = isDirectMessage
+      ? await tx
+          .select()
+          .from(outboundProspects)
+          .where(eq(outboundProspects.instagramUsername, username))
+      : [];
+    if (relatedProspects.length) {
+      await tx
+        .update(outboundProspects)
+        .set({
+          status: doNotContact ? "closed" : "replied",
+          pipelineStage: doNotContact ? "closed" : "replied",
+          updatedAt: now,
+        })
+        .where(eq(outboundProspects.instagramUsername, username));
+      await tx.insert(outboundEvents).values(
+        relatedProspects.map((prospect) => ({
+          id: crypto.randomUUID(),
+          prospectId: prospect.id,
+          campaignId: prospect.campaignId,
+          leadId: lead.id,
+          type: receivedOptOut ? "opt_out_received" : "inbound_reply_received",
+          variant: prospect.experimentVariant,
+          metadata: JSON.stringify({ browserHandoff }),
+          occurredAt: now,
+        })),
+      );
+    }
+    if (browserHandoff) {
+      await tx.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        actor: "system",
+        action: "instagram_channel_handoff_completed",
+        entityType: "conversation",
+        entityId: activeConversationId,
+        metadata: JSON.stringify({ from: "browser", to: "api" }),
+        createdAt: now,
+      });
     }
 
     const supersededDrafts = await tx
@@ -292,6 +400,17 @@ export async function processInboundMessage(input: InboundMessage) {
         metadata: JSON.stringify({ action: decision.action, score: score.total, catalogProductId: matchedProduct?.id || null }),
         createdAt: now,
       },
+      ...(browserHandoff
+        ? [{
+            id: crypto.randomUUID(),
+            leadId: lead.id,
+            type: "channel_handoff",
+            title: "Conversa assumida pela API oficial",
+            description: "A resposta ao primeiro contato foi recebida pelo webhook; o navegador não responde mais este fio.",
+            metadata: JSON.stringify({ from: "browser", to: "api" }),
+            createdAt: now,
+          }]
+        : []),
       ...(doNotContact
         ? [{ id: crypto.randomUUID(), leadId: lead.id, type: "opt_out", title: "Contato bloqueado permanentemente", description: "Pedido de opt-out reconhecido na mensagem.", metadata: "{}", createdAt: now }]
         : []),
@@ -340,5 +459,6 @@ export async function processInboundMessage(input: InboundMessage) {
     return result;
   });
 
+  if (receivedOptOut) await monitorOutboundOptOutRate(new Date(now));
   return response;
 }

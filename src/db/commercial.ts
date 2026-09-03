@@ -10,10 +10,12 @@ import {
   conversations,
   exceptions,
   experiments,
+  integrationStates,
   jobs,
   leads,
   messages,
   outboundProspects,
+  outboundEvents,
   quoteRequests,
   systemSettings,
   timelineEvents,
@@ -310,15 +312,19 @@ export async function getOrdersOverview() {
 
 export async function getOperationsData() {
   const db = await getCommercialDb();
-  const [campaignRows, experimentRows, jobRows, exceptionRows, usageRows, settingRows] = await Promise.all([
+  const [campaignRows, experimentRows, jobRows, exceptionRows, usageRows, settingRows, leadRows, orderRows, integrationRows, outboundEventRows] = await Promise.all([
     db.select().from(campaigns).orderBy(desc(campaigns.updatedAt)),
     db.select().from(experiments).orderBy(desc(experiments.createdAt)),
     db.select().from(jobs).orderBy(desc(jobs.createdAt)),
     db.select().from(exceptions).orderBy(desc(exceptions.createdAt)),
     db.select().from(aiUsage).orderBy(desc(aiUsage.createdAt)),
     db.select().from(systemSettings),
+    db.select().from(leads),
+    db.select().from(commercialOrders),
+    db.select().from(integrationStates),
+    db.select().from(outboundEvents).orderBy(desc(outboundEvents.occurredAt)),
   ]);
-  return { campaigns: campaignRows, experiments: experimentRows, jobs: jobRows, exceptions: exceptionRows, aiUsage: usageRows, settings: Object.fromEntries(settingRows.map((row) => [row.key, row.value])) };
+  return { campaigns: campaignRows, experiments: experimentRows, jobs: jobRows, exceptions: exceptionRows, aiUsage: usageRows, leads: leadRows, orders: orderRows, integrations: integrationRows, outboundEvents: outboundEventRows, settings: Object.fromEntries(settingRows.map((row) => [row.key, row.value])) };
 }
 
 export async function getOutboundProspects() {

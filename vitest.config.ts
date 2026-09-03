@@ -9,6 +9,13 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    env: {
+      TURSO_DATABASE_URL: "",
+      TURSO_AUTH_TOKEN: "",
+      OPENAI_API_KEY: "",
+      OUTBOUND_AUTOMATION_ENABLED: "false",
+      BROWSER_SEND_ENABLED: "false",
+    },
     include: ["tests/**/*.test.ts"],
     sequence: { concurrent: false },
     coverage: { reporter: ["text", "json-summary"] },

@@ -43,6 +43,20 @@
       "when": 1788389791054,
       "tag": "0005_giant_black_crow",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788406367891,
+      "tag": "0006_bizarre_human_torch",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788407654767,
+      "tag": "0007_cute_firestar",
+      "breakpoints": true
     }
   ]
 }

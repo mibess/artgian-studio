@@ -1,7 +1,7 @@
 import OpenAI from "openai";
-import { gte, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
-import { aiUsage } from "../../../db/schema";
+import { aiUsage, auditLogs, exceptions, systemSettings } from "../../../db/schema";
 import { getBusinessConfig } from "../../config/business";
 import { getCommercialDb } from "../../db/commercial";
 import {
@@ -13,6 +13,7 @@ import {
   type CatalogTruth,
   type IntentDecision,
 } from "../../features/leads/domain";
+import { buildSafeOutboundOpening, type OutboundFunnel } from "../../features/outbound/domain";
 
 const openAiCircuitBreaker = new CircuitBreaker(3, 60_000);
 
@@ -22,6 +23,10 @@ const decisionSchema = z.object({
   reason: z.string().min(3).max(240),
   message: z.string().min(1).max(600),
   requiresHuman: z.boolean(),
+});
+
+const outboundOpeningSchema = z.object({
+  message: z.string().min(10).max(600),
 });
 
 export type ConversationContext = {
@@ -56,6 +61,48 @@ export async function getAiBudgetStatus() {
     .where(gte(aiUsage.createdAt, monthStart.toISOString()));
   const spentUsd = Number(row.total) / 1_000_000;
   const rates = getCostRates();
+  if (budgetUsd > 0 && spentUsd >= budgetUsd) {
+    const now = new Date().toISOString();
+    const [existing] = await db
+      .select({ id: exceptions.id })
+      .from(exceptions)
+      .where(
+        and(
+          eq(exceptions.type, "openai_budget_reached"),
+          eq(exceptions.status, "open"),
+        ),
+      )
+      .limit(1);
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(systemSettings)
+        .values({ key: "automation_paused", value: "true", updatedAt: now })
+        .onConflictDoUpdate({
+          target: systemSettings.key,
+          set: { value: "true", updatedAt: now },
+        });
+      if (!existing) {
+        await tx.insert(exceptions).values({
+          id: crypto.randomUUID(),
+          type: "openai_budget_reached",
+          severity: "high",
+          title: "Automação pausada pelo orçamento da OpenAI",
+          description: "O limite mensal configurado foi atingido. Revise o orçamento antes de retomar.",
+          status: "open",
+          createdAt: now,
+        });
+        await tx.insert(auditLogs).values({
+          id: crypto.randomUUID(),
+          actor: "system",
+          action: "automation_paused_by_openai_budget",
+          entityType: "system_setting",
+          entityId: "automation_paused",
+          metadata: JSON.stringify({ budgetUsd, spentUsd }),
+          createdAt: now,
+        });
+      }
+    });
+  }
   return {
     budgetUsd,
     spentUsd,
@@ -80,8 +127,10 @@ function unsafeCommercialClaim(
   if (unverifiedClaims.some((claim) => normalized.includes(claim.toLocaleLowerCase("pt-BR")))) return true;
   const hasPrice = /r\$\s*\d|\d+[,.]\d{2}/i.test(message);
   const hasDeadline = /\b\d+\s*(dias?|horas?|semanas?)\b/i.test(message);
+  const hasUnverifiedPromise = /\b(garant(?:e|ia|imos)|sempre|nunca falha|melhor do mercado|resultado garantido|frete gr[aá]tis|desconto|aprova[cç][aã]o garantida)\b/i.test(message);
   if (hasPrice && product?.basePriceCents == null && product?.priceFromCents == null) return true;
   if (hasDeadline && !product?.productionTime) return true;
+  if (hasUnverifiedPromise) return true;
   return false;
 }
 
@@ -191,5 +240,96 @@ export async function generateCommercialDecision(
       error instanceof Error ? error.message : "Erro desconhecido",
     );
     return { ...fallback, source: "rules" };
+  }
+}
+
+export async function generateOutboundOpening(input: {
+  leadId: string;
+  firstName?: string | null;
+  profileCategory?: string | null;
+  profileBio?: string | null;
+  profileLocation?: string | null;
+  publicSignal?: string | null;
+  funnelType: OutboundFunnel;
+}) {
+  const business = await getBusinessConfig();
+  const fallback = buildSafeOutboundOpening({
+    firstName: input.firstName,
+    companyName: business.company.name,
+    publicSignal: input.publicSignal,
+    funnelType: input.funnelType,
+  });
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  const model = process.env.OPENAI_MODEL?.trim();
+  if (!apiKey || !model || !openAiCircuitBreaker.canExecute()) {
+    return { message: fallback, source: "rules" as const };
+  }
+  const budget = await getAiBudgetStatus();
+  if (!budget.available) return { message: fallback, source: "rules" as const };
+
+  try {
+    const client = new OpenAI({ apiKey, timeout: 12_000, maxRetries: 1 });
+    const completion = await client.chat.completions.create({
+      model,
+      store: false,
+      reasoning_effort: "minimal",
+      max_completion_tokens: 800,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "outbound_opening",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["message"],
+            properties: { message: { type: "string" } },
+          },
+        },
+      },
+      messages: [
+        {
+          role: "system",
+          content: `Escreva uma única primeira mensagem curta, pessoal e verdadeira em português do Brasil para a ${business.company.name}. Use somente o sinal público fornecido e estes claims verificados: ${business.verifiedClaims.join(" | ")}. Não invente elogio, preço, prazo, desconto, garantia, resultado ou relação comercial. Apresente-se sem fingir ser cliente e termine pedindo permissão para explicar a ideia.`,
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            firstName: input.firstName,
+            category: input.profileCategory,
+            bio: input.profileBio,
+            location: input.profileLocation,
+            publicSignal: input.publicSignal,
+            funnel: input.funnelType,
+          }),
+        },
+      ],
+    });
+    const raw = completion.choices[0]?.message.content;
+    const parsed = raw ? outboundOpeningSchema.safeParse(JSON.parse(raw)) : null;
+    if (
+      !parsed?.success ||
+      unsafeCommercialClaim(parsed.data.message, null, business.unverifiedClaims)
+    ) {
+      return { message: fallback, source: "rules" as const };
+    }
+    const inputTokens = completion.usage?.prompt_tokens || 0;
+    const outputTokens = completion.usage?.completion_tokens || 0;
+    const db = await getCommercialDb();
+    await db.insert(aiUsage).values({
+      id: crypto.randomUUID(),
+      model,
+      inputTokens,
+      outputTokens,
+      estimatedCostUsdMicros: estimateCostMicros(inputTokens, outputTokens),
+      leadId: input.leadId,
+      purpose: "outbound_opening",
+      createdAt: new Date().toISOString(),
+    });
+    openAiCircuitBreaker.recordSuccess();
+    return { message: parsed.data.message, source: "openai" as const };
+  } catch {
+    openAiCircuitBreaker.recordFailure();
+    return { message: fallback, source: "rules" as const };
   }
 }

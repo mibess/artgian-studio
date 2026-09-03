@@ -120,6 +120,10 @@ export async function tryAutoSendInstagramReply(input: {
         gte(auditLogs.createdAt, since),
       ),
     );
+  const configuredDailyLimit = Number(process.env.MAX_AUTO_REPLIES_PER_DAY || 20);
+  const dailyLimit = Number.isFinite(configuredDailyLimit)
+    ? Math.max(0, Math.trunc(configuredDailyLimit))
+    : 20;
   const policy = evaluateAutoReplyPolicy({
     decision: input.decision,
     enabled: process.env.INSTAGRAM_AUTO_REPLY_ENABLED === "true",
@@ -127,7 +131,7 @@ export async function tryAutoSendInstagramReply(input: {
     autoRepliesPaused: settings.auto_replies_paused !== "false",
     withinOperatingHours: isWithinOperatingHours(),
     sentToday: sentRows.length,
-    dailyLimit: Number(process.env.MAX_AUTO_REPLIES_PER_DAY || 20),
+    dailyLimit,
   });
   if (!policy.allowed) return { status: "waiting_review" as const, reason: policy.reason };
 

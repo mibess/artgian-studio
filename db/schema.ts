@@ -135,6 +135,9 @@ export const conversations = sqliteTable(
     leadId: text("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
     channel: text("channel").notNull().default("instagram"),
     externalId: text("external_id"),
+    channelOwner: text("channel_owner").notNull().default("api"),
+    handedOffAt: text("handed_off_at"),
+    lastInboundAt: text("last_inbound_at"),
     status: text("status").notNull().default("active"),
     lastMessageAt: text("last_message_at"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -315,6 +318,10 @@ export const campaigns = sqliteTable("campaigns", {
   name: text("name").notNull(),
   source: text("source").notNull(),
   segment: text("segment"),
+  funnelType: text("funnel_type").notNull().default("consumer"),
+  dailyLimit: integer("daily_limit").notNull().default(5),
+  operatingHours: text("operating_hours").notNull().default("09:00-18:00"),
+  operatingTimezone: text("operating_timezone").notNull().default("America/Sao_Paulo"),
   status: text("status").notNull().default("draft"),
   outboundEnabled: integer("outbound_enabled", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -332,16 +339,32 @@ export const outboundProspects = sqliteTable(
     instagramUsername: text("instagram_username").notNull(),
     name: text("name"),
     sourceUrl: text("source_url"),
+    profileCategory: text("profile_category"),
+    profileBio: text("profile_bio"),
+    profileLocation: text("profile_location"),
+    publicSignal: text("public_signal"),
     qualificationReason: text("qualification_reason").notNull(),
+    funnelType: text("funnel_type").notNull().default("consumer"),
+    pipelineStage: text("pipeline_stage").notNull().default("discovered"),
+    icpScore: integer("icp_score").notNull().default(0),
+    priority: text("priority").notNull().default("normal"),
     contactPolicy: text("contact_policy").notNull().default("manual_only"),
     status: text("status").notNull().default("identified"),
     draftBody: text("draft_body"),
+    experimentId: text("experiment_id"),
+    experimentVariant: text("experiment_variant"),
+    browserJobId: text("browser_job_id"),
+    lastError: text("last_error"),
+    lastAttemptAt: text("last_attempt_at"),
     reviewedAt: text("reviewed_at"),
     contactedAt: text("contacted_at"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
+    uniqueIndex("outbound_prospects_username_unique").on(
+      table.instagramUsername,
+    ),
     uniqueIndex("outbound_prospects_campaign_username_unique").on(
       table.campaignId,
       table.instagramUsername,
@@ -366,6 +389,29 @@ export const experiments = sqliteTable("experiments", {
   status: text("status").notNull().default("draft"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const outboundEvents = sqliteTable(
+  "outbound_events",
+  {
+    id: text("id").primaryKey(),
+    prospectId: text("prospect_id")
+      .notNull()
+      .references(() => outboundProspects.id, { onDelete: "cascade" }),
+    campaignId: text("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    leadId: text("lead_id").references(() => leads.id, { onDelete: "set null" }),
+    type: text("type").notNull(),
+    variant: text("variant"),
+    metadata: text("metadata").notNull().default("{}"),
+    occurredAt: text("occurred_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("outbound_events_prospect_idx").on(table.prospectId, table.occurredAt),
+    index("outbound_events_campaign_idx").on(table.campaignId, table.occurredAt),
+    index("outbound_events_type_idx").on(table.type),
+  ],
+);
 
 export const systemSettings = sqliteTable("system_settings", {
   key: text("key").primaryKey(),

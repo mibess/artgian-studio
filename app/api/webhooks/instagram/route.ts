@@ -3,6 +3,7 @@ import { processInboundMessage } from "../../../../src/features/conversations/pr
 import { tryAutoSendInstagramReply } from "../../../../src/features/conversations/automation";
 import { enhanceReplyDraftWithAi } from "../../../../src/features/conversations/replies";
 import { extractInstagramMessages, verifyMetaSignature } from "../../../../src/integrations/instagram/webhook";
+import { getInstagramMessagingProfile } from "../../../../src/integrations/instagram/profile";
 
 export async function GET(request: NextRequest) {
   const mode = request.nextUrl.searchParams.get("hub.mode");
@@ -27,9 +28,26 @@ export async function POST(request: NextRequest) {
   }
   const inboundMessages = extractInstagramMessages(payload);
   const results = [];
+  const profiles = new Map<
+    string,
+    Awaited<ReturnType<typeof getInstagramMessagingProfile>>
+  >();
   for (const message of inboundMessages) {
+    let instagramUsername = message.instagramUsername;
+    let name: string | undefined;
+    if (message.kind === "dm" && /^\d+$/.test(message.instagramUsername)) {
+      let profile = profiles.get(message.instagramUsername);
+      if (profile === undefined) {
+        profile = await getInstagramMessagingProfile(message.instagramUsername);
+        profiles.set(message.instagramUsername, profile);
+      }
+      instagramUsername = profile?.username || message.instagramUsername;
+      name = profile?.name || profile?.username;
+    }
     const result = await processInboundMessage({
       ...message,
+      instagramUsername,
+      name,
       source: message.kind === "comment" ? "Instagram · Comentário" : "Instagram · Webhook",
       forceHumanReview: message.kind === "comment",
     });

@@ -27,11 +27,13 @@ Abra [http://localhost:3000](http://localhost:3000).
 ## Comandos
 
 - `pnpm dev`: inicia o Next.js em modo de desenvolvimento
+- `pnpm dev:all`: inicia o painel e o worker local no mesmo comando
 - `pnpm build`: gera a versão de produção
 - `pnpm lint`: verifica a qualidade do código
 - `pnpm typecheck`: valida os tipos
 - `pnpm test`: executa os testes automatizados
 - `pnpm test:e2e`: valida o fluxo local no navegador
+- `pnpm worker`: executa a fila persistente, incluindo jobs do Chrome dedicado
 - `pnpm db:generate`: gera migrações do Drizzle
 
 ## Variáveis de ambiente

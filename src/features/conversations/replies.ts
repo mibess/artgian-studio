@@ -274,6 +274,9 @@ export async function approveAndSendInstagramReply(input: {
   if (conversation.externalId?.startsWith("comment:")) {
     return { status: "comment_review_only" as const };
   }
+  if (conversation.channelOwner !== "api") {
+    return { status: "channel_not_owned_by_api" as const };
+  }
 
   const recipientId = getInstagramRecipientId(conversation.externalId);
   if (!recipientId) return { status: "invalid_recipient" as const };

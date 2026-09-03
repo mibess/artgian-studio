@@ -4,12 +4,17 @@ import { PageHeader, formatDateTime } from "../_components";
 import { JOB_TYPE_LABELS } from "../../../src/features/leads/domain";
 
 export default async function AiPage() {
-  const { aiUsage } = await getOperationsData();
+  const { aiUsage, orders } = await getOperationsData();
   const inputTokens=aiUsage.reduce((sum,row)=>sum+row.inputTokens,0);
   const outputTokens=aiUsage.reduce((sum,row)=>sum+row.outputTokens,0);
   const cost=aiUsage.reduce((sum,row)=>sum+row.estimatedCostUsdMicros/1_000_000,0);
   const budget=Number(process.env.OPENAI_MONTHLY_BUDGET_USD||0);
   const percentage=budget>0?Math.min(100,cost/budget*100):0;
+  const leadsWithUsage=new Set(aiUsage.map(row=>row.leadId).filter(Boolean));
+  const convertedLeadIds=new Set(orders.map(order=>order.leadId));
+  const convertedAiCost=aiUsage.filter(row=>row.leadId&&convertedLeadIds.has(row.leadId)).reduce((sum,row)=>sum+row.estimatedCostUsdMicros/1_000_000,0);
+  const costPerLead=leadsWithUsage.size?cost/leadsWithUsage.size:0;
+  const costPerCustomer=convertedLeadIds.size?convertedAiCost/convertedLeadIds.size:0;
   return <>
     <PageHeader eyebrow="Rastreabilidade" title="Inteligência artificial" description="Cada chamada, decisão, token e custo fica registrado. Claims comerciais permanecem sob controle humano." />
     <section className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[
@@ -17,6 +22,8 @@ export default async function AiPage() {
       {label:"Tokens de entrada",value:inputTokens.toLocaleString("pt-BR"),icon:Cpu,color:"bg-[#dce8f6] text-[#425d91]"},
       {label:"Tokens de saída",value:outputTokens.toLocaleString("pt-BR"),icon:Zap,color:"bg-[#fff0c9] text-[#8b6718]"},
       {label:"Custo estimado",value:`US$ ${cost.toFixed(4).replace(".",",")}`,icon:CircleDollarSign,color:"bg-[#d8ede4] text-[#2b7258]"},
+      {label:"Custo por lead",value:`US$ ${costPerLead.toFixed(4).replace(".",",")}`,icon:CircleDollarSign,color:"bg-[#f8ded5] text-[#a24d36]"},
+      {label:"Custo por cliente",value:`US$ ${costPerCustomer.toFixed(4).replace(".",",")}`,icon:CircleDollarSign,color:"bg-[#e8e1f2] text-[#6b5481]"},
     ].map(item=>{const Icon=item.icon;return <article className="rounded-[20px] border border-[#e1e1db] bg-white p-5" key={item.label}><span className={`grid size-9 place-items-center rounded-xl ${item.color}`}><Icon size={16}/></span><p className="mt-4 text-[9px] font-bold uppercase tracking-wide text-[#8b979d]">{item.label}</p><p className="mt-1 text-xl font-semibold tracking-[-0.035em]">{item.value}</p></article>})}</section>
     <div className="grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
       <section className="overflow-hidden rounded-[22px] border border-[#e1e1db] bg-white"><header className="border-b border-[#ecece7] px-5 py-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8b979d]">Registro de uso</p><h2 className="mt-1 text-base font-semibold">Chamadas recentes</h2></header><div className="divide-y divide-[#efefea]">{aiUsage.map(row=><div className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_.8fr_.7fr] sm:items-center" key={row.id}><div><p className="text-xs font-bold text-[#415967]">{JOB_TYPE_LABELS[row.purpose] || "Decisão da inteligência artificial"}</p><p className="mt-0.5 text-[9px] text-[#8a959b]">{row.model}</p></div><p className="text-[10px] text-[#718088]">{row.inputTokens} entrada · {row.outputTokens} saída</p><p className="text-right text-[9px] text-[#8a959b]">{formatDateTime(row.createdAt)}</p></div>)}</div></section>

@@ -2,9 +2,10 @@ import Link from "next/link";
 import { Clock3, MessageCircle, MoreHorizontal } from "lucide-react";
 import { getLeads } from "../../../src/db/commercial";
 import { PIPELINE_LABELS, type ConsumerPipelineStage } from "../../../src/features/leads/domain";
+import { OUTBOUND_PIPELINE_LABELS } from "../../../src/features/outbound/domain";
 import { Avatar, PageHeader } from "../_components";
 
-const columns: Array<{ title: string; stages: ConsumerPipelineStage[]; dot: string }> = [
+const consumerColumns: Array<{ title: string; stages: string[]; dot: string }> = [
   { title: "Entrada", stages: ["discovered", "qualified", "contacted"], dot: "bg-[#9fb8c3]" },
   { title: "Conversa", stages: ["replied", "interest_identified"], dot: "bg-[#efc568]" },
   { title: "Entendimento", stages: ["requirements_collection"], dot: "bg-[#e9a17f]" },
@@ -12,20 +13,42 @@ const columns: Array<{ title: string; stages: ConsumerPipelineStage[]; dot: stri
   { title: "Convertido", stages: ["order_confirmed"], dot: "bg-[#73b294]" },
 ];
 
+const partnerColumns: Array<{ title: string; stages: string[]; dot: string }> = [
+  { title: "Entrada", stages: ["discovered", "qualified"], dot: "bg-[#9fb8c3]" },
+  { title: "Abordagem", stages: ["contacted"], dot: "bg-[#efc568]" },
+  { title: "Conversa", stages: ["replied", "interested"], dot: "bg-[#e9a17f]" },
+  { title: "Parceria", stages: ["partnership_review", "active_partner"], dot: "bg-[#e46e51]" },
+  { title: "Resultado", stages: ["generated_customer"], dot: "bg-[#73b294]" },
+];
+
 export default async function FunnelPage() {
   const leadRows = await getLeads();
+  const boards = [
+    {
+      title: "Funil de consumidores",
+      description: "Da descoberta ao pedido confirmado.",
+      leads: leadRows.filter((lead) => lead.leadType !== "partner"),
+      columns: consumerColumns,
+    },
+    {
+      title: "Funil de parceiros",
+      description: "Arquitetos, decoradores, criadores e revendedores em um pipeline separado.",
+      leads: leadRows.filter((lead) => lead.leadType === "partner"),
+      columns: partnerColumns,
+    },
+  ];
   return <>
-    <PageHeader eyebrow="Pipeline visual" title="Funil de consumidores" description="Uma visão do avanço comercial — separada do estado técnico de cada canal." action={<span className="rounded-full border border-[#dcded9] bg-white px-3 py-2 text-[10px] font-bold text-[#61747e]">{leadRows.filter(l=>l.pipelineStage!=="closed").length} oportunidades ativas</span>}/>
-    <div className="commercial-scrollbar overflow-x-auto pb-4"><div className="grid min-w-[1320px] grid-cols-5 gap-3">
-      {columns.map((column)=><section className="rounded-[20px] bg-[#ebeae4] p-3" key={column.title}>
-        <header className="flex items-center justify-between px-1 py-2"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${column.dot}`}/><h2 className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#425966]">{column.title}</h2></div><span className="grid size-6 place-items-center rounded-full bg-white text-[10px] font-bold text-[#657780]">{leadRows.filter(lead=>column.stages.includes(lead.pipelineStage as ConsumerPipelineStage)).length}</span></header>
-        <div className="mt-2 space-y-3">{leadRows.filter(lead=>column.stages.includes(lead.pipelineStage as ConsumerPipelineStage)).map((lead,index)=><Link href={`/comercial/leads/${lead.id}`} key={lead.id} className="block rounded-[17px] border border-[#dedfd9] bg-white p-4 shadow-[0_5px_14px_rgba(30,50,58,.04)] transition hover:-translate-y-0.5 hover:shadow-md">
+    <PageHeader eyebrow="Pipeline visual" title="Funis comerciais" description="Consumidores e parceiros permanecem separados do estado técnico de cada canal." action={<span className="rounded-full border border-[#dcded9] bg-white px-3 py-2 text-[10px] font-bold text-[#61747e]">{leadRows.filter(l=>l.pipelineStage!=="closed").length} oportunidades ativas</span>}/>
+    <div className="space-y-7">{boards.map((board)=><section key={board.title}><div className="mb-3"><h2 className="text-base font-semibold text-[#294653]">{board.title}</h2><p className="mt-1 text-[10px] text-[#7d8a90]">{board.description}</p></div><div className="commercial-scrollbar overflow-x-auto pb-4"><div className="grid min-w-[1320px] grid-cols-5 gap-3">
+      {board.columns.map((column)=><section className="rounded-[20px] bg-[#ebeae4] p-3" key={column.title}>
+        <header className="flex items-center justify-between px-1 py-2"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${column.dot}`}/><h3 className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#425966]">{column.title}</h3></div><span className="grid size-6 place-items-center rounded-full bg-white text-[10px] font-bold text-[#657780]">{board.leads.filter(lead=>column.stages.includes(lead.pipelineStage)).length}</span></header>
+        <div className="mt-2 space-y-3">{board.leads.filter(lead=>column.stages.includes(lead.pipelineStage)).map((lead,index)=><Link href={`/comercial/leads/${lead.id}`} key={lead.id} className="block rounded-[17px] border border-[#dedfd9] bg-white p-4 shadow-[0_5px_14px_rgba(30,50,58,.04)] transition hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex items-start gap-3"><Avatar name={lead.name} username={lead.instagramUsername} index={index} size="sm"/><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold text-[#294653]">{lead.name}</p><p className="mt-0.5 truncate text-[9px] text-[#8a959b]">@{lead.instagramUsername}</p></div><MoreHorizontal size={14} className="text-[#a0a9ac]"/></div>
           <p className="mt-3 line-clamp-2 text-[11px] font-semibold leading-4 text-[#526873]">{lead.productInterest || "Interesse ainda não identificado"}</p>
           <div className="mt-3 flex flex-wrap gap-1.5">{JSON.parse(lead.tags).slice(0,2).map((tag:string)=><span className="rounded-full bg-[#f5f2e9] px-2 py-1 text-[8px] font-semibold text-[#7c6a3a]" key={tag}>{tag}</span>)}</div>
-          <div className="mt-4 flex items-center justify-between border-t border-[#eeeae3] pt-3"><span className="flex items-center gap-1 text-[8px] font-semibold text-[#8d989c]"><Clock3 size={10}/>{PIPELINE_LABELS[lead.pipelineStage as ConsumerPipelineStage]}</span><span className="flex items-center gap-1 text-[10px] font-extrabold text-[#d96245]"><MessageCircle size={11}/>{lead.score}</span></div>
+          <div className="mt-4 flex items-center justify-between border-t border-[#eeeae3] pt-3"><span className="flex items-center gap-1 text-[8px] font-semibold text-[#8d989c]"><Clock3 size={10}/>{PIPELINE_LABELS[lead.pipelineStage as ConsumerPipelineStage] || OUTBOUND_PIPELINE_LABELS[lead.pipelineStage]}</span><span className="flex items-center gap-1 text-[10px] font-extrabold text-[#d96245]"><MessageCircle size={11}/>{lead.score}</span></div>
         </Link>)}</div>
       </section>)}
-    </div></div>
+    </div></div></section>)}</div>
   </>;
 }
