@@ -3,6 +3,7 @@ import {
   auditLogs,
   catalogProducts,
   conversations,
+  exceptions,
   jobs,
   leads,
   messages,
@@ -377,8 +378,18 @@ export async function approveAndSendInstagramReply(input: {
       .where(eq(conversations.id, conversation.id));
     await tx
       .update(leads)
-      .set({ lastContactAt: now, updatedAt: now })
+      .set({ channelState: "api_active", lastContactAt: now, updatedAt: now })
       .where(eq(leads.id, lead.id));
+    await tx
+      .update(exceptions)
+      .set({ status: "resolved", resolvedAt: now })
+      .where(
+        and(
+          eq(exceptions.leadId, lead.id),
+          eq(exceptions.type, "human_review"),
+          eq(exceptions.status, "open"),
+        ),
+      );
     await tx.insert(timelineEvents).values({
       id: crypto.randomUUID(),
       leadId: lead.id,

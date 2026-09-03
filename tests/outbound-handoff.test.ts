@@ -96,6 +96,20 @@ describe("handoff navegador para API oficial", () => {
     expect(prospect.status).toBe("replied");
     expect(prospect.pipelineStage).toBe("replied");
 
+    await db
+      .update(schema.leads)
+      .set({ channelState: "human_review_required" })
+      .where(eq(schema.leads.id, inbound.leadId));
+    await db.insert(schema.exceptions).values({
+      id: "handoff-human-review",
+      leadId: inbound.leadId,
+      type: "human_review",
+      severity: "high",
+      title: "Conversa precisa de revisão humana",
+      status: "open",
+      createdAt: new Date().toISOString(),
+    });
+
     const sent = await approveAndSendInstagramReply(
       {
         leadId: inbound.leadId,
@@ -105,6 +119,17 @@ describe("handoff navegador para API oficial", () => {
       { sendText: async ({ recipientId }) => ({ recipientId, messageId: "api-reply" }) },
     );
     expect(sent.status).toBe("sent");
+    const [leadAfterApproval] = await db
+      .select()
+      .from(schema.leads)
+      .where(eq(schema.leads.id, inbound.leadId));
+    const [reviewAfterApproval] = await db
+      .select()
+      .from(schema.exceptions)
+      .where(eq(schema.exceptions.id, "handoff-human-review"));
+    expect(leadAfterApproval.channelState).toBe("api_active");
+    expect(reviewAfterApproval.status).toBe("resolved");
+    expect(reviewAfterApproval.resolvedAt).toBeTruthy();
     const handoffEvents = await db
       .select()
       .from(schema.outboundEvents)
