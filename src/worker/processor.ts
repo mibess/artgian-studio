@@ -18,7 +18,6 @@ import { canScheduleFollowup } from "../features/leads/domain";
 import { buildFollowupDraft } from "../features/conversations/followups";
 import { isInstagramReplyWindowOpen } from "../integrations/instagram/send";
 import { scheduleFollowupWake } from "./followup-scheduler";
-import { executeOutboundBrowserJob } from "../features/outbound/execute";
 
 type JobPayload = {
   leadId?: string;
@@ -29,6 +28,19 @@ type JobPayload = {
   followupsSent?: number;
   lastInboundAt?: string;
   prospectId?: string;
+};
+
+type OutboundExecutionResult = {
+  status: string;
+  reason?: string;
+  retryAt?: string;
+};
+
+type WorkerDependencies = {
+  executeOutboundBrowserJob?: (input: {
+    jobId: string;
+    prospectId: string;
+  }) => Promise<OutboundExecutionResult>;
 };
 
 async function getPauseState() {
@@ -77,7 +89,10 @@ export async function recoverStaleJobs(now = new Date()) {
   };
 }
 
-export async function runWorkerOnce(targetJobId?: string) {
+export async function runWorkerOnce(
+  targetJobId?: string,
+  dependencies: WorkerDependencies = {},
+) {
   const db = await getCommercialDb();
   const now = new Date().toISOString();
   await recoverStaleJobs(new Date(now));
@@ -139,7 +154,10 @@ export async function runWorkerOnce(targetJobId?: string) {
 
     if (job.type === "send_outbound") {
       if (!payload.prospectId) throw new Error("Job outbound sem prospectId.");
-      const outbound = await executeOutboundBrowserJob({
+      if (!dependencies.executeOutboundBrowserJob) {
+        throw new Error("Executor outbound disponível somente no worker local.");
+      }
+      const outbound = await dependencies.executeOutboundBrowserJob({
         jobId: job.id,
         prospectId: payload.prospectId,
       });
@@ -339,11 +357,14 @@ export async function runWorkerOnce(targetJobId?: string) {
   }
 }
 
-export async function runWorkerBatch(limit = 3) {
+export async function runWorkerBatch(
+  limit = 3,
+  dependencies: WorkerDependencies = {},
+) {
   const results: Awaited<ReturnType<typeof runWorkerOnce>>[] = [];
   const safeLimit = Math.min(10, Math.max(1, Math.trunc(limit)));
   for (let index = 0; index < safeLimit; index += 1) {
-    const result = await runWorkerOnce();
+    const result = await runWorkerOnce(undefined, dependencies);
     results.push(result);
     if (!result.processed || ("paused" in result && result.paused)) break;
   }
