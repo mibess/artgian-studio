@@ -35,6 +35,10 @@ describe("primeiro contato no Chrome dedicado", () => {
       allowSend: false,
     });
     expect(result.status).toBe("ready");
+    const messageControlName = vi.mocked(fake.page.getByRole).mock.calls[0]?.[1]
+      ?.name as RegExp;
+    expect(messageControlName.test("Enviar mensagem")).toBe(true);
+    expect(messageControlName.test("Send message")).toBe(true);
     expect(fake.messageControl.click).not.toHaveBeenCalled();
     expect(fake.composer.pressSequentially).not.toHaveBeenCalled();
   });

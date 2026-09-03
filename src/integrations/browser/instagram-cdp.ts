@@ -54,8 +54,14 @@ export async function executeInstagramFirstContactOnPage(
   assertAllowedUrl(page.url());
 
   const messageControl = page
-    .getByRole("button", { name: /^(mensagem|message)$/i })
-    .or(page.getByRole("link", { name: /^(mensagem|message)$/i }))
+    .getByRole("button", {
+      name: /^(enviar mensagem|mensagem|send message|message)$/i,
+    })
+    .or(
+      page.getByRole("link", {
+        name: /^(enviar mensagem|mensagem|send message|message)$/i,
+      }),
+    )
     .first();
   await messageControl.waitFor({ state: "visible", timeout: 15_000 });
   if (!input.allowSend) return { status: "ready", profileUrl };
