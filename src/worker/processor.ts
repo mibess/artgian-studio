@@ -175,6 +175,19 @@ export async function runWorkerOnce(
           .where(eq(jobs.id, job.id));
         return { processed: true as const, waitingReview: true as const };
       }
+      if (outbound.status === "blocked") {
+        await db
+          .update(jobs)
+          .set({
+            status: "waiting_review",
+            finishedAt: now,
+            lastError:
+              outbound.reason ||
+              "Envio outbound bloqueado pela política de canal.",
+          })
+          .where(eq(jobs.id, job.id));
+        return { processed: true as const, waitingReview: true as const };
+      }
       if (outbound.status === "paused" || outbound.status === "reschedule") {
         const retryAt =
           outbound.retryAt || new Date(Date.now() + 15 * 60 * 1_000).toISOString();

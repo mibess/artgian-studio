@@ -60,6 +60,13 @@ export async function executeOutboundBrowserJob(input: {
     return { status: "invalid_state" as const };
   }
 
+  const [existingConversation] = await db
+    .select()
+    .from(conversations)
+    .where(eq(conversations.leadId, row.lead.id))
+    .orderBy(desc(conversations.updatedAt))
+    .limit(1);
+
   const settings = await getSystemSettings();
   const rawEnvironmentLimit = Number(
     process.env.MAX_DMS_PER_DAY ||
@@ -95,6 +102,7 @@ export async function executeOutboundBrowserJob(input: {
     campaignEnabled: row.campaign.outboundEnabled,
     doNotContact: row.lead.doNotContact,
     approved: row.prospect.status === "queued" || row.prospect.status === "approved_manual",
+    channelOwner: existingConversation?.channelOwner,
     withinOperatingHours: isWithinOperatingHours(
       new Date(),
       row.campaign.operatingHours,
@@ -104,6 +112,14 @@ export async function executeOutboundBrowserJob(input: {
     dailyLimit: Math.min(row.campaign.dailyLimit, environmentLimit, warmupLimit),
   });
   if (!policy.allowed) {
+    if (policy.reason === "api_channel_owned") {
+      const reason = "Contato já pertence à API oficial; envio pelo navegador bloqueado.";
+      await db
+        .update(outboundProspects)
+        .set({ status: "waiting_review", lastError: reason, updatedAt: new Date().toISOString() })
+        .where(eq(outboundProspects.id, row.prospect.id));
+      return { status: "blocked" as const, reason };
+    }
     return {
       status: policy.reason === "outside_operating_hours" ? "reschedule" as const : "paused" as const,
       reason: policy.reason,
@@ -166,12 +182,7 @@ export async function executeOutboundBrowserJob(input: {
 
     await recordOutboundIntegrationSuccess();
     try {
-      const [conversation] = await db
-        .select()
-        .from(conversations)
-        .where(eq(conversations.leadId, row.lead.id))
-        .orderBy(desc(conversations.updatedAt))
-        .limit(1);
+      const conversation = existingConversation;
       const conversationId = conversation?.id || crypto.randomUUID();
       const messageId = crypto.randomUUID();
       await db.transaction(async (tx) => {

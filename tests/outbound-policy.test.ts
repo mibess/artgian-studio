@@ -52,6 +52,12 @@ describe("política do primeiro contato pelo navegador", () => {
     expect(evaluateBrowserFirstContactPolicy({ ...browserBase, browserSendEnabled: false }).reason).toBe("browser_send_disabled");
   });
 
+  it("não devolve ao navegador uma conversa que já pertence à API", () => {
+    expect(
+      evaluateBrowserFirstContactPolicy({ ...browserBase, channelOwner: "api" }),
+    ).toEqual({ allowed: false, reason: "api_channel_owned" });
+  });
+
   it("libera somente dentro do horário e do limite", () => {
     expect(evaluateBrowserFirstContactPolicy(browserBase)).toEqual({
       allowed: true,

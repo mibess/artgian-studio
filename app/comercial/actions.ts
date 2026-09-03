@@ -498,6 +498,15 @@ export async function queueOutboundFirstContact(formData: FormData) {
   if (row.lead.doNotContact) {
     redirect("/comercial/campanhas?erro=Contato+bloqueado+por+opt-out");
   }
+  const [ownedConversation] = await db
+    .select({ channelOwner: conversations.channelOwner })
+    .from(conversations)
+    .where(eq(conversations.leadId, row.lead.id))
+    .orderBy(desc(conversations.updatedAt))
+    .limit(1);
+  if (ownedConversation?.channelOwner === "api") {
+    redirect("/comercial/campanhas?erro=Este+contato+já+pertence+à+API+oficial");
+  }
 
   const now = new Date().toISOString();
   const jobId = crypto.randomUUID();

@@ -37,6 +37,7 @@ export function evaluateBrowserFirstContactPolicy(input: {
   campaignEnabled: boolean;
   doNotContact: boolean;
   approved: boolean;
+  channelOwner?: string | null;
   withinOperatingHours: boolean;
   sentToday: number;
   dailyLimit: number;
@@ -58,6 +59,9 @@ export function evaluateBrowserFirstContactPolicy(input: {
   }
   if (input.doNotContact) {
     return { allowed: false as const, reason: "do_not_contact" as const };
+  }
+  if (input.channelOwner === "api") {
+    return { allowed: false as const, reason: "api_channel_owned" as const };
   }
   if (!input.approved) {
     return { allowed: false as const, reason: "human_approval_required" as const };
