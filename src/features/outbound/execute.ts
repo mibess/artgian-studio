@@ -138,7 +138,11 @@ export async function executeOutboundBrowserJob(input: {
       Date.parse(lastContact.contactedAt) + randomIntervalSeconds() * 1_000,
     );
     if (nextAllowedAt.getTime() > Date.now()) {
-      return { status: "reschedule" as const, retryAt: nextAllowedAt.toISOString() };
+      return {
+        status: "reschedule" as const,
+        reason: "minimum_interval_between_contacts",
+        retryAt: nextAllowedAt.toISOString(),
+      };
     }
   }
 
