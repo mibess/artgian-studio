@@ -20,7 +20,8 @@
     "db:setup": "tsx scripts/setup-commercial-db.ts",
     "db:backup": "tsx scripts/backup-commercial-db.ts",
     "db:backup:production": "node scripts/backup-turso.mjs",
-    "worker": "tsx worker/index.ts"
+    "worker": "tsx worker/index.ts",
+    "worker:production": "zsh scripts/start-production-worker.zsh"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

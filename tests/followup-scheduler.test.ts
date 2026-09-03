@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getFollowupSchedulerStatus, scheduleFollowupWake } from "../src/worker/followup-scheduler";
 import { NextRequest } from "next/server";
 import { POST } from "../app/api/tasks/followups/route";
+import { parseFollowupFailure } from "../src/worker/followup-alerts";
 
 const original = {
   appUrl: process.env.APP_URL,
@@ -30,7 +31,7 @@ describe("agendador pontual de follow-ups", () => {
   it("publica um único despertar para a rota autenticada", async () => {
     process.env.APP_URL = "https://www.artgian.com.br";
     process.env.QSTASH_TOKEN = "token-de-teste";
-    const publish = vi.fn(async (input: { jobId: string; scheduledAt: string; url: string; delay: number }) => {
+    const publish = vi.fn(async (input: { jobId: string; scheduledAt: string; url: string; failureCallback: string; delay: number }) => {
       expect(input.jobId).toBe("job-2");
     });
     const result = await scheduleFollowupWake(
@@ -42,6 +43,7 @@ describe("agendador pontual de follow-ups", () => {
     expect(publish.mock.calls[0][0]).toMatchObject({
       jobId: "job-2",
       url: "https://www.artgian.com.br/api/tasks/followups",
+      failureCallback: "https://www.artgian.com.br/api/tasks/followups/failure",
     });
   });
 
@@ -63,5 +65,21 @@ describe("agendador pontual de follow-ups", () => {
       body: JSON.stringify({ jobId: "job-inexistente" }),
     }));
     expect(response.status).toBe(401);
+  });
+
+  it("extrai o job do callback de falha sem confiar no corpo da origem", () => {
+    const sourceBody = Buffer.from(JSON.stringify({ jobId: "job-3" })).toString("base64");
+    expect(parseFollowupFailure(JSON.stringify({
+      sourceBody,
+      sourceMessageId: "msg-qstash-1",
+      status: 500,
+      retried: 3,
+    }))).toEqual({
+      jobId: "job-3",
+      sourceMessageId: "msg-qstash-1",
+      status: 500,
+      retried: 3,
+    });
+    expect(parseFollowupFailure("{}")).toBeNull();
   });
 });

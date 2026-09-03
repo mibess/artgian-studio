@@ -1,5 +1,15 @@
-import { runWorkerOnce } from "../src/worker/processor";
-import { executeOutboundBrowserJob } from "../src/features/outbound/execute";
+export {};
+
+try {
+  process.loadEnvFile(process.env.WORKER_ENV_FILE || ".env.local");
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+}
+
+const [{ runWorkerOnce }, { executeOutboundBrowserJob }] = await Promise.all([
+  import("../src/worker/processor"),
+  import("../src/features/outbound/execute"),
+]);
 
 let running = true;
 process.on("SIGINT", () => { running = false; });

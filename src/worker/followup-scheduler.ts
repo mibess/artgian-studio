@@ -12,6 +12,16 @@ function callbackUrl() {
   }
 }
 
+function failureCallbackUrl() {
+  const base = process.env.APP_URL?.trim();
+  if (!base) return null;
+  try {
+    return new URL("/api/tasks/followups/failure", base).toString();
+  } catch {
+    return null;
+  }
+}
+
 export function getFollowupSchedulerStatus() {
   const publishReady = Boolean(process.env.QSTASH_TOKEN?.trim() && callbackUrl());
   const verifyReady = Boolean(
@@ -23,23 +33,41 @@ export function getFollowupSchedulerStatus() {
 
 export async function scheduleFollowupWake(
   input: FollowupWake,
-  dependencies: { publish?: (input: FollowupWake & { url: string; delay: number }) => Promise<void> } = {},
+  dependencies: {
+    publish?: (
+      input: FollowupWake & {
+        url: string;
+        failureCallback: string;
+        delay: number;
+      },
+    ) => Promise<void>;
+  } = {},
 ) {
   const url = callbackUrl();
-  if (!url || !process.env.QSTASH_TOKEN?.trim()) {
+  const failureCallback = failureCallbackUrl();
+  if (!url || !failureCallback || !process.env.QSTASH_TOKEN?.trim()) {
     return { status: "database_only" as const };
   }
   const delay = Math.max(0, Math.ceil((Date.parse(input.scheduledAt) - Date.now()) / 1_000));
-  const publish = dependencies.publish || (async (message: FollowupWake & { url: string; delay: number }) => {
+  const publish = dependencies.publish || (async (
+    message: FollowupWake & {
+      url: string;
+      failureCallback: string;
+      delay: number;
+    },
+  ) => {
     const client = new Client({ token: process.env.QSTASH_TOKEN!.trim() });
     await client.publishJSON({
       url: message.url,
       body: { jobId: message.jobId },
       delay: message.delay,
       retries: 3,
+      failureCallback: message.failureCallback,
+      contentBasedDeduplication: true,
+      label: ["artgian", "followup"],
     });
   });
-  await publish({ ...input, url, delay });
+  await publish({ ...input, url, failureCallback, delay });
   return { status: "qstash" as const };
 }
 

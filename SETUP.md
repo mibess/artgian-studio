@@ -198,6 +198,29 @@ O POST exige `X-Hub-Signature-256`. Eventos repetidos usam o ID externo como cha
 - No plano Hobby, mantenha o cron em uma execução por dia. O webhook cobre o
   tempo real e o cron funciona como reconciliação de segurança.
 
+### Follow-ups pontuais e alertas
+
+- Follow-ups não dependem do cron diário: cada job publica um despertar com
+  atraso no QStash para `/api/tasks/followups`.
+- A rota valida a assinatura do QStash antes de consultar ou executar o job.
+- Cada entrega usa deduplicação, três retentativas e callback de falha em
+  `/api/tasks/followups/failure`.
+- Se as retentativas se esgotarem, o painel registra uma exceção de alta
+  prioridade, atualiza o estado `followup_scheduler` e preserva o job para
+  análise. O callback nunca envia mensagens.
+- O worker apenas prepara um rascunho de follow-up em `waiting_review`. O envio
+  continua exigindo aprovação humana e uma janela válida de 24 horas.
+- No piloto, use `FOLLOWUP_INTERVAL_HOURS=18` e `MAX_FOLLOWUPS=1`.
+
+Checklist diário do operador:
+
+1. revisar **Comercial → Revisão humana** e **Jobs**;
+2. confirmar que não existem jobs `dead_letter` ou `send_uncertain`;
+3. verificar a saúde do Instagram e o último sync em **Configurações**;
+4. revisar cada rascunho antes de enviar;
+5. pausar a automação imediatamente em caso de duplicidade, opt-out ou erro de
+   canal.
+
 ## 6. Dry-run inbound
 
 Abra **Conversas → Simular inbound**. A simulação:
@@ -271,6 +294,19 @@ sessão inteira: mantenha-a em `127.0.0.1`, nunca exponha em `0.0.0.0` e não us
 uma máquina compartilhada. A Vercel não acessa esse Chrome; jobs
 `send_outbound` são deliberadamente ignorados pelo worker serverless e
 processados apenas por `pnpm worker` na máquina autorizada.
+
+Na estação operacional autenticada na Turso, `pnpm worker:production` carrega
+as configurações locais, força a conexão com `artgian-prod` e cria uma
+credencial temporária de banco sem gravá-la em arquivo ou exibi-la. O comando
+falha de forma segura se a CLI da Turso não estiver disponível. Mantenha essa
+estação bloqueada, o Chrome dedicado aberto e monitore o processo; não execute
+duas instâncias do worker outbound ao mesmo tempo.
+
+O comando inicia com envio bloqueado. Depois da autorização explícita e das
+aprovações no painel, use `WORKER_ENABLE_OUTBOUND=true pnpm worker:production`.
+O piloto aplica, por padrão, teto de 3 DMs/dia e intervalo aleatório de 5 a 15
+minutos. Esses valores podem ser reduzidos por `WORKER_MAX_DMS_PER_DAY`,
+`WORKER_MIN_SECONDS_BETWEEN_DMS` e `WORKER_MAX_SECONDS_BETWEEN_DMS`.
 
 ## 8. Ativação do outbound
 
