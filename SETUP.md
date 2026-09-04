@@ -251,6 +251,8 @@ Regras implementadas:
 - duas travas de ambiente (`OUTBOUND_AUTOMATION_ENABLED` e
   `BROWSER_SEND_ENABLED`), além das pausas do painel;
 - intervalo aleatório, horário, teto diário e aquecimento gradual;
+- pausas variáveis entre navegação, leitura, cliques e confirmação;
+- digitação em blocos curtos, com velocidade e pausas variáveis;
 - screenshot, snapshot de acessibilidade e diagnóstico local em falhas;
 - envio incerto nunca é repetido automaticamente;
 - falhas consecutivas abrem o circuit breaker e pausam outbound.
@@ -317,6 +319,15 @@ O piloto aplica, por padrão, teto de 3 DMs/dia e intervalo aleatório de 5 a 15
 minutos. Esses valores podem ser reduzidos por `WORKER_MAX_DMS_PER_DAY`,
 `WORKER_MIN_SECONDS_BETWEEN_DMS` e `WORKER_MAX_SECONDS_BETWEEN_DMS`.
 
+O ritmo dentro de cada ação também é variável. A descoberta espera resultados,
+permanece alguns segundos em cada perfil e faz uma pausa antes de seguir para o
+próximo. O primeiro contato espera no perfil, digita em blocos com velocidade
+variável e pausa antes de confirmar. Ajuste os intervalos por
+`DISCOVERY_*_DELAY_SECONDS`, `DISCOVERY_*_WAIT_SECONDS`,
+`DISCOVERY_*_BETWEEN_*`, `DISCOVERY_*_DWELL_SECONDS`,
+`BROWSER_TYPING_*` e `OUTBOUND_*_SECONDS`. Os valores completos e seus padrões
+estão em `.env.example`.
+
 ## 8. Ativação do outbound
 
 O padrão obrigatório é:
@@ -361,6 +372,12 @@ INSTAGRAM_DISCOVERY_ENABLED=true
 MAX_DISCOVERY_PROFILES_PER_RUN=10
 ```
 
+Os padrões de cadência fazem cada consulta aguardar de 4 a 8 segundos, mantêm
+de 6 a 14 segundos entre buscas e de 8 a 20 segundos entre perfis, além do
+tempo de leitura de cada perfil. Isso reduz rajadas e preserva um fluxo
+operacional gradual; não é técnica de mascaramento nem garantia contra limites
+da plataforma.
+
 No painel **Campanhas e prospecção**, salve palavras-chave, hashtags, regiões,
 limite diário, score mínimo e intervalo. Depois, ative **Busca segura**. A
 primeira execução é agendada imediatamente; cada execução concluída agenda a
@@ -376,6 +393,12 @@ pessoa envia uma mensagem ao perfil profissional. Por isso, DM fria pela API
 permanece bloqueada no código. O envio pelo navegador usa a interface comum da
 conta, sem API privada, mascaramento ou evasão; a operadora deve revisar as
 regras da plataforma antes de cada piloto.
+
+Respostas automáticas pela API oficial aguardam um intervalo calculado a partir
+do tamanho da mensagem recebida e do texto de resposta, limitado por
+`AUTO_REPLY_MIN_DELAY_SECONDS` e `AUTO_REPLY_MAX_DELAY_SECONDS`. Como a API
+envia o texto inteiro de uma vez, esse intervalo representa leitura e composição;
+não há digitação caractere a caractere nesse canal.
 
 Estados de segurança importantes:
 

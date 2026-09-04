@@ -16,8 +16,8 @@ export function getFollowupSchedule(lastInboundAt: string, now = new Date()) {
 export function buildFollowupDraft(productInterest?: string | null) {
   const subject = productInterest?.trim();
   return subject
-    ? `Oi! Você ainda gostaria de continuar falando sobre ${subject}? Se quiser, posso ajudar com o próximo passo.`
-    : "Oi! Você ainda gostaria de continuar essa conversa? Se quiser, posso ajudar com o próximo passo.";
+    ? `Oi! Passando só para saber se você ainda quer continuar com a ideia do ${subject}. Se quiser, me chama por aqui 😊`
+    : "Oi! Passando só para saber se você ainda quer continuar com aquela ideia. Se quiser, me chama por aqui 😊";
 }
 
 export async function scheduleFollowupReview(input: {

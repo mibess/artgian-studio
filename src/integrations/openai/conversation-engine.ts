@@ -14,6 +14,10 @@ import {
   type IntentDecision,
 } from "../../features/leads/domain";
 import { buildSafeOutboundOpening, type OutboundFunnel } from "../../features/outbound/domain";
+import {
+  NATURAL_CONVERSATION_GUIDELINES,
+  naturalizeBrandVoice,
+} from "../../features/conversations/voice";
 
 const openAiCircuitBreaker = new CircuitBreaker(3, 60_000);
 
@@ -181,7 +185,7 @@ export async function generateCommercialDecision(
       messages: [
         {
           role: "system",
-          content: `Você é o assistente comercial da ${business.company.name}. Tom: ${business.brand.voice}. Escreva uma única resposta curta e natural em português do Brasil, adequada para uma DM do Instagram. Descubra a intenção por trás do produto e faça no máximo uma pergunta por mensagem. Só use estes claims: ${business.verifiedClaims.join(" | ")}. Nunca invente preço, prazo, frete, material, viabilidade, desconto ou garantia. Na dúvida, escale para humano.`,
+          content: `${NATURAL_CONVERSATION_GUIDELINES} Tom da marca: ${business.brand.voice}. Use estes itens somente como fatos, sem copiar a linguagem institucional: ${business.verifiedClaims.join(" | ")}. Descubra a intenção por trás do produto. Nunca invente preço, prazo, frete, material, viabilidade, desconto ou garantia. Na dúvida, escale para uma pessoa.`,
         },
         {
           role: "user",
@@ -206,9 +210,13 @@ export async function generateCommercialDecision(
       console.warn("OpenAI retornou uma decisão inválida; usando regras locais.");
       return { ...fallback, source: "rules" };
     }
+    const naturalMessage = naturalizeBrandVoice(
+      parsed.data.message,
+      business.company.name,
+    );
     if (
       unsafeCommercialClaim(
-        parsed.data.message,
+        naturalMessage,
         context.product,
         business.unverifiedClaims,
       )
@@ -232,7 +240,7 @@ export async function generateCommercialDecision(
       createdAt: new Date().toISOString(),
     });
     openAiCircuitBreaker.recordSuccess();
-    return { ...parsed.data, source: "openai" };
+    return { ...parsed.data, message: naturalMessage, source: "openai" };
   } catch (error) {
     openAiCircuitBreaker.recordFailure();
     console.error(
@@ -290,7 +298,7 @@ export async function generateOutboundOpening(input: {
       messages: [
         {
           role: "system",
-          content: `Escreva uma única primeira mensagem curta, pessoal e verdadeira em português do Brasil para a ${business.company.name}. Use somente o sinal público fornecido e estes claims verificados: ${business.verifiedClaims.join(" | ")}. Não invente elogio, preço, prazo, desconto, garantia, resultado ou relação comercial. Apresente-se sem fingir ser cliente e termine pedindo permissão para explicar a ideia.`,
+          content: `${NATURAL_CONVERSATION_GUIDELINES} Escreva uma única primeira mensagem curta e verdadeira. Fale como alguém que trabalha com peças personalizadas em impressão 3D, sem apresentar a empresa em terceira pessoa. Use somente o sinal público fornecido e estes itens como fatos, sem copiar a linguagem institucional: ${business.verifiedClaims.join(" | ")}. Não invente elogio, preço, prazo, desconto, garantia, resultado ou relação comercial. Não finja ser cliente e termine pedindo permissão para explicar a ideia.`,
         },
         {
           role: "user",
@@ -307,9 +315,13 @@ export async function generateOutboundOpening(input: {
     });
     const raw = completion.choices[0]?.message.content;
     const parsed = raw ? outboundOpeningSchema.safeParse(JSON.parse(raw)) : null;
+    const naturalMessage = parsed?.success
+      ? naturalizeBrandVoice(parsed.data.message, business.company.name)
+      : null;
     if (
       !parsed?.success ||
-      unsafeCommercialClaim(parsed.data.message, null, business.unverifiedClaims)
+      !naturalMessage ||
+      unsafeCommercialClaim(naturalMessage, null, business.unverifiedClaims)
     ) {
       return { message: fallback, source: "rules" as const };
     }
@@ -327,7 +339,7 @@ export async function generateOutboundOpening(input: {
       createdAt: new Date().toISOString(),
     });
     openAiCircuitBreaker.recordSuccess();
-    return { message: parsed.data.message, source: "openai" as const };
+    return { message: naturalMessage, source: "openai" as const };
   } catch {
     openAiCircuitBreaker.recordFailure();
     return { message: fallback, source: "rules" as const };

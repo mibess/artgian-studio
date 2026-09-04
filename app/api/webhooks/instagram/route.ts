@@ -5,6 +5,8 @@ import { enhanceReplyDraftWithAi } from "../../../../src/features/conversations/
 import { extractInstagramMessages, verifyMetaSignature } from "../../../../src/integrations/instagram/webhook";
 import { getInstagramMessagingProfile } from "../../../../src/integrations/instagram/profile";
 
+export const maxDuration = 90;
+
 export async function GET(request: NextRequest) {
   const mode = request.nextUrl.searchParams.get("hub.mode");
   const token = request.nextUrl.searchParams.get("hub.verify_token");
@@ -64,6 +66,7 @@ export async function POST(request: NextRequest) {
               leadId: result.leadId,
               messageId: enhanced.messageId,
               decision: enhanced.decision,
+              inboundText: message.text,
             });
           }
         } catch (error) {

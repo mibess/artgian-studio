@@ -52,7 +52,15 @@ describe("primeiro contato no Chrome dedicado", () => {
     });
     expect(result.status).toBe("sent");
     expect(fake.messageControl.click).toHaveBeenCalledOnce();
-    expect(fake.composer.pressSequentially).toHaveBeenCalledWith("Mensagem aprovada pela operadora.", expect.any(Object));
+    expect(
+      vi.mocked(fake.composer.pressSequentially).mock.calls
+        .map(([chunk]) => chunk)
+        .join(""),
+    ).toBe("Mensagem aprovada pela operadora.");
+    expect(fake.composer.pressSequentially).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ delay: expect.any(Number) }),
+    );
     expect(fake.composer.press).toHaveBeenCalledWith("Enter");
   });
 

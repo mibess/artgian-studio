@@ -287,9 +287,10 @@ export async function runWorkerOnce(
           decision: enhanced.decision,
         });
         if (automatic.status === "sent") {
+          const completedAt = new Date().toISOString();
           await db
             .update(jobs)
-            .set({ status: "completed", finishedAt: now, lastError: null })
+            .set({ status: "completed", finishedAt: completedAt, lastError: null })
             .where(eq(jobs.id, job.id));
           return { processed: true as const, sent: true as const };
         }

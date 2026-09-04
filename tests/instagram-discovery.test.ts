@@ -6,7 +6,9 @@ function createDiscoveryPage() {
   let currentUrl = "about:blank";
   const searchInput = {
     waitFor: vi.fn(),
+    click: vi.fn(),
     fill: vi.fn(),
+    pressSequentially: vi.fn(),
   };
   const page = {
     goto: vi.fn(async (url: string) => { currentUrl = url; }),
@@ -47,6 +49,10 @@ describe("descoberta no Chrome dedicado", () => {
       "https://www.instagram.com/explore/",
       expect.any(Object),
     );
-    expect(searchInput.fill).toHaveBeenCalledWith("presente personalizado");
+    expect(searchInput.click).toHaveBeenCalledOnce();
+    expect(searchInput.fill).toHaveBeenCalledWith("");
+    expect(
+      searchInput.pressSequentially.mock.calls.map(([chunk]) => chunk).join(""),
+    ).toBe("presente personalizado");
   });
 });

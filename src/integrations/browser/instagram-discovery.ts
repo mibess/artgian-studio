@@ -7,6 +7,7 @@ import {
   type DiscoverySeed,
   type PublicInstagramCandidate,
 } from "../../features/outbound/discovery-domain";
+import { pauseLikePerson, typeLikePerson } from "./human-pacing";
 
 const ALLOWED_HOSTS = new Set(["www.instagram.com", "instagram.com"]);
 let discoveryJobRunning = false;
@@ -33,7 +34,13 @@ async function profileCandidateFromPage(
   const sourceUrl = `https://www.instagram.com/${username}/`;
   await page.goto(sourceUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
   assertInstagramUrl(page.url());
-  await page.waitForTimeout(700);
+  await pauseLikePerson(page, {
+    minimumVariable: "DISCOVERY_MIN_PROFILE_DWELL_SECONDS",
+    maximumVariable: "DISCOVERY_MAX_PROFILE_DWELL_SECONDS",
+    defaultMinimumSeconds: 6,
+    defaultMaximumSeconds: 14,
+    absoluteMaximumSeconds: 45,
+  });
   const [title, description, mainText] = await Promise.all([
     page.locator('meta[property="og:title"]').getAttribute("content").catch(() => null),
     page.locator('meta[property="og:description"]').getAttribute("content").catch(() => null),
@@ -68,6 +75,12 @@ export async function executeInstagramDiscoveryOnPage(
     timeout: 30_000,
   });
   assertInstagramUrl(page.url());
+  await pauseLikePerson(page, {
+    minimumVariable: "DISCOVERY_MIN_ACTION_DELAY_SECONDS",
+    maximumVariable: "DISCOVERY_MAX_ACTION_DELAY_SECONDS",
+    defaultMinimumSeconds: 2,
+    defaultMaximumSeconds: 5,
+  });
   const searchInput = page.getByPlaceholder(/^(Pesquisar|Search)$/i);
   await searchInput.waitFor({ state: "visible", timeout: 15_000 });
 
@@ -75,8 +88,21 @@ export async function executeInstagramDiscoveryOnPage(
     const query = seed.kind === "hashtag"
       ? `#${seed.value.replace(/^#+/, "").replace(/\s+/g, "")}`
       : seed.value;
-    await searchInput.fill(query);
-    await page.waitForTimeout(1_200);
+    await searchInput.click();
+    await searchInput.fill("");
+    await pauseLikePerson(page, {
+      minimumVariable: "DISCOVERY_MIN_ACTION_DELAY_SECONDS",
+      maximumVariable: "DISCOVERY_MAX_ACTION_DELAY_SECONDS",
+      defaultMinimumSeconds: 1,
+      defaultMaximumSeconds: 3,
+    });
+    await typeLikePerson(page, searchInput, query);
+    await pauseLikePerson(page, {
+      minimumVariable: "DISCOVERY_MIN_RESULTS_WAIT_SECONDS",
+      maximumVariable: "DISCOVERY_MAX_RESULTS_WAIT_SECONDS",
+      defaultMinimumSeconds: 4,
+      defaultMaximumSeconds: 8,
+    });
     const hrefs = await page.locator("a[href]").evaluateAll((anchors) =>
       anchors
         .map((anchor) => anchor.getAttribute("href"))
@@ -90,12 +116,28 @@ export async function executeInstagramDiscoveryOnPage(
       if (discovered.size >= maximumProfiles * 3) break;
     }
     if (discovered.size >= maximumProfiles * 3) break;
+    await pauseLikePerson(page, {
+      minimumVariable: "DISCOVERY_MIN_SECONDS_BETWEEN_SEARCHES",
+      maximumVariable: "DISCOVERY_MAX_SECONDS_BETWEEN_SEARCHES",
+      defaultMinimumSeconds: 6,
+      defaultMaximumSeconds: 14,
+      absoluteMaximumSeconds: 60,
+    });
   }
 
   const candidates: PublicInstagramCandidate[] = [];
   let profilesInspected = 0;
   for (const discoveredProfile of discovered.values()) {
     if (profilesInspected >= maximumProfiles) break;
+    if (profilesInspected > 0) {
+      await pauseLikePerson(page, {
+        minimumVariable: "DISCOVERY_MIN_SECONDS_BETWEEN_PROFILES",
+        maximumVariable: "DISCOVERY_MAX_SECONDS_BETWEEN_PROFILES",
+        defaultMinimumSeconds: 8,
+        defaultMaximumSeconds: 20,
+        absoluteMaximumSeconds: 90,
+      });
+    }
     profilesInspected += 1;
     const candidate = await profileCandidateFromPage(
       page,

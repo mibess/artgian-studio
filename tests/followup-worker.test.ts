@@ -114,7 +114,7 @@ describe("follow-up compatível com a janela do Instagram", () => {
       .from(schema.messages)
       .where(eq(schema.messages.status, "draft"));
     expect(drafts).toHaveLength(1);
-    expect(drafts[0].body).toContain("continuar essa conversa");
+    expect(drafts[0].body).toContain("continuar com aquela ideia");
 
     process.env.FOLLOWUP_REVIEW_ENABLED = "true";
     process.env.MAX_FOLLOWUPS = "1";

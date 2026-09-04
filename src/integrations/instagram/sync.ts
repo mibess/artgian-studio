@@ -186,6 +186,7 @@ export async function syncInstagramConversations(input: {
               leadId: result.leadId,
               messageId: enhanced.messageId,
               decision: enhanced.decision,
+              inboundText: message.text,
             });
           }
         }

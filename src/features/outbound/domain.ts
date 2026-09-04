@@ -113,13 +113,13 @@ export function buildSafeOutboundOpening(input: {
     : "Oi!";
   const signal = input.publicSignal?.trim();
   const context = signal
-    ? `Vi ${signal.replace(/[.!?]+$/, "")} no seu perfil.`
-    : "Encontrei seu perfil no Instagram.";
+    ? `Vi ${signal.replace(/[.!?]+$/, "")} no seu perfil e me veio uma ideia.`
+    : "Encontrei seu perfil por aqui e me veio uma ideia.";
   const idea =
     input.funnelType === "partner"
-      ? `Trabalho com a ${input.companyName} e enxerguei uma possível conexão entre nossos trabalhos.`
-      : `Trabalho com a ${input.companyName} e pensei em uma ideia que pode combinar com você.`;
-  return `${greeting} ${context} ${idea} Posso te contar brevemente?`;
+      ? "Eu trabalho com peças personalizadas em impressão 3D e acho que talvez dê para criarmos algo legal juntos."
+      : "Eu trabalho com peças personalizadas em impressão 3D e pensei em algo que talvez combine com você.";
+  return `${greeting} ${context} ${idea} Posso te contar?`;
 }
 
 export function isValidOutboundTransition(

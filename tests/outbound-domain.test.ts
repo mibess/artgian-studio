@@ -53,6 +53,8 @@ describe("qualificação outbound", () => {
     });
     expect(message).toContain("Oi, Marina!");
     expect(message).toContain("organização de cozinha");
+    expect(message).toContain("Eu trabalho com peças personalizadas");
+    expect(message).not.toContain("Artgian Studio");
     expect(message).not.toMatch(/garantia|desconto|resultado/i);
   });
 

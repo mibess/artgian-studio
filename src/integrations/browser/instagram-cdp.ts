@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type Page } from "playwright-core";
 import { canonicalInstagramUsername } from "../../features/leads/domain";
+import { pauseLikePerson, typeLikePerson } from "./human-pacing";
 
 let browserJobRunning = false;
 const ALLOWED_HOSTS = new Set(["www.instagram.com", "instagram.com"]);
@@ -52,6 +53,13 @@ export async function executeInstagramFirstContactOnPage(
   const message = normalizeMessage(input.message);
   await page.goto(profileUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
   assertAllowedUrl(page.url());
+  await pauseLikePerson(page, {
+    minimumVariable: "OUTBOUND_MIN_PROFILE_DWELL_SECONDS",
+    maximumVariable: "OUTBOUND_MAX_PROFILE_DWELL_SECONDS",
+    defaultMinimumSeconds: 5,
+    defaultMaximumSeconds: 12,
+    absoluteMaximumSeconds: 45,
+  });
 
   const messageControl = page
     .getByRole("button", {
@@ -66,17 +74,31 @@ export async function executeInstagramFirstContactOnPage(
   await messageControl.waitFor({ state: "visible", timeout: 15_000 });
   if (!input.allowSend) return { status: "ready", profileUrl };
 
+  await pauseLikePerson(page, {
+    minimumVariable: "OUTBOUND_MIN_ACTION_DELAY_SECONDS",
+    maximumVariable: "OUTBOUND_MAX_ACTION_DELAY_SECONDS",
+    defaultMinimumSeconds: 2,
+    defaultMaximumSeconds: 5,
+  });
   await messageControl.click();
   assertAllowedUrl(page.url());
   const composer = page
     .locator('[contenteditable="true"][role="textbox"]')
     .last();
   await composer.waitFor({ state: "visible", timeout: 15_000 });
-  const configuredDelay = Number(process.env.OUTBOUND_TYPING_DELAY_MS || 45);
-  const delay = Number.isFinite(configuredDelay)
-    ? Math.min(120, Math.max(20, Math.trunc(configuredDelay)))
-    : 45;
-  await composer.pressSequentially(message, { delay });
+  await pauseLikePerson(page, {
+    minimumVariable: "OUTBOUND_MIN_ACTION_DELAY_SECONDS",
+    maximumVariable: "OUTBOUND_MAX_ACTION_DELAY_SECONDS",
+    defaultMinimumSeconds: 2,
+    defaultMaximumSeconds: 5,
+  });
+  await typeLikePerson(page, composer, message);
+  await pauseLikePerson(page, {
+    minimumVariable: "OUTBOUND_MIN_SECONDS_BEFORE_SEND",
+    maximumVariable: "OUTBOUND_MAX_SECONDS_BEFORE_SEND",
+    defaultMinimumSeconds: 3,
+    defaultMaximumSeconds: 7,
+  });
   try {
     await composer.press("Enter");
   } catch {
@@ -85,7 +107,12 @@ export async function executeInstagramFirstContactOnPage(
       "uncertain",
     );
   }
-  await page.waitForTimeout(1_000);
+  await pauseLikePerson(page, {
+    minimumVariable: "OUTBOUND_MIN_SECONDS_AFTER_SEND",
+    maximumVariable: "OUTBOUND_MAX_SECONDS_AFTER_SEND",
+    defaultMinimumSeconds: 2,
+    defaultMaximumSeconds: 4,
+  });
   return { status: "sent", profileUrl };
 }
 

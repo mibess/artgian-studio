@@ -105,7 +105,7 @@ export async function processInboundMessage(input: InboundMessage) {
       intent,
       action: "show_product",
       reason: "Preço encontrado no catálogo verificado",
-      message: `O ${matchedProduct.name} está cadastrado ${prefix}por ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format((priceCents || 0) / 100)}. Você gostaria dessa opção ou imaginou alguma personalização?`,
+      message: `O ${matchedProduct.name} sai ${prefix}por ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format((priceCents || 0) / 100)}. Você quer desse jeito ou pensou em alguma personalização?`,
       requiresHuman: false,
     };
   }

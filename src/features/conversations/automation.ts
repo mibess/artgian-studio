@@ -1,6 +1,10 @@
 import { and, eq, gte } from "drizzle-orm";
 import { auditLogs } from "../../../db/schema";
 import { getCommercialDb, getSystemSettings } from "../../db/commercial";
+import {
+  getAutomaticReplyDelayMs,
+  wait as waitForHumanDelay,
+} from "../automation/human-pacing";
 import type { AiAction, Intent, IntentDecision } from "../leads/domain";
 import { approveAndSendInstagramReply } from "./replies";
 
@@ -116,7 +120,10 @@ export async function tryAutoSendInstagramReply(input: {
   leadId: string;
   messageId: string;
   decision: AutoReplyDecision;
-}) {
+  inboundText?: string;
+}, dependencies: {
+  wait?: (milliseconds: number) => Promise<void>;
+} = {}) {
   const settings = await getSystemSettings();
   const db = await getCommercialDb();
   const since = new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString();
@@ -144,6 +151,11 @@ export async function tryAutoSendInstagramReply(input: {
   });
   if (!policy.allowed) return { status: "waiting_review" as const, reason: policy.reason };
 
+  const responseDelayMs = getAutomaticReplyDelayMs({
+    inboundText: input.inboundText,
+    outboundText: input.decision.message,
+  });
+  await (dependencies.wait || waitForHumanDelay)(responseDelayMs);
   const result = await approveAndSendInstagramReply(
     {
       leadId: input.leadId,
@@ -157,6 +169,6 @@ export async function tryAutoSendInstagramReply(input: {
     },
   );
   return result.status === "sent"
-    ? { status: "sent" as const, reason: policy.reason }
+    ? { status: "sent" as const, reason: policy.reason, responseDelayMs }
     : { status: "waiting_review" as const, reason: result.status };
 }
