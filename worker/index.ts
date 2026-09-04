@@ -6,9 +6,11 @@ try {
   if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 }
 
-const [{ runWorkerOnce }, { executeOutboundBrowserJob }] = await Promise.all([
+const [{ runWorkerOnce }, { executeOutboundBrowserJob }, { executeCampaignDiscovery }, { discoverInstagramProfiles }] = await Promise.all([
   import("../src/worker/processor"),
   import("../src/features/outbound/execute"),
+  import("../src/features/outbound/discovery"),
+  import("../src/integrations/browser/instagram-discovery"),
 ]);
 
 let running = true;
@@ -19,7 +21,11 @@ console.log("Worker comercial iniciado. Pressione Ctrl+C para encerrar.");
 let consecutiveFailures = 0;
 while (running) {
   try {
-    const result = await runWorkerOnce(undefined, { executeOutboundBrowserJob });
+    const result = await runWorkerOnce(undefined, {
+      executeOutboundBrowserJob,
+      executeDiscoveryJob: (input) =>
+        executeCampaignDiscovery(input, { discover: discoverInstagramProfiles }),
+    });
     consecutiveFailures = 0;
     if (!result.processed) {
       await new Promise((resolve) => setTimeout(resolve, 2_000));

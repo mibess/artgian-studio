@@ -347,6 +347,30 @@ O primeiro contato nunca usa a API oficial. Ele segue este fluxo:
 7. quando a pessoa responder, o webhook troca a propriedade do fio de
    `browser` para `api`; o navegador nunca responde novamente naquele fio.
 
+### Descoberta segura de prospectos
+
+A descoberta é independente do envio. Ela pesquisa termos aprovados no Chrome
+dedicado, lê somente dados públicos necessários, aplica deduplicação, lista de
+não contato e score ICP, e salva os perfis na fila de análise. Ela nunca cria
+um job `send_outbound`.
+
+Na máquina do worker, habilite:
+
+```text
+INSTAGRAM_DISCOVERY_ENABLED=true
+MAX_DISCOVERY_PROFILES_PER_RUN=10
+```
+
+No painel **Campanhas e prospecção**, salve palavras-chave, hashtags, regiões,
+limite diário, score mínimo e intervalo. Depois, ative **Busca segura**. A
+primeira execução é agendada imediatamente; cada execução concluída agenda a
+próxima. A pausa **Descoberta** interrompe a busca sem afetar as conversas.
+
+Perfis encontrados ficam em `identified` com política `manual_only`. O operador
+ainda precisa preparar e aprovar o rascunho e agendar o primeiro contato. Para
+desativar, use o botão da campanha; jobs pendentes são encerrados sem apagar o
+histórico.
+
 A coleção oficial da Meta informa que conversas da Send API começam quando a
 pessoa envia uma mensagem ao perfil profissional. Por isso, DM fria pela API
 permanece bloqueada no código. O envio pelo navegador usa a interface comum da

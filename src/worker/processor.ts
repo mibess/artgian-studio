@@ -16,6 +16,7 @@ import {
 } from "../features/conversations/replies";
 import { canScheduleFollowup } from "../features/leads/domain";
 import { buildFollowupDraft } from "../features/conversations/followups";
+import { scheduleNextCampaignDiscovery } from "../features/outbound/discovery";
 import { isInstagramReplyWindowOpen } from "../integrations/instagram/send";
 import { scheduleFollowupWake } from "./followup-scheduler";
 
@@ -28,6 +29,7 @@ type JobPayload = {
   followupsSent?: number;
   lastInboundAt?: string;
   prospectId?: string;
+  campaignId?: string;
 };
 
 type OutboundExecutionResult = {
@@ -41,6 +43,14 @@ type WorkerDependencies = {
     jobId: string;
     prospectId: string;
   }) => Promise<OutboundExecutionResult>;
+  executeDiscoveryJob?: (input: {
+    jobId: string;
+    campaignId: string;
+  }) => Promise<{
+    status: "completed" | "disabled" | "paused";
+    reason?: string;
+    created?: number;
+  }>;
 };
 
 async function getPauseState() {
@@ -101,6 +111,7 @@ export async function runWorkerOnce(
         eq(jobs.status, "pending"),
         lte(jobs.scheduledAt, now),
         ne(jobs.type, "send_outbound"),
+        ne(jobs.type, "discover_prospects"),
       )
     : and(eq(jobs.status, "pending"), lte(jobs.scheduledAt, now));
   const [job] = await db
@@ -137,6 +148,49 @@ export async function runWorkerOnce(
       return { processed: true as const, paused: true as const };
     }
     const payload = JSON.parse(job.payload) as JobPayload;
+    if (job.type === "discover_prospects") {
+      if (pauses.discovery_paused) {
+        const retryAt = new Date(Date.now() + 60 * 60 * 1_000).toISOString();
+        await db.update(jobs).set({
+          status: "pending",
+          attempts: job.attempts,
+          startedAt: null,
+          scheduledAt: retryAt,
+          lastError: "Descoberta pausada no painel",
+        }).where(eq(jobs.id, job.id));
+        return { processed: true as const, paused: true as const };
+      }
+      if (!payload.campaignId) throw new Error("Job de descoberta sem campaignId.");
+      if (!dependencies.executeDiscoveryJob) {
+        throw new Error("Descoberta disponível somente no worker local.");
+      }
+      const discovery = await dependencies.executeDiscoveryJob({
+        jobId: job.id,
+        campaignId: payload.campaignId,
+      });
+      if (discovery.status === "paused") {
+        const retryAt = new Date(Date.now() + 60 * 60 * 1_000).toISOString();
+        await db.update(jobs).set({
+          status: "pending",
+          attempts: job.attempts,
+          startedAt: null,
+          scheduledAt: retryAt,
+          lastError: discovery.reason || "Descoberta aguardando liberação",
+        }).where(eq(jobs.id, job.id));
+        return { processed: true as const, paused: true as const };
+      }
+      const completedAt = new Date().toISOString();
+      await db.update(jobs).set({
+        status: "completed",
+        finishedAt: completedAt,
+        lastError: discovery.status === "disabled" ? "Descoberta desativada para a campanha" : null,
+      }).where(eq(jobs.id, job.id));
+      return {
+        processed: true as const,
+        discovery: true as const,
+        created: discovery.created || 0,
+      };
+    }
     if (!payload.leadId) throw new Error("Job sem leadId.");
     const [lead] = await db.select().from(leads).where(eq(leads.id, payload.leadId)).limit(1);
     if (!lead) throw new Error("Lead não encontrado.");
@@ -366,6 +420,18 @@ export async function runWorkerOnce(
   } catch (error) {
     const exhausted = job.attempts + 1 >= job.maxAttempts;
     await db.update(jobs).set({ status: exhausted ? "dead_letter" : "pending", finishedAt: exhausted ? now : null, lastError: error instanceof Error ? error.message : "Falha desconhecida" }).where(eq(jobs.id, job.id));
+    if (exhausted && job.type === "discover_prospects") {
+      try {
+        const payload = JSON.parse(job.payload) as JobPayload;
+        if (payload.campaignId) {
+          await scheduleNextCampaignDiscovery({
+            campaignId: payload.campaignId,
+            currentJobId: job.id,
+          });
+        }
+      } catch {
+      }
+    }
     return { processed: true as const, failed: true as const, exhausted };
   }
 }

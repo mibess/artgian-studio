@@ -8,6 +8,7 @@ import {
   catalogProducts,
   commercialOrders,
   conversations,
+  discoveryRuns,
   exceptions,
   experiments,
   integrationStates,
@@ -39,6 +40,7 @@ let seedPromise: Promise<void> | undefined;
 
 const DEFAULT_SYSTEM_SETTINGS = [
   { key: "automation_paused", value: "false" },
+  { key: "discovery_paused", value: "false" },
   { key: "outbound_paused", value: "true" },
   { key: "followups_paused", value: "true" },
   { key: "auto_replies_paused", value: "true" },
@@ -174,6 +176,7 @@ async function seedDemoData() {
 
     await tx.insert(systemSettings).values([
       { key: "automation_paused", value: "false", updatedAt: isoOffset(1) },
+      { key: "discovery_paused", value: "false", updatedAt: isoOffset(1) },
       { key: "outbound_paused", value: "true", updatedAt: isoOffset(1) },
       { key: "followups_paused", value: "false", updatedAt: isoOffset(1) },
       { key: "auto_replies_paused", value: "true", updatedAt: isoOffset(1) },
@@ -312,7 +315,7 @@ export async function getOrdersOverview() {
 
 export async function getOperationsData() {
   const db = await getCommercialDb();
-  const [campaignRows, experimentRows, jobRows, exceptionRows, usageRows, settingRows, leadRows, orderRows, integrationRows, outboundEventRows] = await Promise.all([
+  const [campaignRows, experimentRows, jobRows, exceptionRows, usageRows, settingRows, leadRows, orderRows, integrationRows, outboundEventRows, discoveryRunRows] = await Promise.all([
     db.select().from(campaigns).orderBy(desc(campaigns.updatedAt)),
     db.select().from(experiments).orderBy(desc(experiments.createdAt)),
     db.select().from(jobs).orderBy(desc(jobs.createdAt)),
@@ -323,8 +326,9 @@ export async function getOperationsData() {
     db.select().from(commercialOrders),
     db.select().from(integrationStates),
     db.select().from(outboundEvents).orderBy(desc(outboundEvents.occurredAt)),
+    db.select().from(discoveryRuns).orderBy(desc(discoveryRuns.startedAt)),
   ]);
-  return { campaigns: campaignRows, experiments: experimentRows, jobs: jobRows, exceptions: exceptionRows, aiUsage: usageRows, leads: leadRows, orders: orderRows, integrations: integrationRows, outboundEvents: outboundEventRows, settings: Object.fromEntries(settingRows.map((row) => [row.key, row.value])) };
+  return { campaigns: campaignRows, experiments: experimentRows, jobs: jobRows, exceptions: exceptionRows, aiUsage: usageRows, leads: leadRows, orders: orderRows, integrations: integrationRows, outboundEvents: outboundEventRows, discoveryRuns: discoveryRunRows, settings: Object.fromEntries(settingRows.map((row) => [row.key, row.value])) };
 }
 
 export async function getOutboundProspects() {

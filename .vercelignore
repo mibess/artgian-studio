@@ -1,0 +1,16 @@
+.git/
+.next/
+.chrome-profile/
+.test-tmp/
+backups/
+coverage/
+data/
+node_modules/
+playwright-report/
+screenshots/
+test-results/
+traces/
+*.db
+*.db-shm
+*.db-wal
+*.tsbuildinfo

@@ -324,6 +324,14 @@ export const campaigns = sqliteTable("campaigns", {
   operatingTimezone: text("operating_timezone").notNull().default("America/Sao_Paulo"),
   status: text("status").notNull().default("draft"),
   outboundEnabled: integer("outbound_enabled", { mode: "boolean" }).notNull().default(false),
+  discoveryEnabled: integer("discovery_enabled", { mode: "boolean" }).notNull().default(false),
+  discoveryKeywords: text("discovery_keywords").notNull().default("[]"),
+  discoveryHashtags: text("discovery_hashtags").notNull().default("[]"),
+  discoveryLocations: text("discovery_locations").notNull().default("[]"),
+  discoveryDailyLimit: integer("discovery_daily_limit").notNull().default(10),
+  discoveryMinimumScore: integer("discovery_minimum_score").notNull().default(40),
+  discoveryIntervalHours: integer("discovery_interval_hours").notNull().default(24),
+  lastDiscoveryAt: text("last_discovery_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -343,6 +351,8 @@ export const outboundProspects = sqliteTable(
     profileBio: text("profile_bio"),
     profileLocation: text("profile_location"),
     publicSignal: text("public_signal"),
+    discoverySource: text("discovery_source").notNull().default("manual"),
+    discoveryQuery: text("discovery_query"),
     qualificationReason: text("qualification_reason").notNull(),
     funnelType: text("funnel_type").notNull().default("consumer"),
     pipelineStage: text("pipeline_stage").notNull().default("discovered"),
@@ -371,6 +381,32 @@ export const outboundProspects = sqliteTable(
     ),
     index("outbound_prospects_status_idx").on(table.status),
     index("outbound_prospects_lead_idx").on(table.leadId),
+  ],
+);
+
+export const discoveryRuns = sqliteTable(
+  "discovery_runs",
+  {
+    id: text("id").primaryKey(),
+    campaignId: text("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    jobId: text("job_id").references(() => jobs.id, { onDelete: "set null" }),
+    status: text("status").notNull().default("running"),
+    queriesScanned: integer("queries_scanned").notNull().default(0),
+    profilesInspected: integer("profiles_inspected").notNull().default(0),
+    profilesQualified: integer("profiles_qualified").notNull().default(0),
+    profilesCreated: integer("profiles_created").notNull().default(0),
+    skippedDuplicates: integer("skipped_duplicates").notNull().default(0),
+    skippedBlocked: integer("skipped_blocked").notNull().default(0),
+    skippedLowScore: integer("skipped_low_score").notNull().default(0),
+    error: text("error"),
+    startedAt: text("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    finishedAt: text("finished_at"),
+  },
+  (table) => [
+    index("discovery_runs_campaign_idx").on(table.campaignId, table.startedAt),
+    index("discovery_runs_status_idx").on(table.status),
   ],
 );
 

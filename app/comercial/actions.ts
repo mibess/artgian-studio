@@ -14,6 +14,8 @@ import { runInstagramMaintenance } from "../../src/integrations/instagram/mainte
 import { canonicalInstagramUsername } from "../../src/features/leads/domain";
 import { isInstagramReplyWindowOpen } from "../../src/integrations/instagram/send";
 import { assignExperimentVariant, buildSafeOutboundOpening, isValidOutboundTransition, OUTBOUND_FUNNELS, OUTBOUND_PIPELINES, scorePublicProfile, type OutboundFunnel } from "../../src/features/outbound/domain";
+import { parseDiscoveryTermsInput } from "../../src/features/outbound/discovery-domain";
+import { cancelPendingCampaignDiscovery, enqueueCampaignDiscovery } from "../../src/features/outbound/discovery";
 import { generateOutboundOpening } from "../../src/integrations/openai/conversation-engine";
 import { requireAdminAccess } from "../../src/auth/admin";
 
@@ -21,6 +23,7 @@ export async function updateAutomationSetting(formData: FormData) {
   await requireAdminAccess();
   const allowed = new Set([
     "automation_paused",
+    "discovery_paused",
     "outbound_paused",
     "followups_paused",
     "auto_replies_paused",
@@ -165,6 +168,127 @@ export async function createCampaign(formData: FormData) {
   });
   revalidatePath("/comercial/campanhas");
   redirect("/comercial/campanhas?salvo=1");
+}
+
+export async function saveCampaignDiscoverySettings(formData: FormData) {
+  await requireAdminAccess();
+  const campaignId = String(formData.get("campaignId") || "");
+  const discoveryEnabled = String(formData.get("discoveryEnabled") || "false") === "true";
+  const keywords = parseDiscoveryTermsInput(String(formData.get("discoveryKeywords") || ""));
+  const hashtags = parseDiscoveryTermsInput(String(formData.get("discoveryHashtags") || ""));
+  const locations = parseDiscoveryTermsInput(String(formData.get("discoveryLocations") || ""), 8);
+  const rawDailyLimit = Number(formData.get("discoveryDailyLimit") || 10);
+  const rawMinimumScore = Number(formData.get("discoveryMinimumScore") || 40);
+  const rawIntervalHours = Number(formData.get("discoveryIntervalHours") || 24);
+  if (
+    !campaignId ||
+    !Number.isFinite(rawDailyLimit) ||
+    !Number.isFinite(rawMinimumScore) ||
+    !Number.isFinite(rawIntervalHours)
+  ) {
+    redirect("/comercial/campanhas?erro=Configuração+de+descoberta+inválida");
+  }
+  const discoveryDailyLimit = Math.min(30, Math.max(1, Math.trunc(rawDailyLimit)));
+  const discoveryMinimumScore = Math.min(100, Math.max(0, Math.trunc(rawMinimumScore)));
+  const discoveryIntervalHours = Math.min(168, Math.max(6, Math.trunc(rawIntervalHours)));
+  const db = await getCommercialDb();
+  const [campaign] = await db
+    .select({ id: campaigns.id })
+    .from(campaigns)
+    .where(eq(campaigns.id, campaignId))
+    .limit(1);
+  if (!campaign) redirect("/comercial/campanhas?erro=Campanha+não+encontrada");
+  const now = new Date().toISOString();
+  await db.transaction(async (tx) => {
+    await tx.update(campaigns).set({
+      discoveryEnabled,
+      discoveryKeywords: JSON.stringify(keywords),
+      discoveryHashtags: JSON.stringify(hashtags),
+      discoveryLocations: JSON.stringify(locations),
+      discoveryDailyLimit,
+      discoveryMinimumScore,
+      discoveryIntervalHours,
+      updatedAt: now,
+    }).where(eq(campaigns.id, campaignId));
+    await tx.insert(auditLogs).values({
+      id: crypto.randomUUID(),
+      actor: "operator",
+      action: "campaign_discovery_settings_updated",
+      entityType: "campaign",
+      entityId: campaignId,
+      metadata: JSON.stringify({
+        discoveryEnabled,
+        keywords,
+        hashtags,
+        locations,
+        discoveryDailyLimit,
+        discoveryMinimumScore,
+        discoveryIntervalHours,
+        sendsMessages: false,
+      }),
+      createdAt: now,
+    });
+  });
+  if (discoveryEnabled) await enqueueCampaignDiscovery({ campaignId, scheduledAt: now });
+  revalidatePath("/comercial", "layout");
+  redirect("/comercial/campanhas?descoberta=1");
+}
+
+export async function setCampaignDiscoveryEnabled(formData: FormData) {
+  await requireAdminAccess();
+  const campaignId = String(formData.get("campaignId") || "");
+  const enabled = String(formData.get("enabled") || "false") === "true";
+  const db = await getCommercialDb();
+  const now = new Date().toISOString();
+  const updated = await db
+    .update(campaigns)
+    .set({ discoveryEnabled: enabled, updatedAt: now })
+    .where(eq(campaigns.id, campaignId))
+    .returning({ id: campaigns.id });
+  if (!updated.length) redirect("/comercial/campanhas?erro=Campanha+não+encontrada");
+  if (enabled) {
+    await enqueueCampaignDiscovery({ campaignId, scheduledAt: now });
+  } else {
+    await cancelPendingCampaignDiscovery(campaignId);
+  }
+  await db.insert(auditLogs).values({
+    id: crypto.randomUUID(),
+    actor: "operator",
+    action: enabled ? "campaign_discovery_enabled" : "campaign_discovery_disabled",
+    entityType: "campaign",
+    entityId: campaignId,
+    metadata: JSON.stringify({ enabled, sendsMessages: false }),
+    createdAt: now,
+  });
+  revalidatePath("/comercial", "layout");
+  redirect("/comercial/campanhas?descoberta=1");
+}
+
+export async function queueCampaignDiscoveryNow(formData: FormData) {
+  await requireAdminAccess();
+  const campaignId = String(formData.get("campaignId") || "");
+  const db = await getCommercialDb();
+  const [campaign] = await db
+    .select({ id: campaigns.id, discoveryEnabled: campaigns.discoveryEnabled })
+    .from(campaigns)
+    .where(eq(campaigns.id, campaignId))
+    .limit(1);
+  if (!campaign?.discoveryEnabled) {
+    redirect("/comercial/campanhas?erro=Ative+a+busca+segura+antes+de+executar");
+  }
+  const now = new Date().toISOString();
+  const scheduled = await enqueueCampaignDiscovery({ campaignId, scheduledAt: now });
+  await db.insert(auditLogs).values({
+    id: crypto.randomUUID(),
+    actor: "operator",
+    action: "campaign_discovery_requested",
+    entityType: "campaign",
+    entityId: campaignId,
+    metadata: JSON.stringify({ jobId: scheduled.jobId, created: scheduled.created, sendsMessages: false }),
+    createdAt: now,
+  });
+  revalidatePath("/comercial", "layout");
+  redirect("/comercial/campanhas?busca=1");
 }
 
 function validInstagramProfileUrl(value: string) {

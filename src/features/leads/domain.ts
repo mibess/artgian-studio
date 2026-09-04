@@ -91,6 +91,7 @@ export const CHANNEL_STATE_LABELS: Record<string, string> = {
 };
 
 export const JOB_TYPE_LABELS: Record<string, string> = {
+  discover_prospects: "Descobrir prospectos",
   discover_leads: "Descobrir leads",
   score_lead: "Calcular score",
   send_outbound: "Preparar outbound",

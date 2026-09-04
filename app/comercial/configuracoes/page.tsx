@@ -1,4 +1,4 @@
-import { AlertTriangle, AtSign as Instagram, CheckCircle2, Clock3, MessageCircle, Pause, RefreshCw, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, AtSign as Instagram, CheckCircle2, Clock3, MessageCircle, Pause, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { SubmitButton } from "../../components/PendingButton";
 import { getBusinessConfig, isDefinedBusinessValue } from "../../../src/config/business";
 import { getOperationsData } from "../../../src/db/commercial";
@@ -17,6 +17,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const browserState=ops.integrations.find(item=>item.key==="instagram_browser");
   const settings=[
     {key:"automation_paused",label:"Automação geral",description:"Interrompe toda a execução automática",icon:Pause},
+    {key:"discovery_paused",label:"Descoberta",description:"Busca segura de perfis, sem enviar mensagens",icon:Search},
     {key:"outbound_paused",label:"Outbound",description:"Prospecção assistida sob política",icon:Instagram},
     {key:"followups_paused",label:"Follow-ups",description:"Retomadas contextuais limitadas",icon:Clock3},
     {key:"auto_replies_paused",label:"Respostas automáticas",description:"Envio de respostas geradas",icon:MessageCircle},
