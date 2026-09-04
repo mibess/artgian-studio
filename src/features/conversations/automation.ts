@@ -13,6 +13,11 @@ const SAFE_AUTO_REPLY_INTENTS = new Set<Intent>([
   "wants_quote",
 ]);
 
+const LOW_RISK_CONVERSATIONAL_ACTIONS: Partial<Record<Intent, Set<AiAction>>> = {
+  greeting: new Set(["ask_question"]),
+  general_question: new Set(["ask_question"]),
+};
+
 const SAFE_AUTO_REPLY_ACTIONS = new Set<AiAction>([
   "reply",
   "ask_question",
@@ -52,7 +57,11 @@ export function evaluateAutoReplyPolicy(input: AutoReplyPolicyInput) {
   if (input.decision.requiresHuman) {
     return { allowed: false as const, reason: "human_review_required" as const };
   }
-  if (!SAFE_AUTO_REPLY_INTENTS.has(input.decision.intent)) {
+  const isSafeCommercialIntent = SAFE_AUTO_REPLY_INTENTS.has(input.decision.intent);
+  const isSafeConversationalTurn = LOW_RISK_CONVERSATIONAL_ACTIONS[
+    input.decision.intent
+  ]?.has(input.decision.action) === true;
+  if (!isSafeCommercialIntent && !isSafeConversationalTurn) {
     return { allowed: false as const, reason: "unsafe_intent" as const };
   }
   if (!SAFE_AUTO_REPLY_ACTIONS.has(input.decision.action)) {

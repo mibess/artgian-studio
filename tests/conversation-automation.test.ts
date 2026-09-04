@@ -31,15 +31,31 @@ describe("política de respostas automáticas inbound", () => {
     expect(evaluate()).toEqual({ allowed: true, reason: "safe_inbound" });
   });
 
-  it.each(["greeting", "general_question", "ambiguous"] as const)(
-    "mantém %s em revisão humana",
+  it.each(["greeting", "general_question"] as const)(
+    "permite %s quando a resposta apenas pede mais contexto",
     (intent) => {
-      expect(evaluate({ decision: { ...safeDecision, intent } })).toEqual({
-        allowed: false,
-        reason: "unsafe_intent",
-      });
+      expect(
+        evaluate({
+          decision: { ...safeDecision, intent, action: "ask_question" },
+        }),
+      ).toEqual({ allowed: true, reason: "safe_inbound" });
     },
   );
+
+  it.each(["greeting", "general_question"] as const)(
+    "mantém %s em revisão quando a resposta faz uma afirmação geral",
+    (intent) => {
+      expect(
+        evaluate({ decision: { ...safeDecision, intent, action: "reply" } }),
+      ).toEqual({ allowed: false, reason: "unsafe_intent" });
+    },
+  );
+
+  it("mantém mensagens ambíguas em revisão humana", () => {
+    expect(
+      evaluate({ decision: { ...safeDecision, intent: "ambiguous" } }),
+    ).toEqual({ allowed: false, reason: "unsafe_intent" });
+  });
 
   it("bloqueia fallback local, decisão sensível e ação de escalonamento", () => {
     expect(evaluate({ decision: { ...safeDecision, source: "rules" } }).allowed).toBe(false);
