@@ -24,6 +24,7 @@ import {
   Menu,
 } from "lucide-react";
 import { useState } from "react";
+import { SubmitButton } from "../components/PendingButton";
 import { updateAutomationSetting } from "./actions";
 
 const groups = [
@@ -116,10 +117,10 @@ export function CommercialSidebar({ companyName, instagramHandle, paused }: Comm
         <form action={updateAutomationSetting}>
           <input type="hidden" name="key" value="automation_paused" />
           <input type="hidden" name="value" value={paused ? "false" : "true"} />
-          <button className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[11px] font-extrabold uppercase tracking-[0.12em] transition ${paused ? "bg-[#f3c76b] text-[#142b3a] hover:bg-[#f7d486]" : "bg-white/8 text-white hover:bg-white/12"}`} type="submit">
+          <SubmitButton className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[11px] font-extrabold uppercase tracking-[0.12em] transition disabled:opacity-60 ${paused ? "bg-[#f3c76b] text-[#142b3a] hover:bg-[#f7d486]" : "bg-white/8 text-white hover:bg-white/12"}`} pendingLabel={paused ? "Retomando…" : "Pausando…"}>
             {paused ? <Sparkles size={15} /> : <Pause size={15} />}
             {paused ? "Retomar automação" : "Pausar automação"}
-          </button>
+          </SubmitButton>
         </form>
         <div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-white/35">
           <span className={`size-1.5 rounded-full ${paused ? "bg-[#f3c76b]" : "bg-[#68d391]"}`} />

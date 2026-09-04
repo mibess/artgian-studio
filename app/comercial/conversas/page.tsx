@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AtSign as Instagram, Bot, MessageSquareText, Sparkles } from "lucide-react";
+import { SubmitButton } from "../../components/PendingButton";
 import { getConversationsOverview, getSystemSettings } from "../../../src/db/commercial";
 import { Avatar, PageHeader, StatusBadge, formatDateTime } from "../_components";
 import { simulateInbound } from "../actions";
@@ -29,7 +30,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
           <form action={simulateInbound} className="mt-5 space-y-3">
             <label className="block"><span className="mb-1.5 block text-[9px] font-bold uppercase tracking-wide text-white/45">Perfil de teste</span><div className="relative"><Instagram className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35" size={14}/><input name="username" required defaultValue="cliente.teste" className="h-10 w-full rounded-xl border border-white/10 bg-white/8 pl-9 pr-3 text-xs text-white outline-none placeholder:text-white/30 focus:border-[#f1c865]/60"/></div></label>
             <label className="block"><span className="mb-1.5 block text-[9px] font-bold uppercase tracking-wide text-white/45">Mensagem recebida</span><textarea name="message" required rows={4} defaultValue="Oi! Quanto custa uma miniatura personalizada? Preciso de 2 unidades para 20/09." className="w-full resize-none rounded-xl border border-white/10 bg-white/8 p-3 text-xs leading-5 text-white outline-none placeholder:text-white/30 focus:border-[#f1c865]/60"/></label>
-            <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#f1c865] px-4 py-3 text-xs font-extrabold text-[#193848]"><Bot size={15}/>Processar em dry-run</button>
+            <SubmitButton pendingLabel="Processando…" className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#f1c865] px-4 py-3 text-xs font-extrabold text-[#193848] disabled:opacity-60"><Bot size={15}/>Processar em dry-run</SubmitButton>
           </form>
         </section>
         <section className="rounded-[20px] border border-[#e1e1db] bg-white p-5"><div className="flex items-center gap-3"><MessageSquareText className={autoRepliesActive?"text-[#3f8b6d]":"text-[#d96245]"} size={18}/><div><p className="text-xs font-bold text-[#344f5c]">{autoRepliesActive?"Respostas automáticas ativas":"Respostas automáticas pausadas"}</p><p className="mt-0.5 text-[10px] text-[#8a959b]">{autoRepliesActive?"DMs comerciais seguras podem ser respondidas; casos ambíguos continuam em revisão.":"Sugestões são criadas como jobs, sem envio automático."}</p></div></div></section>

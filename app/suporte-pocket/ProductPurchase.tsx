@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { announceProductColor } from "../components/ProductColorImage";
 
 const colors = [
@@ -14,6 +14,7 @@ export default function ProductPurchase() {
   const router = useRouter();
   const [color, setColor] = useState("preto");
   const [quantity, setQuantity] = useState(1);
+  const [pending, startTransition] = useTransition();
 
   function buyNow() {
     const params = new URLSearchParams({
@@ -21,7 +22,7 @@ export default function ProductPurchase() {
       cor: color,
       quantidade: String(quantity),
     });
-    router.push(`/comprar?${params.toString()}`);
+    startTransition(() => router.push(`/comprar?${params.toString()}`));
   }
 
   return (
@@ -88,8 +89,10 @@ export default function ProductPurchase() {
           className="group flex h-14 flex-1 items-center justify-between rounded-full bg-[#0b2447] pr-2 pl-6 font-semibold text-white shadow-[0_14px_35px_rgba(11,36,71,.2)] transition hover:-translate-y-0.5 hover:bg-[#173861] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b]"
           type="button"
           onClick={buyNow}
+          disabled={pending}
+          aria-busy={pending}
         >
-          Comprar agora
+          {pending ? <span className="flex items-center gap-2"><span className="ui-spinner" aria-hidden="true" />Abrindo checkout…</span> : "Comprar agora"}
           <span className="grid size-10 place-items-center rounded-full bg-[#d8bc7b] text-xl text-[#0b2447] transition group-hover:rotate-[-8deg]">
             →
           </span>

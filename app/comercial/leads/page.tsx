@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Filter, Search, SlidersHorizontal, UserPlus } from "lucide-react";
+import { NativeSubmitButton } from "../../components/PendingButton";
 import { getLeads } from "../../../src/db/commercial";
 import { PIPELINE_LABELS } from "../../../src/features/leads/domain";
 import { Avatar, PageHeader, StatusBadge, formatBrl, formatDateTime } from "../_components";
@@ -22,7 +23,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
       <form className="flex flex-col gap-3 border-b border-[#ecece7] p-4 sm:flex-row sm:items-center" method="get">
         <label className="relative flex-1"><Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#95a0a5]" size={15}/><input name="busca" defaultValue={params.busca} placeholder="Buscar por nome, @perfil, produto ou segmento" className="h-11 w-full rounded-xl border border-[#dfe2de] bg-[#faf9f6] pl-10 pr-4 text-xs outline-none transition focus:border-[#e07a5f] focus:bg-white"/></label>
         <label className="relative"><Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#95a0a5]" size={14}/><select name="etapa" defaultValue={params.etapa || "all"} className="h-11 appearance-none rounded-xl border border-[#dfe2de] bg-[#faf9f6] pl-10 pr-9 text-xs font-semibold text-[#4f6570] outline-none"><option value="all">Todas as etapas</option>{Object.entries(PIPELINE_LABELS).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label>
-        <button className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#e56e50] px-4 text-xs font-bold text-white" type="submit"><SlidersHorizontal size={14}/>Filtrar</button>
+        <NativeSubmitButton pendingLabel="Filtrando…" className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#e56e50] px-4 text-xs font-bold text-white disabled:opacity-60"><SlidersHorizontal size={14}/>Filtrar</NativeSubmitButton>
       </form>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[980px] text-left">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 
 const kitItems = [
   "Suporte para lata 350 ml",
@@ -13,6 +13,7 @@ const kitItems = [
 export default function ProductPurchase() {
   const router = useRouter();
   const [quantity, setQuantity] = useState(1);
+  const [pending, startTransition] = useTransition();
 
   function buyNow() {
     const params = new URLSearchParams({
@@ -20,7 +21,7 @@ export default function ProductPurchase() {
       cor: "preto",
       quantidade: String(quantity),
     });
-    router.push(`/comprar?${params.toString()}`);
+    startTransition(() => router.push(`/comprar?${params.toString()}`));
   }
 
   return (
@@ -68,8 +69,10 @@ export default function ProductPurchase() {
           className="group flex h-14 flex-1 items-center justify-between rounded-full bg-[#132746] pr-2 pl-6 font-semibold text-white shadow-[0_14px_35px_rgba(19,39,70,.22)] transition hover:-translate-y-0.5 hover:bg-[#203c67] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b57455]"
           type="button"
           onClick={buyNow}
+          disabled={pending}
+          aria-busy={pending}
         >
-          Comprar o kit
+          {pending ? <span className="flex items-center gap-2"><span className="ui-spinner" aria-hidden="true" />Abrindo checkout…</span> : "Comprar o kit"}
           <span className="grid size-10 place-items-center rounded-full bg-[#b57455] text-xl text-white transition group-hover:rotate-[-8deg]">
             →
           </span>

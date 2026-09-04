@@ -3,6 +3,7 @@ import { getDb } from "../../../db";
 import { orderItems, orders } from "../../../db/schema";
 import { maskCpf } from "../../../lib/brazil";
 import { formatBrl } from "../../../lib/catalog";
+import { NativeSubmitButton } from "../../components/PendingButton";
 
 export const dynamic = "force-dynamic";
 
@@ -103,17 +104,17 @@ export default async function AdminOrdersPage({
                     {canCreateLabel && (
                       <form action={`/api/admin/orders/${order.id}/label`} method="post">
                         <input type="hidden" name="action" value="create" />
-                        <button className="rounded-full bg-[#0b2447] px-4 py-2 text-xs font-semibold text-white" type="submit">
+                        <NativeSubmitButton pendingLabel="Comprando…" className="inline-flex items-center gap-2 rounded-full bg-[#0b2447] px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">
                           Comprar etiqueta sandbox
-                        </button>
+                        </NativeSubmitButton>
                       </form>
                     )}
                     {canGenerateLabel && (
                       <form action={`/api/admin/orders/${order.id}/label`} method="post">
                         <input type="hidden" name="action" value="generate" />
-                        <button className="rounded-full border border-[#0b2447]/20 px-4 py-2 text-xs font-semibold" type="submit">
+                        <NativeSubmitButton pendingLabel="Gerando…" className="inline-flex items-center gap-2 rounded-full border border-[#0b2447]/20 px-4 py-2 text-xs font-semibold disabled:opacity-60">
                           Gerar etiqueta
-                        </button>
+                        </NativeSubmitButton>
                       </form>
                     )}
                     {order.shippingLabelUrl && (

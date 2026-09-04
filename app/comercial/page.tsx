@@ -9,12 +9,12 @@ import {
   MoreHorizontal,
   MoveUpRight,
   PackageCheck,
-  RefreshCcw,
   Target,
   UserRoundCheck,
   UsersRound,
   WandSparkles,
 } from "lucide-react";
+import { RefreshButton } from "../components/RefreshButton";
 import { getBusinessConfig } from "../../src/config/business";
 import { getDashboardData } from "../../src/db/commercial";
 import { JOB_TYPE_LABELS, PIPELINE_LABELS, type ConsumerPipelineStage } from "../../src/features/leads/domain";
@@ -97,7 +97,7 @@ export default async function CommercialDashboard() {
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-2 rounded-full border border-[#d9dedb] bg-white px-3.5 py-2 text-xs font-semibold text-[#48606c] shadow-sm"><span className="size-2 rounded-full bg-[#69b894] shadow-[0_0_0_4px_rgba(105,184,148,.13)]" />Inbound monitorado</span>
-          <button aria-label="Atualizar painel" className="grid size-9 place-items-center rounded-full border border-[#d9dedb] bg-white text-[#6c7b83] shadow-sm"><RefreshCcw size={14} /></button>
+          <RefreshButton />
         </div>
       </header>
 

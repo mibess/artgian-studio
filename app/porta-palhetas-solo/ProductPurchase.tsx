@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { announceProductColor } from "../components/ProductColorImage";
 
 const colors = [
@@ -15,6 +15,7 @@ export default function ProductPurchase() {
   const [color, setColor] = useState("terracota");
   const [name, setName] = useState("Seu Nome");
   const [quantity, setQuantity] = useState(1);
+  const [pending, startTransition] = useTransition();
 
   function buyNow() {
     const personalization = name.trim();
@@ -26,7 +27,7 @@ export default function ProductPurchase() {
       quantidade: String(quantity),
       personalizacao: personalization,
     });
-    router.push(`/comprar?${params.toString()}`);
+    startTransition(() => router.push(`/comprar?${params.toString()}`));
   }
 
   return (
@@ -121,9 +122,10 @@ export default function ProductPurchase() {
           className="group flex h-14 flex-1 items-center justify-between rounded-full bg-[#182645] pr-2 pl-6 font-semibold text-white shadow-[0_14px_35px_rgba(24,38,69,.22)] transition hover:-translate-y-0.5 hover:bg-[#243b69] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] disabled:cursor-not-allowed disabled:opacity-45"
           type="button"
           onClick={buyNow}
-          disabled={!name.trim()}
+          disabled={!name.trim() || pending}
+          aria-busy={pending}
         >
-          Comprar personalizado
+          {pending ? <span className="flex items-center gap-2"><span className="ui-spinner" aria-hidden="true" />Abrindo checkout…</span> : "Comprar personalizado"}
           <span className="grid size-10 place-items-center rounded-full bg-[#c96f47] text-xl text-white transition group-hover:rotate-[-8deg]">
             →
           </span>

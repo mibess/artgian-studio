@@ -219,12 +219,13 @@ export default function CheckoutForm({
             </label>
             <div className="flex items-end sm:col-span-4">
               <button
-                className="h-12 rounded-full border border-[#0b2447]/20 px-5 text-xs font-semibold transition hover:border-[#b88a3b] disabled:cursor-wait disabled:opacity-60"
+                className="flex h-12 items-center gap-2 rounded-full border border-[#0b2447]/20 px-5 text-xs font-semibold transition hover:border-[#b88a3b] disabled:opacity-60"
                 type="button"
                 onClick={calculateQuote}
                 disabled={quoting}
+                aria-busy={quoting}
               >
-                {quoting ? "Calculando…" : "Calcular entrega"}
+                {quoting ? <><span className="ui-spinner" aria-hidden="true" />Calculando…</> : "Calcular entrega"}
               </button>
             </div>
 
@@ -322,8 +323,9 @@ export default function CheckoutForm({
           className="flex h-14 w-full items-center justify-between rounded-full bg-[#0b2447] pr-2 pl-6 font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-[#173b68] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
           type="submit"
           disabled={submitting || !selectedShipping}
+          aria-busy={submitting}
         >
-          {submitting ? "Abrindo o Mercado Pago…" : selectedShipping ? "Pagar com Mercado Pago" : "Calcule a entrega para continuar"}
+          {submitting ? <span className="flex items-center gap-2"><span className="ui-spinner" aria-hidden="true" />Abrindo o Mercado Pago…</span> : selectedShipping ? "Pagar com Mercado Pago" : "Calcule a entrega para continuar"}
           <span className="grid size-10 place-items-center rounded-full bg-[#d8bc7b] text-xl text-[#0b2447]">→</span>
         </button>
       </form>
