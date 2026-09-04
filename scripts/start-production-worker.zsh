@@ -15,8 +15,12 @@ if ! command -v turso >/dev/null 2>&1; then
 fi
 
 export COMMERCIAL_DATABASE_MODE=turso
+export COMMERCIAL_DEMO_MODE=false
+export APP_URL="${PRODUCTION_APP_URL:-https://www.artgian.com.br}"
 export TURSO_DATABASE_URL="$(turso db show artgian-prod --url)"
 export TURSO_AUTH_TOKEN="$(turso db tokens create artgian-prod --expiration 30d)"
+export INSTAGRAM_AUTO_REPLY_ENABLED=true
+export FOLLOWUP_REVIEW_ENABLED=true
 export OUTBOUND_AUTOMATION_ENABLED="${WORKER_ENABLE_OUTBOUND:-false}"
 export BROWSER_SEND_ENABLED="${WORKER_ENABLE_OUTBOUND:-false}"
 export MAX_DMS_PER_DAY="${WORKER_MAX_DMS_PER_DAY:-3}"

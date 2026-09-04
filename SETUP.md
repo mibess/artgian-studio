@@ -151,8 +151,10 @@ O modelo principal decide a próxima ação e redige mensagens. O modelo rápido
 No piloto, cada mensagem recebida cria primeiro uma sugestão local segura. Em
 seguida, a sugestão é aprimorada pela OpenAI em segundo plano, desde que ainda
 esteja como rascunho. Simulações pelo painel aguardam a geração para facilitar
-a validação. A OpenAI nunca aciona o envio: a resposta só sai do sistema depois
-do clique **Aprovar e enviar**.
+a validação. A OpenAI apenas produz a decisão estruturada; a política local é
+quem decide entre envio automático e revisão. Somente DMs inbound de baixo
+risco, geradas pela OpenAI, dentro do horário e dos limites configurados podem
+ser enviadas automaticamente. Os demais casos exigem **Aprovar e enviar**.
 
 ## 5. Instagram oficial
 
@@ -293,14 +295,16 @@ Faça login manualmente no Instagram nesse perfil. A porta CDP controla a
 sessão inteira: mantenha-a em `127.0.0.1`, nunca exponha em `0.0.0.0` e não use
 uma máquina compartilhada. A Vercel não acessa esse Chrome; jobs
 `send_outbound` são deliberadamente ignorados pelo worker serverless e
-processados apenas por `pnpm worker` na máquina autorizada.
+processados apenas por `pnpm worker:production` na máquina autorizada.
 
 Na estação operacional autenticada na Turso, `pnpm worker:production` carrega
-as configurações locais, força a conexão com `artgian-prod` e cria uma
-credencial temporária de banco sem gravá-la em arquivo ou exibi-la. O comando
-falha de forma segura se a CLI da Turso não estiver disponível. Mantenha essa
-estação bloqueada, o Chrome dedicado aberto e monitore o processo; não execute
-duas instâncias do worker outbound ao mesmo tempo.
+as configurações locais, força a conexão com `artgian-prod`, desativa dados de
+demonstração, usa `https://www.artgian.com.br` nos callbacks e cria uma
+credencial temporária de banco sem gravá-la em arquivo ou exibi-la. Para usar
+outro domínio canônico, defina `PRODUCTION_APP_URL`. O comando falha de forma
+segura se a CLI da Turso não estiver disponível. Mantenha essa estação
+bloqueada, o Chrome dedicado aberto e monitore o processo; não execute duas
+instâncias do worker outbound ao mesmo tempo.
 
 Falhas transitórias de rede com o banco não encerram o processo: o worker
 aplica backoff exponencial de 2 a 60 segundos e volta a consultar a fila. O

@@ -33,7 +33,8 @@ Abra [http://localhost:3000](http://localhost:3000).
 - `pnpm typecheck`: valida os tipos
 - `pnpm test`: executa os testes automatizados
 - `pnpm test:e2e`: valida o fluxo local no navegador
-- `pnpm worker`: executa a fila persistente, incluindo jobs do Chrome dedicado
+- `pnpm worker`: executa a fila persistente no ambiente local de desenvolvimento
+- `pnpm worker:production`: conecta o worker operacional ao Turso `artgian-prod`
 - `pnpm db:generate`: gera migrações do Drizzle
 
 ## Variáveis de ambiente
