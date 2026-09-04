@@ -157,7 +157,7 @@ export async function generateCommercialDecision(
     const completion = await client.chat.completions.create({
       model,
       store: false,
-      reasoning_effort: "minimal",
+      reasoning_effort: "none",
       max_completion_tokens: 1_200,
       response_format: {
         type: "json_schema",
@@ -272,7 +272,7 @@ export async function generateOutboundOpening(input: {
     const completion = await client.chat.completions.create({
       model,
       store: false,
-      reasoning_effort: "minimal",
+      reasoning_effort: "none",
       max_completion_tokens: 800,
       response_format: {
         type: "json_schema",

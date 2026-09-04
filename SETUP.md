@@ -137,11 +137,11 @@ Preencha:
 
 ```text
 OPENAI_API_KEY=
-OPENAI_MODEL=
-OPENAI_MODEL_FAST=
+OPENAI_MODEL=gpt-5.6-luna
+OPENAI_MODEL_FAST=gpt-5.6-luna
 OPENAI_MONTHLY_BUDGET_USD=
-OPENAI_INPUT_COST_PER_1M_USD=
-OPENAI_OUTPUT_COST_PER_1M_USD=
+OPENAI_INPUT_COST_PER_1M_USD=0.20
+OPENAI_OUTPUT_COST_PER_1M_USD=1.20
 ```
 
 Consulte os preços oficiais do modelo no momento da configuração e informe os custos por milhão de tokens. Sem orçamento e custos válidos, o sistema usa as regras locais de classificação e não chama a API silenciosamente.
