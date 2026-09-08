@@ -62,6 +62,21 @@ export const products = {
     defaultColor: "Terracota",
     customizable: true,
   },
+  "porta-incenso-samurai": {
+    name: "Porta-Incenso Samurai",
+    href: "/porta-incenso-samurai",
+    image: "/porta-incenso-samurai-capa.png",
+    alt: "Porta-Incenso Samurai preto com bandeja coletora",
+    unitPriceCents: 1_790,
+    shippingPackage: {
+      widthCm: 24,
+      heightCm: 11,
+      lengthCm: 15,
+      weightKg: 0.15,
+    } satisfies ShippingPackage,
+    defaultColor: "Preto",
+    customizable: false,
+  },
   "suporte-pocket": {
     name: "Suporte Pocket",
     href: "/suporte-pocket",

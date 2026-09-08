@@ -50,6 +50,19 @@ const products = [
   },
   {
     number: "04",
+    category: "Bem-estar",
+    name: "Porta-Incenso Samurai",
+    description:
+      "Um samurai em posição de combate sustenta o incenso enquanto a bandeja recolhe as cinzas.",
+    price: "R$ 17,90",
+    image: "/porta-incenso-samurai-capa.png",
+    alt: "Porta-Incenso Samurai preto com bandeja coletora",
+    href: "/porta-incenso-samurai",
+    accent: "#9a653f",
+    feature: "Peça escultural",
+  },
+  {
+    number: "05",
     category: "Mobilidade",
     name: "Suporte Pocket",
     description:
