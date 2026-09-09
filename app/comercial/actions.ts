@@ -277,7 +277,11 @@ export async function queueCampaignDiscoveryNow(formData: FormData) {
     redirect("/comercial/campanhas?erro=Ative+a+busca+segura+antes+de+executar");
   }
   const now = new Date().toISOString();
-  const scheduled = await enqueueCampaignDiscovery({ campaignId, scheduledAt: now });
+  const scheduled = await enqueueCampaignDiscovery({
+    campaignId,
+    scheduledAt: now,
+    rescheduleExisting: true,
+  });
   await db.insert(auditLogs).values({
     id: crypto.randomUUID(),
     actor: "operator",

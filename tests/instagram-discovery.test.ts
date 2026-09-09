@@ -6,7 +6,7 @@ function createDiscoveryPage() {
   let currentUrl = "about:blank";
   const searchInput = {
     waitFor: vi.fn(),
-    click: vi.fn(),
+    focus: vi.fn(),
     fill: vi.fn(),
     pressSequentially: vi.fn(),
   };
@@ -40,6 +40,7 @@ describe("descoberta no Chrome dedicado", () => {
       ownUsername: "artgian.studio",
     });
     expect(result.queriesScanned).toBe(1);
+    expect(result.scannedSeeds).toEqual([{ kind: "keyword", value: "presente personalizado" }]);
     expect(result.profilesInspected).toBe(2);
     expect(result.candidates.map((candidate) => candidate.instagramUsername)).toEqual([
       "perfil.bom",
@@ -49,10 +50,22 @@ describe("descoberta no Chrome dedicado", () => {
       "https://www.instagram.com/explore/",
       expect.any(Object),
     );
-    expect(searchInput.click).toHaveBeenCalledOnce();
+    expect(searchInput.focus).toHaveBeenCalledOnce();
     expect(searchInput.fill).toHaveBeenCalledWith("");
     expect(
       searchInput.pressSequentially.mock.calls.map(([chunk]) => chunk).join(""),
     ).toBe("presente personalizado");
+  });
+
+  it("ignora perfis ainda dentro da janela de reavaliação", async () => {
+    const { page } = createDiscoveryPage();
+    const result = await executeInstagramDiscoveryOnPage(page, {
+      seeds: [{ kind: "keyword", value: "presente personalizado" }],
+      maximumProfiles: 1,
+      knownLocations: ["Brasil"],
+      excludedUsernames: ["perfil.bom"],
+    });
+    expect(result.profilesInspected).toBe(1);
+    expect(result.candidates[0]?.instagramUsername).toBe("perfil.outro");
   });
 });

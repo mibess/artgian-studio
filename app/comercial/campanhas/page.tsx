@@ -62,7 +62,7 @@ export default async function CampaignsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const [{ campaigns, settings, jobs, discoveryRuns }, prospects, params] = await Promise.all([
+  const [{ campaigns, settings, jobs, discoveryRuns, discoveryQueryStats }, prospects, params] = await Promise.all([
     getOperationsData(),
     getOutboundProspects(),
     searchParams,
@@ -215,7 +215,7 @@ export default async function CampaignsPage({
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#2f7c60]">Motor de descoberta</p>
             <h2 className="mt-1 text-base font-semibold">Critérios e recorrência</h2>
-            <p className="mt-1 max-w-3xl text-[10px] leading-5 text-[#7c8a90]">Termos separados por vírgula ou linha. Campos vazios usam o ICP e a região cadastrados no negócio.</p>
+            <p className="mt-1 max-w-3xl text-[10px] leading-5 text-[#7c8a90]">Termos separados por vírgula ou linha. A cada rodada, o motor alterna os critérios, reserva 30% para exploração e evita rever recentemente os mesmos perfis.</p>
           </div>
           <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-[9px] font-bold ${discoveryPaused ? "bg-[#fff0c9] text-[#846214]" : "bg-[#d8ede4] text-[#2b7258]"}`}>
             <CalendarSearch size={13} />{discoveryPaused ? "Descoberta pausada" : "Descoberta liberada"}
@@ -227,6 +227,10 @@ export default async function CampaignsPage({
           <div className="mt-5 grid gap-4 xl:grid-cols-2">
             {campaigns.map((campaign) => {
               const latestRun = discoveryRuns.find((run) => run.campaignId === campaign.id);
+              const campaignQueryStats = discoveryQueryStats
+                .filter((item) => item.campaignId === campaign.id)
+                .sort((left, right) => right.profilesCreated - left.profilesCreated || right.profilesQualified - left.profilesQualified)
+                .slice(0, 3);
               const pending = jobs.some((job) => job.type === "discover_prospects" && ["pending", "running"].includes(job.status) && jobBelongsToCampaign(job.payload, campaign.id));
               return (
                 <article className="rounded-[18px] bg-[#f7f7f2] p-4 sm:p-5" key={campaign.id}>
@@ -264,6 +268,16 @@ export default async function CampaignsPage({
                     </form>
                   )}
                   {latestRun && <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[9px] leading-4 text-[#6d7c82]"><strong className="text-[#415967]">Última execução:</strong> {latestRun.status === "completed" ? `${latestRun.profilesCreated} novos de ${latestRun.profilesInspected} analisados` : latestRun.status === "failed" ? `falhou — ${latestRun.error || "verifique o worker"}` : "em andamento"}.</div>}
+                  {campaignQueryStats.length > 0 && (
+                    <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[9px] leading-4 text-[#6d7c82]">
+                      <strong className="text-[#415967]">Desempenho dos critérios</strong>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                        {campaignQueryStats.map((item) => (
+                          <span key={item.id}>{item.query}: {item.profilesCreated} novos/{item.profilesInspected} analisados</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </article>
               );
             })}

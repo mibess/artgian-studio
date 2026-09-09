@@ -104,4 +104,60 @@ describe("processamento inbound persistente", () => {
     const [saved] = await db.select().from(messages).where(eq(messages.id, inbound.draftMessageId!)).limit(1);
     expect(saved).toMatchObject({ status: "sent", externalId: "meta-message-1" });
   });
+
+  it("sincroniza resposta externa e remove o rascunho que ficou pendente", async () => {
+    const [
+      { processInboundMessage },
+      { recordExternalOutboundMessage },
+      { getCommercialDb },
+      { messages },
+    ] = await Promise.all([
+      import("../src/features/conversations/process-inbound"),
+      import("../src/features/conversations/process-external-outbound"),
+      import("../src/db/commercial"),
+      import("../db/schema"),
+    ]);
+    const inbound = await processInboundMessage({
+      externalMessageId: "external-sync-inbound-1",
+      externalConversationId: "business-sync:lead-sync",
+      instagramUsername: "lead-sync",
+      text: "Quanto fica o envio para meu CEP?",
+    });
+    const recorded = await recordExternalOutboundMessage({
+      externalMessageId: "external-sync-outbound-1",
+      externalConversationId: "business-sync:lead-sync",
+      instagramUsername: "lead-sync",
+      text: "Envie seu CEP aqui e calculamos o frete para você.",
+      sentAt: "2026-09-09T00:43:19.000Z",
+      source: "Instagram · Anúncio",
+    });
+    const duplicate = await recordExternalOutboundMessage({
+      externalMessageId: "external-sync-outbound-1",
+      externalConversationId: "business-sync:lead-sync",
+      instagramUsername: "lead-sync",
+      text: "Envie seu CEP aqui e calculamos o frete para você.",
+    });
+
+    expect(recorded.status).toBe("recorded");
+    expect(duplicate.status).toBe("duplicate");
+    const db = await getCommercialDb();
+    const savedMessages = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.conversationId, inbound.conversationId));
+    expect(savedMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          externalId: "external-sync-outbound-1",
+          direction: "outbound",
+          sender: "external",
+          status: "sent",
+        }),
+        expect.objectContaining({
+          id: inbound.draftMessageId,
+          status: "superseded",
+        }),
+      ]),
+    );
+  });
 });

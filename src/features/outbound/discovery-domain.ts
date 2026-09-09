@@ -5,6 +5,7 @@ const INSTAGRAM_RESERVED_PATHS = new Set([
   "about",
   "accounts",
   "api",
+  "blog",
   "challenge",
   "developer",
   "direct",
@@ -15,10 +16,12 @@ const INSTAGRAM_RESERVED_PATHS = new Set([
   "p",
   "popular",
   "privacy",
+  "press",
   "reel",
   "reels",
   "stories",
   "terms",
+  "topics",
   "tv",
   "web",
 ]);
@@ -26,6 +29,15 @@ const INSTAGRAM_RESERVED_PATHS = new Set([
 export type DiscoverySeed = {
   kind: "keyword" | "hashtag" | "location";
   value: string;
+};
+
+export type DiscoverySeedPerformance = {
+  kind: DiscoverySeed["kind"];
+  value: string;
+  profilesInspected: number;
+  profilesQualified: number;
+  profilesCreated: number;
+  lastSearchedAt?: string | null;
 };
 
 export type PublicInstagramCandidate = {
@@ -36,6 +48,7 @@ export type PublicInstagramCandidate = {
   profileBio?: string;
   profileLocation?: string;
   publicSignal?: string;
+  discoveryKind?: DiscoverySeed["kind"];
   discoveryQuery: string;
 };
 
@@ -109,7 +122,87 @@ export function buildDiscoverySeeds(input: {
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, input.maximum ?? 10);
+  }).slice(0, input.maximum ?? seeds.length);
+}
+
+export function discoverySeedKey(seed: DiscoverySeed) {
+  return `${seed.kind}:${normalize(seed.value)}`;
+}
+
+function balancedRotatedSeeds(seeds: DiscoverySeed[], cursor: number) {
+  const kinds: DiscoverySeed["kind"][] = ["hashtag", "keyword", "location"];
+  const safeCursor = Number.isFinite(cursor) ? Math.max(0, Math.trunc(cursor)) : 0;
+  const orderedKinds = kinds.map((_, index) => kinds[(index + safeCursor) % kinds.length]);
+  const buckets = new Map(
+    kinds.map((kind) => {
+      const values = seeds.filter((seed) => seed.kind === kind);
+      if (!values.length) return [kind, values] as const;
+      const offset = safeCursor % values.length;
+      return [kind, [...values.slice(offset), ...values.slice(0, offset)]] as const;
+    }),
+  );
+  const result: DiscoverySeed[] = [];
+  let index = 0;
+  while (result.length < seeds.length) {
+    let added = false;
+    for (const kind of orderedKinds) {
+      const seed = buckets.get(kind)?.[index];
+      if (!seed) continue;
+      result.push(seed);
+      added = true;
+    }
+    if (!added) break;
+    index += 1;
+  }
+  return result;
+}
+
+export function selectDiscoverySeedsForRun(input: {
+  seeds: DiscoverySeed[];
+  cursor: number;
+  maximum?: number;
+  performance?: DiscoverySeedPerformance[];
+  explorationPercent?: number;
+}) {
+  const maximum = Math.min(
+    input.seeds.length,
+    Math.max(1, Math.trunc(input.maximum ?? 10)),
+  );
+  if (!maximum) return [];
+  const rotated = balancedRotatedSeeds(input.seeds, input.cursor);
+  const availableKeys = new Set(input.seeds.map(discoverySeedKey));
+  const ranked = [...(input.performance || [])]
+    .filter((item) => availableKeys.has(discoverySeedKey(item)))
+    .filter((item) => item.profilesQualified > 0 || item.profilesCreated > 0)
+    .sort((left, right) => {
+      const leftYield = (left.profilesCreated * 3 + left.profilesQualified) /
+        Math.max(1, left.profilesInspected);
+      const rightYield = (right.profilesCreated * 3 + right.profilesQualified) /
+        Math.max(1, right.profilesInspected);
+      const leftLastUsed = Date.parse(left.lastSearchedAt || "") || 0;
+      const rightLastUsed = Date.parse(right.lastSearchedAt || "") || 0;
+      return rightYield - leftYield ||
+        leftLastUsed - rightLastUsed;
+    });
+  const explorationPercent = Math.min(100, Math.max(0, input.explorationPercent ?? 30));
+  const explorationSlots = Math.max(1, Math.ceil(maximum * explorationPercent / 100));
+  const exploitationSlots = maximum - explorationSlots;
+  const selected: DiscoverySeed[] = [];
+  const selectedKeys = new Set<string>();
+  for (const item of ranked.slice(0, exploitationSlots)) {
+    const seed = input.seeds.find((candidate) => discoverySeedKey(candidate) === discoverySeedKey(item));
+    if (!seed) continue;
+    selected.push(seed);
+    selectedKeys.add(discoverySeedKey(seed));
+  }
+  for (const seed of rotated) {
+    if (selected.length >= maximum) break;
+    const key = discoverySeedKey(seed);
+    if (selectedKeys.has(key)) continue;
+    selected.push(seed);
+    selectedKeys.add(key);
+  }
+  return selected;
 }
 
 export function instagramUsernameFromHref(href: string) {
@@ -150,6 +243,7 @@ export function extractPublicInstagramCandidate(input: {
   username: string;
   sourceUrl: string;
   discoveryQuery: string;
+  discoveryKind?: DiscoverySeed["kind"];
   title?: string | null;
   description?: string | null;
   mainText?: string | null;
@@ -163,7 +257,7 @@ export function extractPublicInstagramCandidate(input: {
   const nameMatch = title.match(/^(.+?)\s*\(@[^)]+\)/);
   const name = nameMatch?.[1]?.replace(/\s*[•|].*$/, "").trim().slice(0, 120);
   const lines = usefulProfileLines(input.mainText || "", input.username, name);
-  const profileBio = lines.slice(0, 4).join(" · ").slice(0, 500) || undefined;
+  const profileBio = lines.slice(0, 6).join(" · ").slice(0, 500) || undefined;
   const searchable = normalize(`${profileBio || ""} ${input.description || ""}`);
   const profileLocation = uniqueDiscoveryTerms(input.knownLocations || [])
     .find((location) => searchable.includes(normalize(location)));
@@ -179,8 +273,31 @@ export function extractPublicInstagramCandidate(input: {
     profileBio,
     profileLocation,
     publicSignal,
+    discoveryKind: input.discoveryKind,
     discoveryQuery: input.discoveryQuery,
   };
+}
+
+export function isLikelyCommercialInstagramProfile(
+  candidate: PublicInstagramCandidate,
+) {
+  const searchable = normalize([
+    candidate.instagramUsername.replace(/[._-]+/g, " "),
+    candidate.name,
+    candidate.profileCategory,
+    candidate.profileBio,
+    candidate.publicSignal,
+  ].filter(Boolean).join(" "));
+  const commercialSignals = [
+    /\b(loja|lojinha|store|shop|shopping|empresa|marca|negocio|atacado|varejo)\b/u,
+    /\b(atelie|studio|estudio|agencia|consultoria|fornecedor|revendedor|distribuidor)\b/u,
+    /\b(empreendedor|empreendedora|empresario|empresaria|criador de conteudo|influenciador|influenciadora)\b/u,
+    /\b(encomenda|encomendas|orcamento|orcamentos|pedidos|atendimento|compre|compras)\b/u,
+    /\b(frete|envio|envios|delivery|catalogo|servicos|produto e servico|produtos e servicos)\b/u,
+    /\b(cnpj|whatsapp comercial|link na bio|chame no direct|chama no direct)\b/u,
+    /\b(shopee|shp[ .]?ee|mercado livre|elo7|ifood|linktree|linktr[ .]?ee)\b/u,
+  ];
+  return commercialSignals.some((signal) => signal.test(searchable));
 }
 
 export function buildDiscoveryQualificationReason(input: {

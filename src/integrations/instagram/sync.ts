@@ -1,4 +1,5 @@
 import { processInboundMessage, type InboundMessage } from "../../features/conversations/process-inbound";
+import { recordExternalOutboundMessage } from "../../features/conversations/process-external-outbound";
 import { tryAutoSendInstagramReply } from "../../features/conversations/automation";
 import { enhanceReplyDraftWithAi } from "../../features/conversations/replies";
 import { getInstagramAccessToken } from "./token-store";
@@ -76,7 +77,7 @@ async function fetchGraphJson<T>(
   return payload;
 }
 
-export function extractInboundMessagesFromConversation(input: {
+export function extractMessagesFromConversation(input: {
   profile: GraphProfile;
   conversation: GraphConversation;
   messages: GraphMessage[];
@@ -94,13 +95,6 @@ export function extractInboundMessagesFromConversation(input: {
   return input.messages
     .filter((message) => {
       if (!message.id || !message.message?.trim() || !message.from?.id) return false;
-      if (ownIds.has(message.from.id)) return false;
-      if (
-        input.profile.username &&
-        message.from.username === input.profile.username
-      ) {
-        return false;
-      }
       const createdAt = Date.parse(message.created_time || "");
       return Number.isFinite(createdAt) && createdAt >= input.since.getTime();
     })
@@ -108,15 +102,52 @@ export function extractInboundMessagesFromConversation(input: {
       (left, right) =>
         Date.parse(left.created_time || "") - Date.parse(right.created_time || ""),
     )
-    .map(
-      (message): InboundMessage => ({
+    .flatMap((message) => {
+      const outbound =
+        ownIds.has(message.from!.id!) ||
+        Boolean(
+          input.profile.username &&
+            message.from!.username === input.profile.username,
+        );
+      const recipients = Array.isArray(message.to)
+        ? message.to
+        : message.to?.data || [];
+      const counterparty = outbound
+        ? recipients.find(
+            (party) =>
+              party.id &&
+              !ownIds.has(party.id) &&
+              party.username !== input.profile.username,
+          )
+        : message.from;
+      if (!counterparty?.id) return [];
+      return [{
         externalMessageId: message.id!,
-        externalConversationId: `${businessId}:${message.from!.id}`,
-        instagramUsername: message.from?.username || message.from!.id!,
+        externalConversationId: `${businessId}:${counterparty.id}`,
+        instagramUsername: counterparty.username || counterparty.id,
         name: message.from?.username,
         text: message.message!.trim(),
         source: "Instagram · Reconciliação",
         receivedAt: new Date(message.created_time!).toISOString(),
+        direction: outbound ? "outbound" as const : "inbound" as const,
+      }];
+    });
+}
+
+export function extractInboundMessagesFromConversation(
+  input: Parameters<typeof extractMessagesFromConversation>[0],
+) {
+  return extractMessagesFromConversation(input)
+    .filter((message) => message.direction === "inbound")
+    .map(
+      (message): InboundMessage => ({
+        externalMessageId: message.externalMessageId,
+        externalConversationId: message.externalConversationId,
+        instagramUsername: message.instagramUsername,
+        name: message.name,
+        text: message.text,
+        source: message.source,
+        receivedAt: message.receivedAt,
       }),
     );
 }
@@ -150,6 +181,9 @@ export async function syncInstagramConversations(input: {
   let inspectedMessages = 0;
   let recoveredMessages = 0;
   let duplicateMessages = 0;
+  let recoveredOutboundMessages = 0;
+  let duplicateOutboundMessages = 0;
+  let unmatchedOutboundMessages = 0;
   let inspectedConversations = 0;
   for (const conversation of conversationList.data || []) {
     const updatedAt = Date.parse(conversation.updated_time || "");
@@ -165,13 +199,30 @@ export async function syncInstagramConversations(input: {
       fetchImpl,
     );
     inspectedMessages += messageList.data?.length || 0;
-    const inboundMessages = extractInboundMessagesFromConversation({
+    const conversationMessages = extractMessagesFromConversation({
       profile,
       conversation,
       messages: messageList.data || [],
       since,
     });
-    for (const message of inboundMessages) {
+    for (const message of conversationMessages) {
+      if (message.direction === "outbound") {
+        const outbound = await recordExternalOutboundMessage({
+          ...message,
+          sentAt: message.receivedAt,
+          source: "Instagram · Reconciliação (mensagem externa)",
+        });
+        if (outbound.status === "duplicate") duplicateOutboundMessages += 1;
+        else if (outbound.status === "conversation_not_found") {
+          unmatchedOutboundMessages += 1;
+        } else if (
+          outbound.status === "recorded" ||
+          outbound.status === "reconciled"
+        ) {
+          recoveredOutboundMessages += 1;
+        }
+        continue;
+      }
       const result = await processInboundMessage(message);
       if (result.duplicate) duplicateMessages += 1;
       else {
@@ -200,5 +251,8 @@ export async function syncInstagramConversations(input: {
     inspectedMessages,
     recoveredMessages,
     duplicateMessages,
+    recoveredOutboundMessages,
+    duplicateOutboundMessages,
+    unmatchedOutboundMessages,
   };
 }

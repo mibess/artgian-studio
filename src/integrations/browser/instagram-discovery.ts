@@ -28,6 +28,7 @@ function assertInstagramUrl(value: string) {
 async function profileCandidateFromPage(
   page: Page,
   username: string,
+  discoveryKind: DiscoverySeed["kind"],
   discoveryQuery: string,
   knownLocations: string[],
 ) {
@@ -49,6 +50,7 @@ async function profileCandidateFromPage(
   return extractPublicInstagramCandidate({
     username,
     sourceUrl,
+    discoveryKind,
     discoveryQuery,
     title,
     description,
@@ -64,11 +66,16 @@ export async function executeInstagramDiscoveryOnPage(
     maximumProfiles: number;
     knownLocations: string[];
     ownUsername?: string;
+    excludedUsernames?: string[];
   },
 ) {
   const maximumProfiles = Math.min(30, Math.max(1, Math.trunc(input.maximumProfiles)));
   const ownUsername = input.ownUsername?.replace(/^@/, "").toLocaleLowerCase("en-US");
-  const discovered = new Map<string, { username: string; query: string }>();
+  const excludedUsernames = new Set(
+    (input.excludedUsernames || []).map((username) => username.toLocaleLowerCase("en-US")),
+  );
+  const discovered = new Map<string, { username: string; seed: DiscoverySeed }>();
+  const scannedSeeds: DiscoverySeed[] = [];
   let queriesScanned = 0;
   await page.goto("https://www.instagram.com/explore/", {
     waitUntil: "domcontentloaded",
@@ -88,7 +95,7 @@ export async function executeInstagramDiscoveryOnPage(
     const query = seed.kind === "hashtag"
       ? `#${seed.value.replace(/^#+/, "").replace(/\s+/g, "")}`
       : seed.value;
-    await searchInput.click();
+    await searchInput.focus();
     await searchInput.fill("");
     await pauseLikePerson(page, {
       minimumVariable: "DISCOVERY_MIN_ACTION_DELAY_SECONDS",
@@ -109,10 +116,16 @@ export async function executeInstagramDiscoveryOnPage(
         .filter((href): href is string => Boolean(href)),
     );
     queriesScanned += 1;
+    scannedSeeds.push(seed);
     for (const href of hrefs) {
       const username = instagramUsernameFromHref(href);
-      if (!username || username === ownUsername || discovered.has(username)) continue;
-      discovered.set(username, { username, query: seed.value });
+      if (
+        !username ||
+        username === ownUsername ||
+        excludedUsernames.has(username) ||
+        discovered.has(username)
+      ) continue;
+      discovered.set(username, { username, seed });
       if (discovered.size >= maximumProfiles * 3) break;
     }
     if (discovered.size >= maximumProfiles * 3) break;
@@ -142,7 +155,8 @@ export async function executeInstagramDiscoveryOnPage(
     const candidate = await profileCandidateFromPage(
       page,
       discoveredProfile.username,
-      discoveredProfile.query,
+      discoveredProfile.seed.kind,
+      discoveredProfile.seed.value,
       input.knownLocations,
     );
     if (candidate) candidates.push(candidate);
@@ -151,6 +165,7 @@ export async function executeInstagramDiscoveryOnPage(
     candidates,
     queriesScanned,
     profilesInspected,
+    scannedSeeds,
   };
 }
 
@@ -185,6 +200,7 @@ export async function discoverInstagramProfiles(input: {
   maximumProfiles: number;
   knownLocations: string[];
   ownUsername?: string;
+  excludedUsernames?: string[];
 }) {
   if (process.env.INSTAGRAM_DISCOVERY_ENABLED !== "true") {
     throw new InstagramDiscoveryError(

@@ -30,4 +30,4 @@ export MAX_SECONDS_BETWEEN_DMS="${WORKER_MAX_SECONDS_BETWEEN_DMS:-900}"
 export OPERATING_HOURS="${OPERATING_HOURS:-09:00-18:00}"
 export OPERATING_TIMEZONE="${OPERATING_TIMEZONE:-America/Sao_Paulo}"
 
-exec pnpm tsx worker/index.ts
+exec node --import tsx worker/index.ts

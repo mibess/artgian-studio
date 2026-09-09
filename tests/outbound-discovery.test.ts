@@ -21,7 +21,7 @@ describe("execução segura da descoberta", () => {
   });
 
   it("qualifica, deduplica e cadastra sem criar job de envio", async () => {
-    const [{ getCommercialDb }, schema, { executeCampaignDiscovery }] = await Promise.all([
+    const [{ getCommercialDb }, schema, { enqueueCampaignDiscovery, executeCampaignDiscovery }] = await Promise.all([
       import("../src/db/commercial"),
       import("../db/schema"),
       import("../src/features/outbound/discovery"),
@@ -65,7 +65,7 @@ describe("execução segura da descoberta", () => {
       {
         discover: async () => ({
           queriesScanned: 1,
-          profilesInspected: 3,
+          profilesInspected: 4,
           candidates: [
             {
               instagramUsername: "perfil.novo",
@@ -88,6 +88,14 @@ describe("execução segura da descoberta", () => {
               profileBio: "Assuntos sem relação com a campanha",
               discoveryQuery: "presente personalizado",
             },
+            {
+              instagramUsername: "loja.presentes",
+              name: "Loja de Presentes",
+              sourceUrl: "https://www.instagram.com/loja.presentes/",
+              profileBio: "Loja de decoração geek · encomendas pelo WhatsApp",
+              publicSignal: "que você destaca decoração geek",
+              discoveryQuery: "decoração geek",
+            },
           ],
         }),
       },
@@ -109,11 +117,39 @@ describe("execução segura da descoberta", () => {
     const [run] = await db.select().from(schema.discoveryRuns);
     expect(run).toMatchObject({
       status: "completed",
-      profilesInspected: 3,
+      profilesInspected: 4,
       profilesCreated: 1,
       skippedBlocked: 1,
-      skippedLowScore: 1,
+      skippedLowScore: 2,
     });
+    const remembered = await db.select().from(schema.discoveryCandidates);
+    expect(remembered).toHaveLength(4);
+    expect(remembered.find((item) => item.instagramUsername === "perfil.semaderencia")?.lastOutcome)
+      .toBe("low_score");
+    const queryStats = await db.select().from(schema.discoveryQueryStats);
+    expect(queryStats.find((item) => item.query === "presente personalizado")).toMatchObject({
+      searches: 1,
+      profilesInspected: 3,
+      profilesCreated: 1,
+    });
+    const [campaign] = await db
+      .select()
+      .from(schema.campaigns)
+      .where(eq(schema.campaigns.id, "discovery-campaign"));
+    expect(campaign.discoveryCursor).toBe(1);
+
+    const requestedAt = new Date(Date.now() - 1_000).toISOString();
+    const rescheduled = await enqueueCampaignDiscovery({
+      campaignId: "discovery-campaign",
+      scheduledAt: requestedAt,
+      rescheduleExisting: true,
+    });
+    const [rescheduledJob] = await db
+      .select()
+      .from(schema.jobs)
+      .where(eq(schema.jobs.id, rescheduled.jobId));
+    expect(rescheduled).toMatchObject({ created: false });
+    expect(rescheduledJob.scheduledAt).toBe(requestedAt);
   });
 
   it("permite ao worker processar descoberta sem exigir um lead prévio", async () => {

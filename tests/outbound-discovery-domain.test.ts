@@ -4,7 +4,9 @@ import {
   buildDiscoverySeeds,
   extractPublicInstagramCandidate,
   instagramUsernameFromHref,
+  isLikelyCommercialInstagramProfile,
   parseDiscoveryTermsInput,
+  selectDiscoverySeedsForRun,
 } from "../src/features/outbound/discovery-domain";
 
 const business = {
@@ -36,8 +38,42 @@ describe("domínio da descoberta segura", () => {
   it("aceita somente links que representam perfis", () => {
     expect(instagramUsernameFromHref("/@Invalido")).toBeNull();
     expect(instagramUsernameFromHref("/explore/")).toBeNull();
+    expect(instagramUsernameFromHref("/blog/")).toBeNull();
     expect(instagramUsernameFromHref("/p/ABC123/")).toBeNull();
     expect(instagramUsernameFromHref("https://www.instagram.com/perfil.valido/")).toBe("perfil.valido");
+  });
+
+  it("alterna critérios, equilibra tipos e preserva exploração", () => {
+    const seeds = [
+      { kind: "hashtag" as const, value: "feitoem3d" },
+      { kind: "hashtag" as const, value: "decoracaogeek" },
+      { kind: "keyword" as const, value: "presente personalizado" },
+      { kind: "keyword" as const, value: "setup gamer" },
+      { kind: "keyword" as const, value: "mãe de pet" },
+      { kind: "location" as const, value: "Brasil" },
+    ];
+    const first = selectDiscoverySeedsForRun({ seeds, cursor: 0, maximum: 4 });
+    const second = selectDiscoverySeedsForRun({ seeds, cursor: 1, maximum: 4 });
+    expect(first).not.toEqual(second);
+    expect(new Set(first.map((seed) => seed.kind))).toEqual(
+      new Set(["hashtag", "keyword", "location"]),
+    );
+
+    const adaptive = selectDiscoverySeedsForRun({
+      seeds,
+      cursor: 2,
+      maximum: 4,
+      explorationPercent: 30,
+      performance: [{
+        kind: "keyword",
+        value: "mãe de pet",
+        profilesInspected: 3,
+        profilesQualified: 2,
+        profilesCreated: 1,
+      }],
+    });
+    expect(adaptive[0]).toEqual({ kind: "keyword", value: "mãe de pet" });
+    expect(new Set(adaptive.map((seed) => seed.value)).size).toBe(4);
   });
 
   it("extrai apenas evidências públicas úteis do perfil", () => {
@@ -58,5 +94,22 @@ describe("domínio da descoberta segura", () => {
     });
     expect(candidate?.profileBio).toContain("Presentes personalizados");
     expect(candidate?.publicSignal).toContain("Presentes personalizados");
+  });
+
+  it("distingue sinais comerciais de um perfil pessoal", () => {
+    expect(isLikelyCommercialInstagramProfile({
+      instagramUsername: "atelie.presentes",
+      name: "Ateliê dos Presentes",
+      sourceUrl: "https://www.instagram.com/atelie.presentes/",
+      profileBio: "Encomendas pelo WhatsApp · enviamos para todo o Brasil",
+      discoveryQuery: "presente criativo",
+    })).toBe(true);
+    expect(isLikelyCommercialInstagramProfile({
+      instagramUsername: "marina.silva",
+      name: "Marina Silva",
+      sourceUrl: "https://www.instagram.com/marina.silva/",
+      profileBio: "Mãe, apaixonada por decoração geek, livros e meus cachorros",
+      discoveryQuery: "decoração geek",
+    })).toBe(false);
   });
 });

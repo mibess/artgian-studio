@@ -58,6 +58,16 @@ describe("qualificação outbound", () => {
     expect(message).not.toMatch(/garantia|desconto|resultado/i);
   });
 
+  it("reconhece contexto pessoal explícito no funil de consumidor", () => {
+    const result = scorePublicProfile({
+      funnelType: "consumer",
+      bio: "Sou colecionador de bonecos e esse é o meu hobby",
+      publicSignal: "que você mostra sua coleção geek",
+    }, business);
+    expect(result.score).toBe(40);
+    expect(result.priority).toBe("normal");
+  });
+
   it("atribui a mesma variante para a mesma chave", () => {
     expect(assignExperimentVariant("perfil", "experimento")).toBe(assignExperimentVariant("perfil", "experimento"));
   });

@@ -5,7 +5,7 @@ import {
   encryptInstagramToken,
   shouldRefreshInstagramToken,
 } from "../src/integrations/instagram/token-store";
-import { extractInboundMessagesFromConversation } from "../src/integrations/instagram/sync";
+import { extractMessagesFromConversation } from "../src/integrations/instagram/sync";
 import { GET as runCron } from "../app/api/cron/instagram/route";
 
 const originalAppSecret = process.env.INSTAGRAM_APP_SECRET;
@@ -50,15 +50,15 @@ describe("confiabilidade do Instagram", () => {
     ).toBe(true);
   });
 
-  it("reconcilia somente mensagens recebidas e recentes", () => {
+  it("reconcilia mensagens recebidas e enviadas recentes", () => {
     process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID = "business-1";
-    const messages = extractInboundMessagesFromConversation({
+    const messages = extractMessagesFromConversation({
       profile: { id: "scoped-business", user_id: "business-1", username: "loja" },
       conversation: { id: "conversation-1" },
       since: new Date("2026-09-02T10:00:00.000Z"),
       messages: [
         { id: "inbound-1", created_time: "2026-09-02T11:00:00.000Z", from: { id: "customer-1", username: "cliente" }, message: "Olá" },
-        { id: "outbound-1", created_time: "2026-09-02T11:01:00.000Z", from: { id: "business-1", username: "loja" }, message: "Olá!" },
+        { id: "outbound-1", created_time: "2026-09-02T11:01:00.000Z", from: { id: "business-1", username: "loja" }, to: { data: [{ id: "customer-1", username: "cliente" }] }, message: "Olá!" },
         { id: "old-1", created_time: "2026-09-01T11:00:00.000Z", from: { id: "customer-1" }, message: "Antiga" },
       ],
     });
@@ -68,6 +68,14 @@ describe("confiabilidade do Instagram", () => {
         externalConversationId: "business-1:customer-1",
         instagramUsername: "cliente",
         text: "Olá",
+        direction: "inbound",
+      }),
+      expect.objectContaining({
+        externalMessageId: "outbound-1",
+        externalConversationId: "business-1:customer-1",
+        instagramUsername: "cliente",
+        text: "Olá!",
+        direction: "outbound",
       }),
     ]);
   });

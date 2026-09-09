@@ -331,6 +331,7 @@ export const campaigns = sqliteTable("campaigns", {
   discoveryDailyLimit: integer("discovery_daily_limit").notNull().default(10),
   discoveryMinimumScore: integer("discovery_minimum_score").notNull().default(40),
   discoveryIntervalHours: integer("discovery_interval_hours").notNull().default(24),
+  discoveryCursor: integer("discovery_cursor").notNull().default(0),
   lastDiscoveryAt: text("last_discovery_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -407,6 +408,68 @@ export const discoveryRuns = sqliteTable(
   (table) => [
     index("discovery_runs_campaign_idx").on(table.campaignId, table.startedAt),
     index("discovery_runs_status_idx").on(table.status),
+  ],
+);
+
+export const discoveryCandidates = sqliteTable(
+  "discovery_candidates",
+  {
+    id: text("id").primaryKey(),
+    campaignId: text("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    instagramUsername: text("instagram_username").notNull(),
+    lastQueryKind: text("last_query_kind").notNull(),
+    lastQuery: text("last_query").notNull(),
+    lastOutcome: text("last_outcome").notNull(),
+    inspectionCount: integer("inspection_count").notNull().default(1),
+    lastInspectedAt: text("last_inspected_at").notNull(),
+    revisitAfter: text("revisit_after").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("discovery_candidates_campaign_username_unique").on(
+      table.campaignId,
+      table.instagramUsername,
+    ),
+    index("discovery_candidates_revisit_idx").on(
+      table.campaignId,
+      table.revisitAfter,
+    ),
+  ],
+);
+
+export const discoveryQueryStats = sqliteTable(
+  "discovery_query_stats",
+  {
+    id: text("id").primaryKey(),
+    campaignId: text("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    queryKind: text("query_kind").notNull(),
+    query: text("query").notNull(),
+    searches: integer("searches").notNull().default(0),
+    profilesInspected: integer("profiles_inspected").notNull().default(0),
+    profilesQualified: integer("profiles_qualified").notNull().default(0),
+    profilesCreated: integer("profiles_created").notNull().default(0),
+    skippedDuplicates: integer("skipped_duplicates").notNull().default(0),
+    skippedBlocked: integer("skipped_blocked").notNull().default(0),
+    skippedLowScore: integer("skipped_low_score").notNull().default(0),
+    lastSearchedAt: text("last_searched_at").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("discovery_query_stats_campaign_query_unique").on(
+      table.campaignId,
+      table.queryKind,
+      table.query,
+    ),
+    index("discovery_query_stats_campaign_idx").on(
+      table.campaignId,
+      table.lastSearchedAt,
+    ),
   ],
 );
 

@@ -11,10 +11,32 @@ describe("webhook do Instagram", () => {
     expect(verifyMetaSignature(body, "sha256=invalida")).toBe(false);
   });
 
-  it("ignora echoes e extrai mensagens inbound", () => {
+  it("extrai mensagens inbound e echoes outbound", () => {
     const messages = extractInstagramMessages({ entry: [{ id: "business", messaging: [{ sender: { id: "lead-1" }, timestamp: 1_800_000_000_000, message: { mid: "message-1", text: "Quanto custa?" } }, { sender: { id: "business" }, message: { mid: "echo", text: "Olá", is_echo: true } }] }] });
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toMatchObject({ externalMessageId: "message-1", instagramUsername: "lead-1", text: "Quanto custa?", kind: "dm" });
+    expect(messages[0]).toMatchObject({ externalMessageId: "message-1", instagramUsername: "lead-1", text: "Quanto custa?", kind: "dm", direction: "inbound" });
+  });
+
+  it("associa echoes ao destinatário da conversa", () => {
+    const messages = extractInstagramMessages({
+      entry: [{
+        id: "business",
+        messaging: [{
+          sender: { id: "business" },
+          recipient: { id: "lead-1" },
+          timestamp: 1_800_000_000_000,
+          message: { mid: "echo", text: "Olá", is_echo: true },
+        }],
+      }],
+    });
+    expect(messages).toEqual([
+      expect.objectContaining({
+        externalMessageId: "echo",
+        externalConversationId: "business:lead-1",
+        instagramUsername: "lead-1",
+        direction: "outbound",
+      }),
+    ]);
   });
 
   it("captura comentários para revisão sem tratá-los como DM", () => {

@@ -81,7 +81,16 @@ export function scorePublicProfile(
   const categoryScore = input.category?.trim() ? 10 : 0;
   const keywordScore = Math.min(50, matches.length * 15);
   const geographyScore = geographyMatch ? 20 : 0;
-  const score = Math.min(100, signalScore + categoryScore + keywordScore + geographyScore);
+  const personalContext = normalize([input.bio, input.publicSignal].filter(Boolean).join(" "));
+  const consumerIdentityScore = input.funnelType === "consumer" && [
+    /\bsou (?:um |uma )?(?:colecionador|colecionadora|gamer|nerd|geek|apaixonado|apaixonada)\b/u,
+    /\b(minha colecao|meu hobby|meus hobbies|minha casa|meu cantinho|meu setup)\b/u,
+    /\b(mae de|pai de|tutora de|tutor de|apaixonado por|apaixonada por)\b/u,
+  ].some((signal) => signal.test(personalContext)) ? 20 : 0;
+  const score = Math.min(
+    100,
+    signalScore + categoryScore + keywordScore + geographyScore + consumerIdentityScore,
+  );
   return {
     score,
     matches,

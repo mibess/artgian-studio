@@ -50,17 +50,23 @@ export function extractInstagramMessages(input: unknown) {
     text: string;
     receivedAt: string;
     kind: "dm" | "comment";
+    direction: "inbound" | "outbound";
   }> = [];
   for (const entry of payload.entry || []) {
     for (const event of entry.messaging || []) {
-      if (!event.message?.mid || !event.message.text || event.message.is_echo || !event.sender?.id) continue;
+      if (!event.message?.mid || !event.message.text || !event.sender?.id) continue;
+      const direction = event.message.is_echo ? "outbound" : "inbound";
+      const counterpartyId =
+        direction === "outbound" ? event.recipient?.id : event.sender.id;
+      if (!counterpartyId) continue;
       result.push({
         externalMessageId: event.message.mid,
-        externalConversationId: `${entry.id || event.recipient?.id || "instagram"}:${event.sender.id}`,
-        instagramUsername: event.sender.id,
+        externalConversationId: `${entry.id || (direction === "outbound" ? event.sender.id : event.recipient?.id) || "instagram"}:${counterpartyId}`,
+        instagramUsername: counterpartyId,
         text: event.message.text,
         receivedAt: new Date(event.timestamp || Date.now()).toISOString(),
         kind: "dm",
+        direction,
       });
     }
     const changes = [
@@ -84,6 +90,7 @@ export function extractInstagramMessages(input: unknown) {
           entry.time ? entry.time * 1_000 : Date.now(),
         ).toISOString(),
         kind: "comment",
+        direction: "inbound",
       });
     }
   }

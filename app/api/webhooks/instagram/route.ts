@@ -1,5 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { processInboundMessage } from "../../../../src/features/conversations/process-inbound";
+import { recordExternalOutboundMessage } from "../../../../src/features/conversations/process-external-outbound";
 import { tryAutoSendInstagramReply } from "../../../../src/features/conversations/automation";
 import { enhanceReplyDraftWithAi } from "../../../../src/features/conversations/replies";
 import { extractInstagramMessages, verifyMetaSignature } from "../../../../src/integrations/instagram/webhook";
@@ -28,13 +29,23 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
   }
-  const inboundMessages = extractInstagramMessages(payload);
+  const extractedMessages = extractInstagramMessages(payload);
   const results = [];
   const profiles = new Map<
     string,
     Awaited<ReturnType<typeof getInstagramMessagingProfile>>
   >();
-  for (const message of inboundMessages) {
+  for (const message of extractedMessages) {
+    if (message.direction === "outbound") {
+      results.push(
+        await recordExternalOutboundMessage({
+          ...message,
+          sentAt: message.receivedAt,
+          source: "Instagram · Webhook (mensagem externa)",
+        }),
+      );
+      continue;
+    }
     let instagramUsername = message.instagramUsername;
     let name: string | undefined;
     if (message.kind === "dm" && /^\d+$/.test(message.instagramUsername)) {
@@ -78,5 +89,5 @@ export async function POST(request: NextRequest) {
       });
     }
   }
-  return NextResponse.json({ received: inboundMessages.length, results });
+  return NextResponse.json({ received: extractedMessages.length, results });
 }
