@@ -83,11 +83,11 @@ export async function runInstagramMaintenance() {
     const previousSync = state?.lastSuccessfulSyncAt
       ? Date.parse(state.lastSuccessfulSyncAt)
       : Number.NaN;
-    const since = new Date(
-      Number.isFinite(previousSync)
-        ? previousSync - 60 * 60 * 1_000
-        : startedAt.getTime() - 48 * 60 * 60 * 1_000,
-    );
+    const reconciliationFloor = startedAt.getTime() - 48 * 60 * 60 * 1_000;
+    const incrementalStart = Number.isFinite(previousSync)
+      ? previousSync - 60 * 60 * 1_000
+      : reconciliationFloor;
+    const since = new Date(Math.min(incrementalStart, reconciliationFloor));
     const sync = await syncInstagramConversations({ since, accessToken });
     const finishedAt = new Date().toISOString();
     const publicSync = {
