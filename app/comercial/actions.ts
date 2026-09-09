@@ -115,14 +115,27 @@ export async function addCatalogProduct(formData: FormData) {
   redirect("/comercial/produtos?salvo=1");
 }
 
+function redirectCampaign(formData: FormData, query: string): never {
+  const params = new URLSearchParams(query);
+  const selected = String(formData.get("selectedCampaign") || formData.get("campaignId") || "");
+  const tab = String(formData.get("returnTab") || "");
+  if (selected) params.set("id", selected);
+  if (["resumo", "publico", "mensagens", "busca", "historico"].includes(tab)) params.set("aba", tab);
+  if (formData.get("newCampaign") === "true" && params.has("erro")) params.set("nova", "1");
+  const prospectId = String(formData.get("prospectId") || "");
+  const anchor = prospectId && tab === "mensagens" ? `#prospect-${encodeURIComponent(prospectId)}` : "";
+  redirect(`/comercial/campanhas?${params.toString()}${anchor}`);
+}
+
 export async function createCampaign(formData: FormData) {
   await requireAdminAccess();
+  formData.set("newCampaign", "true");
   const name = String(formData.get("name") || "").trim();
   const source = String(formData.get("source") || "").trim();
   const segment = String(formData.get("segment") || "").trim();
   const discoveryStrategyInput = String(formData.get("discoveryStrategy") || "instagram_search");
   if (!DISCOVERY_STRATEGIES.includes(discoveryStrategyInput as (typeof DISCOVERY_STRATEGIES)[number])) {
-    redirect("/comercial/campanhas?erro=Estratégia+de+busca+inválida");
+    redirectCampaign(formData, "erro=Estratégia+de+busca+inválida");
   }
   const discoveryStrategy = normalizeDiscoveryStrategy(discoveryStrategyInput);
   const requestedFunnelType = String(formData.get("funnelType") || "consumer");
@@ -131,13 +144,13 @@ export async function createCampaign(formData: FormData) {
   const dailyLimit = Math.min(30, Math.max(1, Math.trunc(requestedDailyLimit)));
   const operatingHours = String(formData.get("operatingHours") || "09:00-18:00").trim();
   if (name.length < 3 || name.length > 120 || source.length < 2 || source.length > 120 || segment.length > 120) {
-    redirect("/comercial/campanhas?erro=Informe+nome+e+origem+da+campanha");
+    redirectCampaign(formData, "erro=Informe+nome+e+origem+da+campanha");
   }
   if (!Number.isFinite(requestedDailyLimit)) {
-    redirect("/comercial/campanhas?erro=Informe+um+limite+diário+válido");
+    redirectCampaign(formData, "erro=Informe+um+limite+diário+válido");
   }
   if (!OUTBOUND_FUNNELS.includes(funnelType as OutboundFunnel)) {
-    redirect("/comercial/campanhas?erro=Funil+de+campanha+inválido");
+    redirectCampaign(formData, "erro=Funil+de+campanha+inválido");
   }
   const hours = /^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/.exec(operatingHours);
   if (
@@ -147,11 +160,11 @@ export async function createCampaign(formData: FormData) {
     Number(hours[3]) > 23 ||
     Number(hours[4]) > 59
   ) {
-    redirect("/comercial/campanhas?erro=Use+uma+janela+como+09:00-18:00");
+    redirectCampaign(formData, "erro=Use+uma+janela+como+09:00-18:00");
   }
   const db = await getCommercialDb();
   const now = new Date().toISOString();
-  await db.transaction(async (tx) => {
+  const campaignId = await db.transaction(async (tx) => {
     const id = crypto.randomUUID();
     await tx.insert(campaigns).values({
       id,
@@ -177,9 +190,12 @@ export async function createCampaign(formData: FormData) {
       metadata: JSON.stringify({ outboundEnabled: false, discoveryStrategy }),
       createdAt: now,
     });
+    return id;
   });
   revalidatePath("/comercial/campanhas");
-  redirect("/comercial/campanhas?salvo=1");
+  formData.set("selectedCampaign", campaignId);
+  formData.set("returnTab", "busca");
+  redirectCampaign(formData, "salvo=1");
 }
 
 export async function saveCampaignDiscoverySettings(formData: FormData) {
@@ -188,7 +204,7 @@ export async function saveCampaignDiscoverySettings(formData: FormData) {
   const discoveryEnabled = String(formData.get("discoveryEnabled") || "false") === "true";
   const strategyInput = String(formData.get("discoveryStrategy") || "instagram_search");
   if (!DISCOVERY_STRATEGIES.includes(strategyInput as (typeof DISCOVERY_STRATEGIES)[number])) {
-    redirect("/comercial/campanhas?erro=Estratégia+de+busca+inválida");
+    redirectCampaign(formData, "erro=Estratégia+de+busca+inválida");
   }
   const discoveryStrategy = normalizeDiscoveryStrategy(strategyInput);
   const keywords = parseDiscoveryTermsInput(String(formData.get("discoveryKeywords") || ""));
@@ -208,7 +224,7 @@ export async function saveCampaignDiscoverySettings(formData: FormData) {
     !Number.isFinite(rawIntervalHours) ||
     !Number.isFinite(rawMinimumBaseFollowers)
   ) {
-    redirect("/comercial/campanhas?erro=Configuração+de+descoberta+inválida");
+    redirectCampaign(formData, "erro=Configuração+de+descoberta+inválida");
   }
   const discoveryDailyLimit = Math.min(30, Math.max(1, Math.trunc(rawDailyLimit)));
   const discoveryMinimumScore = Math.min(100, Math.max(0, Math.trunc(rawMinimumScore)));
@@ -218,10 +234,10 @@ export async function saveCampaignDiscoverySettings(formData: FormData) {
     Math.max(10_000, Math.trunc(rawMinimumBaseFollowers)),
   );
   if (discoveryStrategy === "instagram_followers" && !baseProfiles.length) {
-    redirect("/comercial/campanhas?erro=Adicione+ao+menos+um+perfil-base+válido");
+    redirectCampaign(formData, "erro=Adicione+ao+menos+um+perfil-base+válido");
   }
   if (discoveryStrategy === "local_business" && (!localNiche || !localLocation)) {
-    redirect("/comercial/campanhas?erro=Informe+o+nicho+e+a+localização+da+busca+local");
+    redirectCampaign(formData, "erro=Informe+o+nicho+e+a+localização+da+busca+local");
   }
   const db = await getCommercialDb();
   const [campaign] = await db
@@ -229,7 +245,7 @@ export async function saveCampaignDiscoverySettings(formData: FormData) {
     .from(campaigns)
     .where(eq(campaigns.id, campaignId))
     .limit(1);
-  if (!campaign) redirect("/comercial/campanhas?erro=Campanha+não+encontrada");
+  if (!campaign) redirectCampaign(formData, "erro=Campanha+não+encontrada");
   const now = new Date().toISOString();
   await db.transaction(async (tx) => {
     await tx.update(campaigns).set({
@@ -274,7 +290,7 @@ export async function saveCampaignDiscoverySettings(formData: FormData) {
   });
   if (discoveryEnabled) await enqueueCampaignDiscovery({ campaignId, scheduledAt: now });
   revalidatePath("/comercial", "layout");
-  redirect("/comercial/campanhas?descoberta=1");
+  redirectCampaign(formData, "descoberta=1");
 }
 
 export async function setCampaignDiscoveryEnabled(formData: FormData) {
@@ -288,7 +304,7 @@ export async function setCampaignDiscoveryEnabled(formData: FormData) {
     .set({ discoveryEnabled: enabled, updatedAt: now })
     .where(eq(campaigns.id, campaignId))
     .returning({ id: campaigns.id });
-  if (!updated.length) redirect("/comercial/campanhas?erro=Campanha+não+encontrada");
+  if (!updated.length) redirectCampaign(formData, "erro=Campanha+não+encontrada");
   if (enabled) {
     await enqueueCampaignDiscovery({ campaignId, scheduledAt: now });
   } else {
@@ -304,7 +320,7 @@ export async function setCampaignDiscoveryEnabled(formData: FormData) {
     createdAt: now,
   });
   revalidatePath("/comercial", "layout");
-  redirect("/comercial/campanhas?descoberta=1");
+  redirectCampaign(formData, "descoberta=1");
 }
 
 export async function queueCampaignDiscoveryNow(formData: FormData) {
@@ -317,7 +333,7 @@ export async function queueCampaignDiscoveryNow(formData: FormData) {
     .where(eq(campaigns.id, campaignId))
     .limit(1);
   if (!campaign?.discoveryEnabled) {
-    redirect("/comercial/campanhas?erro=Ative+a+busca+segura+antes+de+executar");
+    redirectCampaign(formData, "erro=Ative+a+busca+segura+antes+de+executar");
   }
   const now = new Date().toISOString();
   const scheduled = await enqueueCampaignDiscovery({
@@ -335,7 +351,7 @@ export async function queueCampaignDiscoveryNow(formData: FormData) {
     createdAt: now,
   });
   revalidatePath("/comercial", "layout");
-  redirect("/comercial/campanhas?busca=1");
+  redirectCampaign(formData, "busca=1");
 }
 
 function validInstagramProfileUrl(value: string) {
@@ -360,13 +376,13 @@ export async function addOutboundProspect(formData: FormData) {
   const publicSignal = String(formData.get("publicSignal") || "").trim();
   const qualificationReason = String(formData.get("qualificationReason") || "").trim();
   if (!campaignId || !/^[a-z0-9._]{1,30}$/.test(instagramUsername)) {
-    redirect("/comercial/campanhas?erro=Informe+um+perfil+válido+do+Instagram");
+    redirectCampaign(formData, "erro=Informe+um+perfil+válido+do+Instagram");
   }
   if (!validInstagramProfileUrl(sourceUrl)) {
-    redirect("/comercial/campanhas?erro=A+fonte+deve+ser+um+link+oficial+do+Instagram");
+    redirectCampaign(formData, "erro=A+fonte+deve+ser+um+link+oficial+do+Instagram");
   }
   if (qualificationReason.length < 10 || qualificationReason.length > 500) {
-    redirect("/comercial/campanhas?erro=Explique+em+10+a+500+caracteres+por+que+o+perfil+é+relevante");
+    redirectCampaign(formData, "erro=Explique+em+10+a+500+caracteres+por+que+o+perfil+é+relevante");
   }
   if (
     name.length > 120 ||
@@ -376,12 +392,12 @@ export async function addOutboundProspect(formData: FormData) {
     profileLocation.length > 120 ||
     publicSignal.length > 300
   ) {
-    redirect("/comercial/campanhas?erro=Um+dos+campos+excede+o+limite+permitido");
+    redirectCampaign(formData, "erro=Um+dos+campos+excede+o+limite+permitido");
   }
 
   const db = await getCommercialDb();
   const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1);
-  if (!campaign) redirect("/comercial/campanhas?erro=Campanha+não+encontrada");
+  if (!campaign) redirectCampaign(formData, "erro=Campanha+não+encontrada");
 
   const business = await getBusinessConfig();
   const profileScore = scorePublicProfile(
@@ -397,14 +413,14 @@ export async function addOutboundProspect(formData: FormData) {
 
   let [lead] = await db.select().from(leads).where(eq(leads.instagramUsername, instagramUsername)).limit(1);
   if (lead?.doNotContact) {
-    redirect("/comercial/campanhas?erro=Este+perfil+está+na+lista+permanente+de+não+contato");
+    redirectCampaign(formData, "erro=Este+perfil+está+na+lista+permanente+de+não+contato");
   }
   const existingProspects = await db
     .select({ status: outboundProspects.status })
     .from(outboundProspects)
     .where(eq(outboundProspects.instagramUsername, instagramUsername));
   if (existingProspects.some((prospect) => prospect.status !== "closed")) {
-    redirect("/comercial/campanhas?erro=Este+perfil+já+está+em+uma+campanha+ativa");
+    redirectCampaign(formData, "erro=Este+perfil+já+está+em+uma+campanha+ativa");
   }
   let contactPolicy = "manual_only";
   if (lead && !lead.doNotContact) {
@@ -490,9 +506,9 @@ export async function addOutboundProspect(formData: FormData) {
     });
     return true;
   });
-  if (!inserted) redirect("/comercial/campanhas?erro=Este+perfil+já+está+na+campanha");
+  if (!inserted) redirectCampaign(formData, "erro=Este+perfil+já+está+na+campanha");
   revalidatePath("/comercial/campanhas");
-  redirect("/comercial/campanhas?prospecto=1");
+  redirectCampaign(formData, "prospecto=1");
 }
 
 export async function prepareOutboundProspectDraft(formData: FormData) {
@@ -506,8 +522,8 @@ export async function prepareOutboundProspectDraft(formData: FormData) {
     .leftJoin(leads, eq(outboundProspects.leadId, leads.id))
     .where(eq(outboundProspects.id, prospectId))
     .limit(1);
-  if (!row) redirect("/comercial/campanhas?erro=Prospecto+não+encontrado");
-  if (row.lead?.doNotContact) redirect("/comercial/campanhas?erro=Contato+bloqueado+por+opt-out");
+  if (!row) redirectCampaign(formData, "erro=Prospecto+não+encontrado");
+  if (row.lead?.doNotContact) redirectCampaign(formData, "erro=Contato+bloqueado+por+opt-out");
 
   const business = await getBusinessConfig();
   const [experiment] = await db
@@ -570,7 +586,7 @@ export async function prepareOutboundProspectDraft(formData: FormData) {
     });
   });
   revalidatePath("/comercial/campanhas");
-  redirect("/comercial/campanhas?rascunho=1");
+  redirectCampaign(formData, "rascunho=1");
 }
 
 export async function setOutboundCampaignEnabled(formData: FormData) {
@@ -585,7 +601,7 @@ export async function setOutboundCampaignEnabled(formData: FormData) {
       settings.automation_paused === "true" ||
       settings.outbound_paused !== "false")
   ) {
-    redirect("/comercial/campanhas?erro=Liberação+global+de+outbound+ainda+está+bloqueada");
+    redirectCampaign(formData, "erro=Liberação+global+de+outbound+ainda+está+bloqueada");
   }
   const db = await getCommercialDb();
   const now = new Date().toISOString();
@@ -606,7 +622,7 @@ export async function setOutboundCampaignEnabled(formData: FormData) {
     });
   });
   revalidatePath("/comercial/campanhas");
-  redirect("/comercial/campanhas?campanha=1");
+  redirectCampaign(formData, "campanha=1");
 }
 
 export async function saveOutboundProspectDraft(formData: FormData) {
@@ -614,7 +630,7 @@ export async function saveOutboundProspectDraft(formData: FormData) {
   const prospectId = String(formData.get("prospectId") || "");
   const draftBody = String(formData.get("draftBody") || "").trim();
   if (!prospectId || draftBody.length < 10 || draftBody.length > 1_000) {
-    redirect("/comercial/campanhas?erro=Revise+o+rascunho+(10+a+1000+caracteres)");
+    redirectCampaign(formData, "erro=Revise+o+rascunho+(10+a+1000+caracteres)");
   }
   const db = await getCommercialDb();
   const now = new Date().toISOString();
@@ -637,9 +653,9 @@ export async function saveOutboundProspectDraft(formData: FormData) {
     });
     return true;
   });
-  if (!updated) redirect("/comercial/campanhas?erro=Prospecto+não+encontrado");
+  if (!updated) redirectCampaign(formData, "erro=Prospecto+não+encontrado");
   revalidatePath("/comercial/campanhas");
-  redirect("/comercial/campanhas?revisado=1");
+  redirectCampaign(formData, "revisado=1");
 }
 
 export async function queueOutboundFirstContact(formData: FormData) {
@@ -654,7 +670,7 @@ export async function queueOutboundFirstContact(formData: FormData) {
     .where(eq(outboundProspects.id, prospectId))
     .limit(1);
   if (!row || !row.lead || row.prospect.status !== "approved_manual") {
-    redirect("/comercial/campanhas?erro=O+rascunho+precisa+de+aprovação+humana");
+    redirectCampaign(formData, "erro=O+rascunho+precisa+de+aprovação+humana");
   }
   const settings = await getSystemSettings();
   if (
@@ -664,10 +680,10 @@ export async function queueOutboundFirstContact(formData: FormData) {
     settings.outbound_paused !== "false" ||
     !row.campaign.outboundEnabled
   ) {
-    redirect("/comercial/campanhas?erro=As+travas+de+outbound+e+navegador+ainda+estão+fechadas");
+    redirectCampaign(formData, "erro=As+travas+de+outbound+e+navegador+ainda+estão+fechadas");
   }
   if (row.lead.doNotContact) {
-    redirect("/comercial/campanhas?erro=Contato+bloqueado+por+opt-out");
+    redirectCampaign(formData, "erro=Contato+bloqueado+por+opt-out");
   }
   const [ownedConversation] = await db
     .select({ channelOwner: conversations.channelOwner })
@@ -676,7 +692,7 @@ export async function queueOutboundFirstContact(formData: FormData) {
     .orderBy(desc(conversations.updatedAt))
     .limit(1);
   if (ownedConversation?.channelOwner === "api") {
-    redirect("/comercial/campanhas?erro=Este+contato+já+pertence+à+API+oficial");
+    redirectCampaign(formData, "erro=Este+contato+já+pertence+à+API+oficial");
   }
 
   const now = new Date().toISOString();
@@ -707,7 +723,7 @@ export async function queueOutboundFirstContact(formData: FormData) {
     });
   });
   revalidatePath("/comercial/campanhas");
-  redirect("/comercial/campanhas?agendado=1");
+  redirectCampaign(formData, "agendado=1");
 }
 
 export async function createExperiment(formData: FormData) {
