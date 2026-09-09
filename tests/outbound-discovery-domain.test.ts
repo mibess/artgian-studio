@@ -3,6 +3,7 @@ import type { BusinessConfig } from "../src/config/business";
 import {
   buildDiscoverySeeds,
   extractPublicInstagramCandidate,
+  instagramUsernameFromGoogleWebResult,
   instagramUsernameFromHref,
   isLikelyCommercialInstagramProfile,
   isMassAudienceInstagramProfile,
@@ -54,6 +55,19 @@ describe("domínio da descoberta segura", () => {
     expect(instagramUsernameFromHref("/blog/")).toBeNull();
     expect(instagramUsernameFromHref("/p/ABC123/")).toBeNull();
     expect(instagramUsernameFromHref("https://www.instagram.com/perfil.valido/")).toBe("perfil.valido");
+  });
+
+  it("identifica perfis nos Resultados da Web do Maps sem confundir posts", () => {
+    expect(instagramUsernameFromGoogleWebResult({
+      text: "https://www.instagram.com › luaraanaildesigner Brodowski -SP (@LuaraaNailDesigner) - Instagram",
+    })).toBe("luaraanaildesigner");
+    expect(instagramUsernameFromGoogleWebResult({
+      href: "https://www.google.com/url?q=https%3A%2F%2Fwww.instagram.com%2Fstudio.teste%2F",
+    })).toBe("studio.teste");
+    expect(instagramUsernameFromGoogleWebResult({
+      href: "https://www.instagram.com/p/DARYmCCyjWI/",
+      text: "Banho de gel mais esmaltação em gel! | Instagram",
+    })).toBeNull();
   });
 
   it("alterna critérios, equilibra tipos e preserva exploração", () => {

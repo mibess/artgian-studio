@@ -302,6 +302,36 @@ export function instagramUsernameFromHref(href: string) {
   return username;
 }
 
+export function instagramUsernameFromGoogleWebResult(input: {
+  href?: string | null;
+  text?: string | null;
+}) {
+  const href = input.href?.trim();
+  if (href) {
+    const directUsername = instagramUsernameFromHref(href);
+    if (directUsername) return directUsername;
+    try {
+      const url = new URL(href, "https://www.google.com");
+      for (const parameter of ["q", "url", "u"]) {
+        const target = url.searchParams.get(parameter);
+        if (!target) continue;
+        const wrappedUsername = instagramUsernameFromHref(target);
+        if (wrappedUsername) return wrappedUsername;
+      }
+    } catch {
+      // O texto acessível ainda pode conter o perfil quando o Maps não expõe um href.
+    }
+  }
+
+  const text = input.text?.replace(/\s+/g, " ").trim() || "";
+  const explicitProfile = text.match(
+    /\(@([a-z0-9._]{1,30})\)\s*(?:[-–—|•]\s*)?Instagram\b/i,
+  );
+  if (!explicitProfile) return null;
+  const username = explicitProfile[1].toLocaleLowerCase("en-US");
+  return INSTAGRAM_RESERVED_PATHS.has(username) ? null : username;
+}
+
 function usefulProfileLines(mainText: string, username: string, name?: string) {
   const ignored = /^(follow|following|followers?|posts?|message|contact|seguir|seguindo|seguidores?|publica[cç][oõ]es|mensagem|contato|ver tradu[cç][aã]o)$/i;
   const identity = new Set([normalize(username), normalize(name || "")]);

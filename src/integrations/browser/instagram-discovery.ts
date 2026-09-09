@@ -3,6 +3,7 @@ import path from "node:path";
 import { chromium, type Page } from "playwright-core";
 import {
   extractPublicInstagramCandidate,
+  instagramUsernameFromGoogleWebResult,
   instagramUsernameFromHref,
   parseInstagramFollowerCount,
   type DiscoverySeed,
@@ -10,6 +11,7 @@ import {
   type PublicInstagramCandidate,
   type PublicLocalBusinessOpportunity,
 } from "../../features/outbound/discovery-domain";
+import { randomInteger } from "../../features/automation/human-pacing";
 import { pauseLikePerson, typeLikePerson } from "./human-pacing";
 
 const ALLOWED_HOSTS = new Set(["www.instagram.com", "instagram.com"]);
@@ -351,17 +353,108 @@ async function firstHref(page: Page, selectors: string[]) {
 }
 
 async function findInstagramOnCurrentPage(page: Page) {
-  const hrefs = await page.locator('a[href*="instagram.com"]').evaluateAll((anchors) =>
-    anchors.flatMap((anchor) => {
-      const href = anchor.getAttribute("href");
-      return href ? [href] : [];
-    }),
-  ).catch(() => [] as string[]);
-  for (const href of hrefs) {
-    const username = instagramUsernameFromHref(href);
+  const signals: Array<{ href?: string; text?: string }> = [];
+  for (const frame of page.frames()) {
+    const frameSignals = await frame.locator("a[href], button, [role='button']").evaluateAll((elements) =>
+      elements.flatMap((element) => {
+        const href = element.getAttribute("href") || undefined;
+        const text = [
+          element.getAttribute("aria-label"),
+          element.textContent,
+        ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+        const searchable = `${href || ""} ${text}`.toLocaleLowerCase("en-US");
+        return searchable.includes("instagram") ? [{ href, text }] : [];
+      }),
+    ).catch(() => [] as Array<{ href?: string; text?: string }>);
+    signals.push(...frameSignals);
+  }
+  for (const signal of signals) {
+    const username = instagramUsernameFromGoogleWebResult(signal);
     if (username) return username;
   }
   return null;
+}
+
+async function revealGoogleMapsWebResults(page: Page) {
+  const webResultsHeading = page.getByText(/^(Resultados da Web|Web results)$/i).first();
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (await webResultsHeading.isVisible().catch(() => false)) break;
+    const distance = randomInteger(320, 760);
+    const moved = await page.evaluate((distance) => {
+      const heading = document.querySelector("h1");
+      let current: Element | null = heading;
+      while (current) {
+        const style = window.getComputedStyle(current);
+        if (
+          current.scrollHeight > current.clientHeight + 80 &&
+          /(auto|scroll)/.test(style.overflowY)
+        ) {
+          const before = current.scrollTop;
+          current.scrollBy({ top: distance, behavior: "smooth" });
+          return current.scrollTop !== before;
+        }
+        current = current.parentElement;
+      }
+      return false;
+    }, distance).catch(() => false);
+    if (!moved) break;
+    await pauseLikePerson(page, {
+      minimumVariable: "DISCOVERY_MIN_SCROLL_PAUSE_SECONDS",
+      maximumVariable: "DISCOVERY_MAX_SCROLL_PAUSE_SECONDS",
+      defaultMinimumSeconds: 0.45,
+      defaultMaximumSeconds: 1.2,
+      absoluteMaximumSeconds: 4,
+    });
+  }
+  if (await webResultsHeading.isVisible().catch(() => false)) {
+    await webResultsHeading.scrollIntoViewIfNeeded().catch(() => undefined);
+    await pauseLikePerson(page, {
+      minimumVariable: "DISCOVERY_MIN_SCROLL_PAUSE_SECONDS",
+      maximumVariable: "DISCOVERY_MAX_SCROLL_PAUSE_SECONDS",
+      defaultMinimumSeconds: 0.45,
+      defaultMaximumSeconds: 1.2,
+      absoluteMaximumSeconds: 4,
+    });
+  }
+}
+
+export async function findInstagramOnGoogleMapsListing(page: Page) {
+  await revealGoogleMapsWebResults(page);
+  return findInstagramOnCurrentPage(page);
+}
+
+async function searchGoogleMapsLikePerson(page: Page, query: string) {
+  const fallbackUrl = `https://www.google.com/maps/search/${encodeURIComponent(query)}`;
+  await page.goto("https://www.google.com/maps/", {
+    waitUntil: "domcontentloaded",
+    timeout: 30_000,
+  });
+  if (!isGoogleMapsUrl(page.url())) {
+    throw new InstagramDiscoveryError("O Google Maps abriu uma página inesperada.", "rejected");
+  }
+  await pauseLikePerson(page, {
+    minimumVariable: "DISCOVERY_MIN_ACTION_DELAY_SECONDS",
+    maximumVariable: "DISCOVERY_MAX_ACTION_DELAY_SECONDS",
+    defaultMinimumSeconds: 2,
+    defaultMaximumSeconds: 5,
+  });
+  const searchInput = page.locator("#searchboxinput").first();
+  if (!await searchInput.isVisible().catch(() => false)) {
+    await page.goto(fallbackUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    return;
+  }
+  await searchInput.focus();
+  await searchInput.fill("");
+  await typeLikePerson(page, searchInput, query);
+  await pauseLikePerson(page, {
+    minimumVariable: "DISCOVERY_MIN_ACTION_DELAY_SECONDS",
+    maximumVariable: "DISCOVERY_MAX_ACTION_DELAY_SECONDS",
+    defaultMinimumSeconds: 1,
+    defaultMaximumSeconds: 3,
+  });
+  await searchInput.press("Enter");
+  await page.waitForURL(/google\.com\/maps\/(?:search|place)\//i, { timeout: 15_000 })
+    .catch(() => undefined);
 }
 
 export async function executeLocalBusinessDiscoveryOnPage(
@@ -382,8 +475,7 @@ export async function executeLocalBusinessDiscoveryOnPage(
     (input.excludedUsernames || []).map((username) => username.toLocaleLowerCase("en-US")),
   );
   const excludedMapsUrls = new Set(input.excludedLocalBusinessUrls || []);
-  const mapsSearchUrl = `https://www.google.com/maps/search/${encodeURIComponent(`${niche} em ${location}`)}`;
-  await page.goto(mapsSearchUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  await searchGoogleMapsLikePerson(page, `${niche} em ${location}`);
   if (!isGoogleMapsUrl(page.url())) {
     throw new InstagramDiscoveryError("O Google Maps redirecionou a busca para uma página inesperada.", "rejected");
   }
@@ -407,6 +499,15 @@ export async function executeLocalBusinessDiscoveryOnPage(
     if (profilesInspected >= maximumProfiles) break;
     const mapsUrl = new URL(rawMapsUrl, "https://www.google.com").toString();
     if (!isGoogleMapsUrl(mapsUrl) || excludedMapsUrls.has(mapsUrl)) continue;
+    if (profilesInspected > 0) {
+      await pauseLikePerson(page, {
+        minimumVariable: "DISCOVERY_MIN_SECONDS_BETWEEN_PROFILES",
+        maximumVariable: "DISCOVERY_MAX_SECONDS_BETWEEN_PROFILES",
+        defaultMinimumSeconds: 8,
+        defaultMaximumSeconds: 20,
+        absoluteMaximumSeconds: 90,
+      });
+    }
     await page.goto(mapsUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
     if (!isGoogleMapsUrl(page.url())) continue;
     await pauseLikePerson(page, {
@@ -430,7 +531,7 @@ export async function executeLocalBusinessDiscoveryOnPage(
       'button[aria-label^="Telefone:"]',
       'button[aria-label^="Phone:"]',
     ]);
-    let instagramUsername = await findInstagramOnCurrentPage(page);
+    let instagramUsername = await findInstagramOnGoogleMapsListing(page);
     const websiteHref = await firstHref(page, [
       'a[data-item-id="authority"]',
       'a[aria-label^="Site:"]',
@@ -439,6 +540,12 @@ export async function executeLocalBusinessDiscoveryOnPage(
     const websiteUrl = isSafePublicWebsiteUrl(websiteHref) ? websiteHref! : undefined;
 
     if (!instagramUsername && websiteUrl) {
+      await pauseLikePerson(page, {
+        minimumVariable: "DISCOVERY_MIN_ACTION_DELAY_SECONDS",
+        maximumVariable: "DISCOVERY_MAX_ACTION_DELAY_SECONDS",
+        defaultMinimumSeconds: 2,
+        defaultMaximumSeconds: 5,
+      });
       await page.goto(websiteUrl, { waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => undefined);
       if (isSafePublicWebsiteUrl(page.url())) {
         await pauseLikePerson(page, {
@@ -453,6 +560,12 @@ export async function executeLocalBusinessDiscoveryOnPage(
 
     if (instagramUsername) {
       if (excludedUsernames.has(instagramUsername)) continue;
+      await pauseLikePerson(page, {
+        minimumVariable: "DISCOVERY_MIN_ACTION_DELAY_SECONDS",
+        maximumVariable: "DISCOVERY_MAX_ACTION_DELAY_SECONDS",
+        defaultMinimumSeconds: 2,
+        defaultMaximumSeconds: 5,
+      });
       const candidate = await profileCandidateFromPage(
         page,
         instagramUsername,
