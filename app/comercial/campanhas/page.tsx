@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   AtSign as Instagram,
   Bot,
+  Building2,
   CalendarSearch,
   ExternalLink,
   PauseCircle,
@@ -16,7 +17,11 @@ import {
 } from "lucide-react";
 import { SubmitButton } from "../../components/PendingButton";
 import { getOperationsData, getOutboundProspects } from "../../../src/db/commercial";
-import { parseStoredDiscoveryTerms } from "../../../src/features/outbound/discovery-domain";
+import {
+  normalizeDiscoveryStrategy,
+  parseInstagramBaseProfiles,
+  parseStoredDiscoveryTerms,
+} from "../../../src/features/outbound/discovery-domain";
 import { OUTBOUND_PIPELINE_LABELS } from "../../../src/features/outbound/domain";
 import { EmptyState, PageHeader, StatusBadge, formatDateTime } from "../_components";
 import {
@@ -25,11 +30,11 @@ import {
   prepareOutboundProspectDraft,
   queueCampaignDiscoveryNow,
   queueOutboundFirstContact,
-  saveCampaignDiscoverySettings,
   saveOutboundProspectDraft,
   setCampaignDiscoveryEnabled,
   setOutboundCampaignEnabled,
 } from "../actions";
+import { DiscoverySettingsForm } from "./DiscoverySettingsForm";
 
 type SearchParams = {
   salvo?: string;
@@ -49,6 +54,12 @@ const policyLabels: Record<string, string> = {
   comment_private_reply: "Resposta privada a comentário",
 };
 
+const strategyLabels = {
+  instagram_search: "Termos no Instagram",
+  instagram_followers: "Seguidores de perfis-base",
+  local_business: "Empresas locais no Google Maps",
+} as const;
+
 function jobBelongsToCampaign(payload: string, campaignId: string) {
   try {
     return (JSON.parse(payload) as { campaignId?: string }).campaignId === campaignId;
@@ -62,7 +73,7 @@ export default async function CampaignsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const [{ campaigns, settings, jobs, discoveryRuns, discoveryQueryStats }, prospects, params] = await Promise.all([
+  const [{ campaigns, settings, jobs, discoveryRuns, discoveryQueryStats, localBusinessOpportunities }, prospects, params] = await Promise.all([
     getOperationsData(),
     getOutboundProspects(),
     searchParams,
@@ -127,7 +138,7 @@ export default async function CampaignsPage({
           <div>
             <h2 className="text-sm font-bold text-[#294f40]">Descoberta segura e contato separado</h2>
             <p className="mt-1 max-w-4xl text-[10px] leading-5 text-[#5b756a]">
-              O worker pesquisa critérios aprovados, lê somente sinais públicos, elimina duplicados e grava os perfis para revisão. Descobrir ou qualificar um perfil nunca envia DM.
+              Escolha entre termos no Instagram, seguidores de perfis-base ou empresas no Google Maps. O worker lê sinais públicos, elimina duplicados e grava tudo para revisão; descobrir uma oportunidade nunca envia DM.
             </p>
           </div>
         </div>
@@ -153,6 +164,9 @@ export default async function CampaignsPage({
                   <h2 className="mt-5 text-base font-semibold text-[#294653]">{campaign.name}</h2>
                   <p className="mt-1 text-[10px] text-[#859197]">{campaign.source} · {campaign.segment || "Sem segmento"}</p>
                   <div className="mt-4 flex flex-wrap gap-2 text-[9px] font-bold">
+                    <span className="rounded-full bg-[#e8eef2] px-2.5 py-1 text-[#4e6977]">
+                      {strategyLabels[normalizeDiscoveryStrategy(campaign.discoveryStrategy)]}
+                    </span>
                     <span className={`rounded-full px-2.5 py-1 ${campaign.discoveryEnabled ? "bg-[#d8ede4] text-[#2b7258]" : "bg-[#edf0ed] text-[#65746c]"}`}>
                       {campaign.discoveryEnabled ? "Busca automática ativa" : "Busca automática inativa"}
                     </span>
@@ -202,6 +216,15 @@ export default async function CampaignsPage({
               </label>
             </div>
             <label className="block">
+              <span className="mb-1.5 block text-[8px] font-bold uppercase tracking-wide text-white/45">Estratégia inicial</span>
+              <select name="discoveryStrategy" defaultValue="instagram_search" className="h-10 w-full rounded-xl border border-white/10 bg-[#294c5c] px-3 text-xs text-white">
+                <option value="instagram_search">Termos no Instagram</option>
+                <option value="instagram_followers">Seguidores de perfis-base</option>
+                <option value="local_business">Empresas locais no Google Maps</option>
+              </select>
+              <span className="mt-1.5 block text-[8px] leading-3 text-white/45">Depois de criar, complete os critérios no cartão da campanha.</span>
+            </label>
+            <label className="block">
               <span className="mb-1.5 block text-[8px] font-bold uppercase tracking-wide text-white/45">Janela operacional</span>
               <input name="operatingHours" defaultValue="09:00-18:00" pattern="[0-9]{2}:[0-9]{2}-[0-9]{2}:[0-9]{2}" className="h-10 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-xs text-white" />
             </label>
@@ -215,7 +238,7 @@ export default async function CampaignsPage({
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#2f7c60]">Motor de descoberta</p>
             <h2 className="mt-1 text-base font-semibold">Critérios e recorrência</h2>
-            <p className="mt-1 max-w-3xl text-[10px] leading-5 text-[#7c8a90]">Termos separados por vírgula ou linha. A cada rodada, o motor alterna os critérios, reserva 30% para exploração e evita rever recentemente os mesmos perfis.</p>
+            <p className="mt-1 max-w-3xl text-[10px] leading-5 text-[#7c8a90]">Cada campanha usa uma estratégia clara. Os campos mudam conforme a escolha e o motor evita rever recentemente os mesmos perfis ou estabelecimentos.</p>
           </div>
           <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-[9px] font-bold ${discoveryPaused ? "bg-[#fff0c9] text-[#846214]" : "bg-[#d8ede4] text-[#2b7258]"}`}>
             <CalendarSearch size={13} />{discoveryPaused ? "Descoberta pausada" : "Descoberta liberada"}
@@ -251,24 +274,21 @@ export default async function CampaignsPage({
                     <div><h3 className="text-sm font-bold text-[#294653]">{campaign.name}</h3><p className="mt-1 text-[9px] text-[#859197]">{running ? "Busca em execução" : nextPending ? `Próxima busca agendada para ${formatDateTime(nextPending.scheduledAt)}` : "Nenhuma busca pendente"}</p></div>
                     <span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ${campaign.discoveryEnabled ? "bg-[#d8ede4] text-[#2b7258]" : "bg-[#e7e9e6] text-[#69756f]"}`}>{campaign.discoveryEnabled ? "Ativa" : "Inativa"}</span>
                   </div>
-                  <form action={saveCampaignDiscoverySettings} className="mt-4 space-y-3">
-                    <input type="hidden" name="campaignId" value={campaign.id} />
-                    <input type="hidden" name="discoveryEnabled" value={campaign.discoveryEnabled ? "true" : "false"} />
-                    <label className="block">
-                      <span className="mb-1 block text-[8px] font-bold uppercase tracking-wide text-[#718088]">Palavras-chave</span>
-                      <textarea name="discoveryKeywords" rows={2} defaultValue={parseStoredDiscoveryTerms(campaign.discoveryKeywords).join(", ")} placeholder="presente personalizado, decoração geek" className="w-full resize-y rounded-xl border border-[#dfe2de] bg-white p-3 text-[10px] leading-4 outline-none" />
-                    </label>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="block"><span className="mb-1 block text-[8px] font-bold uppercase tracking-wide text-[#718088]">Hashtags</span><input name="discoveryHashtags" defaultValue={parseStoredDiscoveryTerms(campaign.discoveryHashtags).join(", ")} placeholder="decoracaogeek" className="h-10 w-full rounded-xl border border-[#dfe2de] bg-white px-3 text-[10px] outline-none" /></label>
-                      <label className="block"><span className="mb-1 block text-[8px] font-bold uppercase tracking-wide text-[#718088]">Regiões</span><input name="discoveryLocations" defaultValue={parseStoredDiscoveryTerms(campaign.discoveryLocations).join(", ")} placeholder="Brasil, São Paulo" className="h-10 w-full rounded-xl border border-[#dfe2de] bg-white px-3 text-[10px] outline-none" /></label>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <label className="block"><span className="mb-1 block text-[8px] font-bold uppercase tracking-wide text-[#718088]">Perfis/dia</span><input name="discoveryDailyLimit" type="number" min="1" max="30" defaultValue={campaign.discoveryDailyLimit} className="h-10 w-full rounded-xl border border-[#dfe2de] bg-white px-3 text-[10px] outline-none" /></label>
-                      <label className="block"><span className="mb-1 block text-[8px] font-bold uppercase tracking-wide text-[#718088]">Score mínimo</span><input name="discoveryMinimumScore" type="number" min="0" max="100" defaultValue={campaign.discoveryMinimumScore} className="h-10 w-full rounded-xl border border-[#dfe2de] bg-white px-3 text-[10px] outline-none" /></label>
-                      <label className="block"><span className="mb-1 block text-[8px] font-bold uppercase tracking-wide text-[#718088]">Intervalo (h)</span><input name="discoveryIntervalHours" type="number" min="6" max="168" defaultValue={campaign.discoveryIntervalHours} className="h-10 w-full rounded-xl border border-[#dfe2de] bg-white px-3 text-[10px] outline-none" /></label>
-                    </div>
-                    <SubmitButton pendingLabel="Salvando…" className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#193848] px-4 py-2.5 text-[10px] font-bold text-white disabled:opacity-60">Salvar critérios</SubmitButton>
-                  </form>
+                  <DiscoverySettingsForm
+                    campaignId={campaign.id}
+                    enabled={campaign.discoveryEnabled}
+                    strategy={normalizeDiscoveryStrategy(campaign.discoveryStrategy)}
+                    keywords={parseStoredDiscoveryTerms(campaign.discoveryKeywords)}
+                    hashtags={parseStoredDiscoveryTerms(campaign.discoveryHashtags)}
+                    locations={parseStoredDiscoveryTerms(campaign.discoveryLocations)}
+                    baseProfiles={parseInstagramBaseProfiles(parseStoredDiscoveryTerms(campaign.discoveryBaseProfiles).join("\n"))}
+                    minimumBaseFollowers={campaign.discoveryMinimumBaseFollowers}
+                    localNiche={campaign.discoveryLocalNiche || ""}
+                    localLocation={campaign.discoveryLocalLocation || ""}
+                    dailyLimit={campaign.discoveryDailyLimit}
+                    minimumScore={campaign.discoveryMinimumScore}
+                    intervalHours={campaign.discoveryIntervalHours}
+                  />
                   <form action={setCampaignDiscoveryEnabled} className="mt-2">
                     <input type="hidden" name="campaignId" value={campaign.id} />
                     <input type="hidden" name="enabled" value={campaign.discoveryEnabled ? "false" : "true"} />
@@ -280,7 +300,7 @@ export default async function CampaignsPage({
                       <SubmitButton disabled={running || discoveryPaused} pendingLabel="Agendando…" className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#bdd6ca] bg-white px-4 py-2.5 text-[10px] font-bold text-[#2f7c60] disabled:opacity-40"><Play size={12} />Buscar agora</SubmitButton>
                     </form>
                   )}
-                  {latestRun && <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[9px] leading-4 text-[#6d7c82]"><strong className="text-[#415967]">Última execução:</strong> {latestRun.status === "completed" ? `${latestRun.profilesCreated} novos de ${latestRun.profilesInspected} analisados` : latestRun.status === "failed" ? `falhou — ${latestRun.error || "verifique o worker"}` : "em andamento"}.</div>}
+                  {latestRun && <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[9px] leading-4 text-[#6d7c82]"><strong className="text-[#415967]">Última execução:</strong> {latestRun.status === "completed" ? `${latestRun.profilesCreated} perfis e ${latestRun.websiteOpportunitiesCreated} oportunidades de site, em ${latestRun.profilesInspected} analisados` : latestRun.status === "failed" ? `falhou — ${latestRun.error || "verifique o worker"}` : "em andamento"}.</div>}
                   {campaignQueryStats.length > 0 && (
                     <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[9px] leading-4 text-[#6d7c82]">
                       <strong className="text-[#415967]">Desempenho dos critérios</strong>
@@ -297,6 +317,35 @@ export default async function CampaignsPage({
           </div>
         )}
       </section>
+
+      {localBusinessOpportunities.length > 0 && (
+        <section className="mt-5 overflow-hidden rounded-[22px] border border-[#ead9a6] bg-white">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f0e6c8] bg-[#fffaf0] px-5 py-4">
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-[13px] bg-[#fff0c9] text-[#8b6718]"><Building2 size={18} /></span>
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#9b7a2e]">Presença digital local</p><h2 className="text-base font-semibold">{localBusinessOpportunities.length} empresas para revisão</h2></div>
+            </div>
+            <span className="text-[9px] text-[#806f43]">Sem contato automático</span>
+          </header>
+          <div className="grid gap-px bg-[#eee9dd] md:grid-cols-2 xl:grid-cols-3">
+            {localBusinessOpportunities.map((opportunity) => (
+              <article className="bg-white p-5" key={opportunity.id}>
+                <span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ${opportunity.status === "website_opportunity" ? "bg-[#fff0c9] text-[#846214]" : "bg-[#e8eef2] text-[#526b78]"}`}>
+                  {opportunity.status === "website_opportunity" ? "Oportunidade de criação de site" : "Site encontrado · Instagram não localizado"}
+                </span>
+                <h3 className="mt-3 text-sm font-bold text-[#294653]">{opportunity.businessName}</h3>
+                <p className="mt-1 text-[9px] text-[#7c8a90]">{opportunity.niche} · {opportunity.location}</p>
+                {opportunity.address && <p className="mt-3 text-[9px] leading-4 text-[#5f7078]">{opportunity.address}</p>}
+                {opportunity.phone && <p className="mt-1 text-[9px] font-bold text-[#5f7078]">{opportunity.phone}</p>}
+                <div className="mt-4 flex flex-wrap gap-3 text-[9px] font-bold">
+                  <Link href={opportunity.googleMapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#2f7c60]">Abrir no Maps <ExternalLink size={10} /></Link>
+                  {opportunity.websiteUrl && <Link href={opportunity.websiteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#587795]">Abrir site <ExternalLink size={10} /></Link>}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[.7fr_1.3fr]">
         <section className="h-fit rounded-[22px] border border-[#e1e1db] bg-white p-5">
@@ -323,7 +372,7 @@ export default async function CampaignsPage({
                 <article className="p-5" key={prospect.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold text-[#294653]">{prospect.name || `@${prospect.instagramUsername}`}</p><p className="mt-1 text-[10px] text-[#859197]">@{prospect.instagramUsername} · {campaign.name} · {prospect.funnelType === "partner" ? "Parceiros" : "Clientes"}</p></div><span className={`rounded-full px-3 py-1.5 text-[9px] font-bold ${prospect.contactPolicy === "inbound_window" ? "bg-[#d8ede4] text-[#2b7258]" : "bg-[#fff0c9] text-[#846214]"}`}>{policyLabels[prospect.contactPolicy] || prospect.contactPolicy}</span></div>
                   <div className="mt-3 flex flex-wrap gap-2 text-[9px]">
-                    {prospect.discoverySource === "instagram_browser" && <span className="inline-flex items-center gap-1 rounded-full bg-[#e4f2ec] px-2.5 py-1 font-bold text-[#2f7c60]"><Sparkles size={10} />Descoberto automaticamente{prospect.discoveryQuery ? ` · ${prospect.discoveryQuery}` : ""}</span>}
+                    {prospect.discoverySource !== "manual" && <span className="inline-flex items-center gap-1 rounded-full bg-[#e4f2ec] px-2.5 py-1 font-bold text-[#2f7c60]"><Sparkles size={10} />Descoberto automaticamente{prospect.discoveryQuery ? ` · ${prospect.discoveryQuery}` : ""}</span>}
                     <span className="rounded-full bg-[#edf0ed] px-2.5 py-1 font-bold text-[#52656d]">ICP {prospect.icpScore}</span><span className="rounded-full bg-[#edf0ed] px-2.5 py-1 font-bold text-[#52656d]">{OUTBOUND_PIPELINE_LABELS[prospect.pipelineStage] || prospect.pipelineStage}</span><span className="rounded-full bg-[#edf0ed] px-2.5 py-1 font-bold text-[#52656d]">Prioridade {prospect.priority === "high" ? "alta" : prospect.priority === "low" ? "baixa" : "normal"}</span>{prospect.experimentVariant && <span className="rounded-full bg-[#e8e1f2] px-2.5 py-1 font-bold text-[#6b5481]">Teste {prospect.experimentVariant === "control" ? "controle" : "variante"}</span>}
                   </div>
                   <p className="mt-3 text-[10px] leading-5 text-[#657780]">{prospect.qualificationReason}</p>

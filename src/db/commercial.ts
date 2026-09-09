@@ -15,6 +15,7 @@ import {
   integrationStates,
   jobs,
   leads,
+  localBusinessOpportunities,
   messages,
   outboundProspects,
   outboundEvents,
@@ -316,7 +317,7 @@ export async function getOrdersOverview() {
 
 export async function getOperationsData() {
   const db = await getCommercialDb();
-  const [campaignRows, experimentRows, jobRows, exceptionRows, usageRows, settingRows, leadRows, orderRows, integrationRows, outboundEventRows, discoveryRunRows, discoveryQueryStatRows] = await Promise.all([
+  const [campaignRows, experimentRows, jobRows, exceptionRows, usageRows, settingRows, leadRows, orderRows, integrationRows, outboundEventRows, discoveryRunRows, discoveryQueryStatRows, localBusinessOpportunityRows] = await Promise.all([
     db.select().from(campaigns).orderBy(desc(campaigns.updatedAt)),
     db.select().from(experiments).orderBy(desc(experiments.createdAt)),
     db.select().from(jobs).orderBy(desc(jobs.createdAt)),
@@ -329,8 +330,9 @@ export async function getOperationsData() {
     db.select().from(outboundEvents).orderBy(desc(outboundEvents.occurredAt)),
     db.select().from(discoveryRuns).orderBy(desc(discoveryRuns.startedAt)),
     db.select().from(discoveryQueryStats).orderBy(desc(discoveryQueryStats.lastSearchedAt)),
+    db.select().from(localBusinessOpportunities).orderBy(desc(localBusinessOpportunities.createdAt)),
   ]);
-  return { campaigns: campaignRows, experiments: experimentRows, jobs: jobRows, exceptions: exceptionRows, aiUsage: usageRows, leads: leadRows, orders: orderRows, integrations: integrationRows, outboundEvents: outboundEventRows, discoveryRuns: discoveryRunRows, discoveryQueryStats: discoveryQueryStatRows, settings: Object.fromEntries(settingRows.map((row) => [row.key, row.value])) };
+  return { campaigns: campaignRows, experiments: experimentRows, jobs: jobRows, exceptions: exceptionRows, aiUsage: usageRows, leads: leadRows, orders: orderRows, integrations: integrationRows, outboundEvents: outboundEventRows, discoveryRuns: discoveryRunRows, discoveryQueryStats: discoveryQueryStatRows, localBusinessOpportunities: localBusinessOpportunityRows, settings: Object.fromEntries(settingRows.map((row) => [row.key, row.value])) };
 }
 
 export async function getOutboundProspects() {

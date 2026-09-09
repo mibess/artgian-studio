@@ -32,7 +32,7 @@ test("prospecção prepara e revisa rascunho sem enviar mensagem", async ({ page
   await expect(page.getByText("Nenhuma mensagem externa foi enviada.")).toBeVisible();
 
   await page.locator('select[name="campaignId"]').selectOption({ label: `Campanha E2E ${suffix}` });
-  await page.getByPlaceholder("@perfil").fill(`prospecto.e2e.${suffix}`.slice(0, 30));
+  await page.getByPlaceholder("@perfil", { exact: true }).fill(`prospecto.e2e.${suffix}`.slice(0, 30));
   await page.getByPlaceholder("Categoria pública").fill("Arquitetura");
   await page.getByPlaceholder("Localização pública").fill("Brasil");
   await page.getByPlaceholder("Sinal público verdadeiro").fill("seu projeto recente de organização de ambientes");

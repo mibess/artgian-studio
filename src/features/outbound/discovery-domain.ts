@@ -26,8 +26,16 @@ const INSTAGRAM_RESERVED_PATHS = new Set([
   "web",
 ]);
 
+export const DISCOVERY_STRATEGIES = [
+  "instagram_search",
+  "instagram_followers",
+  "local_business",
+] as const;
+
+export type DiscoveryStrategy = (typeof DISCOVERY_STRATEGIES)[number];
+
 export type DiscoverySeed = {
-  kind: "keyword" | "hashtag" | "location";
+  kind: "keyword" | "hashtag" | "location" | "base_profile" | "local_business";
   value: string;
 };
 
@@ -52,6 +60,19 @@ export type PublicInstagramCandidate = {
   discoveryQuery: string;
 };
 
+export type PublicLocalBusinessOpportunity = {
+  businessName: string;
+  niche: string;
+  location: string;
+  address?: string;
+  phone?: string;
+  googleMapsUrl: string;
+  websiteUrl?: string;
+  instagramUsername?: string;
+  status: "website_opportunity" | "instagram_not_found";
+  notes?: string;
+};
+
 function normalize(value: string) {
   return value
     .normalize("NFD")
@@ -74,6 +95,50 @@ export function parseStoredDiscoveryTerms(value: string | null | undefined) {
 
 export function parseDiscoveryTermsInput(value: string, maximum = 12) {
   return uniqueDiscoveryTerms(value.split(/[,;\n]/)).slice(0, maximum);
+}
+
+export function normalizeDiscoveryStrategy(value: unknown): DiscoveryStrategy {
+  return DISCOVERY_STRATEGIES.includes(value as DiscoveryStrategy)
+    ? value as DiscoveryStrategy
+    : "instagram_search";
+}
+
+export function parseInstagramBaseProfiles(value: string, maximum = 8) {
+  const handles = value.split(/[,;\n]/).map((item) => {
+    const trimmed = item.trim();
+    const fromUrl = instagramUsernameFromHref(trimmed);
+    return (fromUrl || trimmed.replace(/^@/, "")).toLocaleLowerCase("en-US");
+  });
+  return [...new Set(handles)]
+    .filter((handle) => /^[a-z0-9._]{1,30}$/.test(handle))
+    .slice(0, maximum);
+}
+
+export function parseInstagramFollowerCount(value: string | null | undefined) {
+  if (!value) return null;
+  const normalized = normalize(value).replace(/\u00a0/g, " ");
+  const match = normalized.match(
+    /([\d.,]+)\s*(bilhao|bilhoes|bi|billion|bil|milhao|milhoes|mi|million|m|mil|thousand|k)?\s+(?:followers?|seguidores?)/i,
+  );
+  if (!match) return null;
+  let numeric = match[1];
+  const suffix = match[2] || "";
+  const decimalSuffix = /^(bilhao|bilhoes|bi|billion|bil|milhao|milhoes|mi|million|m|mil|thousand|k)$/i.test(suffix);
+  if (decimalSuffix) {
+    numeric = numeric.replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".");
+  } else {
+    numeric = numeric.replace(/[.,](?=\d{3}(?:\D|$))/g, "").replace(",", ".");
+  }
+  const base = Number(numeric);
+  if (!Number.isFinite(base)) return null;
+  const multiplier = /^(bilhao|bilhoes|bi|billion|bil)$/i.test(suffix)
+    ? 1_000_000_000
+    : /^(milhao|milhoes|mi|million|m)$/i.test(suffix)
+      ? 1_000_000
+      : /^(mil|thousand|k)$/i.test(suffix)
+        ? 1_000
+        : 1;
+  return Math.round(base * multiplier);
 }
 
 function uniqueDiscoveryTerms(values: string[]) {
@@ -130,7 +195,13 @@ export function discoverySeedKey(seed: DiscoverySeed) {
 }
 
 function balancedRotatedSeeds(seeds: DiscoverySeed[], cursor: number) {
-  const kinds: DiscoverySeed["kind"][] = ["hashtag", "keyword", "location"];
+  const kinds: DiscoverySeed["kind"][] = [
+    "hashtag",
+    "keyword",
+    "location",
+    "base_profile",
+    "local_business",
+  ];
   const safeCursor = Number.isFinite(cursor) ? Math.max(0, Math.trunc(cursor)) : 0;
   const orderedKinds = kinds.map((_, index) => kinds[(index + safeCursor) % kinds.length]);
   const buckets = new Map(
@@ -208,7 +279,12 @@ export function selectDiscoverySeedsForRun(input: {
 export function instagramUsernameFromHref(href: string) {
   let pathname: string;
   try {
-    pathname = new URL(href, "https://www.instagram.com").pathname;
+    const url = new URL(href, "https://www.instagram.com");
+    if (
+      /^(?:https?:)?\/\//i.test(href) &&
+      !["instagram.com", "www.instagram.com"].includes(url.hostname.toLocaleLowerCase("en-US"))
+    ) return null;
+    pathname = url.pathname;
   } catch {
     return null;
   }

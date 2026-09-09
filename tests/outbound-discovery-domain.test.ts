@@ -6,6 +6,8 @@ import {
   instagramUsernameFromHref,
   isLikelyCommercialInstagramProfile,
   parseDiscoveryTermsInput,
+  parseInstagramBaseProfiles,
+  parseInstagramFollowerCount,
   selectDiscoverySeedsForRun,
 } from "../src/features/outbound/discovery-domain";
 
@@ -33,6 +35,16 @@ describe("domínio da descoberta segura", () => {
     expect(seeds[0]).toEqual({ kind: "hashtag", value: "feitoem3d" });
     expect(seeds).toContainEqual({ kind: "keyword", value: "presente personalizado" });
     expect(seeds).toContainEqual({ kind: "location", value: "Brasil" });
+  });
+
+  it("normaliza perfis-base e interpreta contagens públicas de seguidores", () => {
+    expect(parseInstagramBaseProfiles(
+      "@Perfil.Grande\nhttps://www.instagram.com/outra_referencia/\n@inválido",
+    )).toEqual(["perfil.grande", "outra_referencia"]);
+    expect(parseInstagramFollowerCount("1,2 mi seguidores")).toBe(1_200_000);
+    expect(parseInstagramFollowerCount("625 mil seguidores")).toBe(625_000);
+    expect(parseInstagramFollowerCount("1,234,567 followers")).toBe(1_234_567);
+    expect(parseInstagramFollowerCount("contagem indisponível")).toBeNull();
   });
 
   it("aceita somente links que representam perfis", () => {

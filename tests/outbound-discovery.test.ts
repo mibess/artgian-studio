@@ -179,6 +179,89 @@ describe("execução segura da descoberta", () => {
     expect(job.status).toBe("completed");
   });
 
+  it("registra empresas sem site como oportunidade local sem criar contato", async () => {
+    const [{ getCommercialDb }, schema, { executeCampaignDiscovery }] = await Promise.all([
+      import("../src/db/commercial"),
+      import("../db/schema"),
+      import("../src/features/outbound/discovery"),
+    ]);
+    const db = await getCommercialDb();
+    const now = new Date().toISOString();
+    await db.insert(schema.campaigns).values({
+      id: "local-discovery-campaign",
+      name: "Mecânicas de Brodowski",
+      source: "Google Maps",
+      segment: "Mecânicas",
+      funnelType: "partner",
+      status: "active",
+      discoveryEnabled: true,
+      discoveryStrategy: "local_business",
+      discoveryLocalNiche: "Mecânica automotiva",
+      discoveryLocalLocation: "Brodowski, SP",
+      discoveryDailyLimit: 5,
+      discoveryMinimumScore: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.jobs).values({
+      id: "local-discovery-job",
+      type: "discover_prospects",
+      payload: JSON.stringify({ campaignId: "local-discovery-campaign" }),
+      status: "running",
+      scheduledAt: now,
+      startedAt: now,
+      createdAt: now,
+    });
+    let receivedStrategy = "";
+    const result = await executeCampaignDiscovery(
+      { jobId: "local-discovery-job", campaignId: "local-discovery-campaign" },
+      {
+        discover: async (input) => {
+          receivedStrategy = input.strategy;
+          expect(input.localNiche).toBe("Mecânica automotiva");
+          expect(input.localLocation).toBe("Brodowski, SP");
+          expect(input.seeds).toEqual([{
+            kind: "local_business",
+            value: "Mecânica automotiva em Brodowski, SP",
+          }]);
+          return {
+            queriesScanned: 1,
+            profilesInspected: 1,
+            candidates: [],
+            localOpportunities: [{
+              businessName: "Auto Mecânica Exemplo",
+              niche: "Mecânica automotiva",
+              location: "Brodowski, SP",
+              address: "Rua Teste, 10",
+              phone: "(16) 3000-0000",
+              googleMapsUrl: "https://www.google.com/maps/place/auto-mecanica-exemplo",
+              status: "website_opportunity" as const,
+            }],
+          };
+        },
+      },
+    );
+
+    expect(receivedStrategy).toBe("local_business");
+    expect(result).toMatchObject({
+      status: "completed",
+      created: 0,
+      websiteOpportunitiesCreated: 1,
+    });
+    const opportunities = await db.select().from(schema.localBusinessOpportunities);
+    expect(opportunities).toHaveLength(1);
+    expect(opportunities[0]).toMatchObject({
+      businessName: "Auto Mecânica Exemplo",
+      status: "website_opportunity",
+      websiteUrl: null,
+    });
+    const outboundJobs = await db
+      .select()
+      .from(schema.jobs)
+      .where(eq(schema.jobs.type, "send_outbound"));
+    expect(outboundJobs).toHaveLength(0);
+  });
+
   it("não consome descoberta quando o executor local não está disponível", async () => {
     const [{ getCommercialDb }, schema, { runWorkerOnce }] = await Promise.all([
       import("../src/db/commercial"),

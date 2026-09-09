@@ -325,9 +325,14 @@ export const campaigns = sqliteTable("campaigns", {
   status: text("status").notNull().default("draft"),
   outboundEnabled: integer("outbound_enabled", { mode: "boolean" }).notNull().default(false),
   discoveryEnabled: integer("discovery_enabled", { mode: "boolean" }).notNull().default(false),
+  discoveryStrategy: text("discovery_strategy").notNull().default("instagram_search"),
   discoveryKeywords: text("discovery_keywords").notNull().default("[]"),
   discoveryHashtags: text("discovery_hashtags").notNull().default("[]"),
   discoveryLocations: text("discovery_locations").notNull().default("[]"),
+  discoveryBaseProfiles: text("discovery_base_profiles").notNull().default("[]"),
+  discoveryMinimumBaseFollowers: integer("discovery_minimum_base_followers").notNull().default(500000),
+  discoveryLocalNiche: text("discovery_local_niche"),
+  discoveryLocalLocation: text("discovery_local_location"),
   discoveryDailyLimit: integer("discovery_daily_limit").notNull().default(10),
   discoveryMinimumScore: integer("discovery_minimum_score").notNull().default(40),
   discoveryIntervalHours: integer("discovery_interval_hours").notNull().default(24),
@@ -401,6 +406,7 @@ export const discoveryRuns = sqliteTable(
     skippedDuplicates: integer("skipped_duplicates").notNull().default(0),
     skippedBlocked: integer("skipped_blocked").notNull().default(0),
     skippedLowScore: integer("skipped_low_score").notNull().default(0),
+    websiteOpportunitiesCreated: integer("website_opportunities_created").notNull().default(0),
     error: text("error"),
     startedAt: text("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     finishedAt: text("finished_at"),
@@ -408,6 +414,39 @@ export const discoveryRuns = sqliteTable(
   (table) => [
     index("discovery_runs_campaign_idx").on(table.campaignId, table.startedAt),
     index("discovery_runs_status_idx").on(table.status),
+  ],
+);
+
+export const localBusinessOpportunities = sqliteTable(
+  "local_business_opportunities",
+  {
+    id: text("id").primaryKey(),
+    campaignId: text("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    businessName: text("business_name").notNull(),
+    niche: text("niche").notNull(),
+    location: text("location").notNull(),
+    address: text("address"),
+    phone: text("phone"),
+    googleMapsUrl: text("google_maps_url").notNull(),
+    websiteUrl: text("website_url"),
+    instagramUsername: text("instagram_username"),
+    status: text("status").notNull().default("website_opportunity"),
+    notes: text("notes"),
+    reviewedAt: text("reviewed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("local_business_opportunities_campaign_maps_unique").on(
+      table.campaignId,
+      table.googleMapsUrl,
+    ),
+    index("local_business_opportunities_status_idx").on(
+      table.status,
+      table.createdAt,
+    ),
   ],
 );
 

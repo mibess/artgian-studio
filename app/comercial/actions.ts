@@ -14,7 +14,12 @@ import { runInstagramMaintenance } from "../../src/integrations/instagram/mainte
 import { canonicalInstagramUsername } from "../../src/features/leads/domain";
 import { isInstagramReplyWindowOpen } from "../../src/integrations/instagram/send";
 import { assignExperimentVariant, buildSafeOutboundOpening, isValidOutboundTransition, OUTBOUND_FUNNELS, OUTBOUND_PIPELINES, scorePublicProfile, type OutboundFunnel } from "../../src/features/outbound/domain";
-import { parseDiscoveryTermsInput } from "../../src/features/outbound/discovery-domain";
+import {
+  DISCOVERY_STRATEGIES,
+  normalizeDiscoveryStrategy,
+  parseDiscoveryTermsInput,
+  parseInstagramBaseProfiles,
+} from "../../src/features/outbound/discovery-domain";
 import { cancelPendingCampaignDiscovery, enqueueCampaignDiscovery } from "../../src/features/outbound/discovery";
 import { generateOutboundOpening } from "../../src/integrations/openai/conversation-engine";
 import { requireAdminAccess } from "../../src/auth/admin";
@@ -115,7 +120,13 @@ export async function createCampaign(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const source = String(formData.get("source") || "").trim();
   const segment = String(formData.get("segment") || "").trim();
-  const funnelType = String(formData.get("funnelType") || "consumer");
+  const discoveryStrategyInput = String(formData.get("discoveryStrategy") || "instagram_search");
+  if (!DISCOVERY_STRATEGIES.includes(discoveryStrategyInput as (typeof DISCOVERY_STRATEGIES)[number])) {
+    redirect("/comercial/campanhas?erro=Estratégia+de+busca+inválida");
+  }
+  const discoveryStrategy = normalizeDiscoveryStrategy(discoveryStrategyInput);
+  const requestedFunnelType = String(formData.get("funnelType") || "consumer");
+  const funnelType = discoveryStrategy === "local_business" ? "partner" : requestedFunnelType;
   const requestedDailyLimit = Number(formData.get("dailyLimit") || 5);
   const dailyLimit = Math.min(30, Math.max(1, Math.trunc(requestedDailyLimit)));
   const operatingHours = String(formData.get("operatingHours") || "09:00-18:00").trim();
@@ -148,6 +159,7 @@ export async function createCampaign(formData: FormData) {
       source,
       segment: segment || null,
       funnelType,
+      discoveryStrategy,
       dailyLimit,
       operatingHours,
       operatingTimezone: process.env.OPERATING_TIMEZONE || "America/Sao_Paulo",
@@ -162,7 +174,7 @@ export async function createCampaign(formData: FormData) {
       action: "campaign_created",
       entityType: "campaign",
       entityId: id,
-      metadata: JSON.stringify({ outboundEnabled: false }),
+      metadata: JSON.stringify({ outboundEnabled: false, discoveryStrategy }),
       createdAt: now,
     });
   });
@@ -174,9 +186,18 @@ export async function saveCampaignDiscoverySettings(formData: FormData) {
   await requireAdminAccess();
   const campaignId = String(formData.get("campaignId") || "");
   const discoveryEnabled = String(formData.get("discoveryEnabled") || "false") === "true";
+  const strategyInput = String(formData.get("discoveryStrategy") || "instagram_search");
+  if (!DISCOVERY_STRATEGIES.includes(strategyInput as (typeof DISCOVERY_STRATEGIES)[number])) {
+    redirect("/comercial/campanhas?erro=Estratégia+de+busca+inválida");
+  }
+  const discoveryStrategy = normalizeDiscoveryStrategy(strategyInput);
   const keywords = parseDiscoveryTermsInput(String(formData.get("discoveryKeywords") || ""));
   const hashtags = parseDiscoveryTermsInput(String(formData.get("discoveryHashtags") || ""));
   const locations = parseDiscoveryTermsInput(String(formData.get("discoveryLocations") || ""), 8);
+  const baseProfiles = parseInstagramBaseProfiles(String(formData.get("discoveryBaseProfiles") || ""));
+  const localNiche = String(formData.get("discoveryLocalNiche") || "").trim().slice(0, 120);
+  const localLocation = String(formData.get("discoveryLocalLocation") || "").trim().slice(0, 120);
+  const rawMinimumBaseFollowers = Number(formData.get("discoveryMinimumBaseFollowers") || 500_000);
   const rawDailyLimit = Number(formData.get("discoveryDailyLimit") || 10);
   const rawMinimumScore = Number(formData.get("discoveryMinimumScore") || 40);
   const rawIntervalHours = Number(formData.get("discoveryIntervalHours") || 24);
@@ -184,13 +205,24 @@ export async function saveCampaignDiscoverySettings(formData: FormData) {
     !campaignId ||
     !Number.isFinite(rawDailyLimit) ||
     !Number.isFinite(rawMinimumScore) ||
-    !Number.isFinite(rawIntervalHours)
+    !Number.isFinite(rawIntervalHours) ||
+    !Number.isFinite(rawMinimumBaseFollowers)
   ) {
     redirect("/comercial/campanhas?erro=Configuração+de+descoberta+inválida");
   }
   const discoveryDailyLimit = Math.min(30, Math.max(1, Math.trunc(rawDailyLimit)));
   const discoveryMinimumScore = Math.min(100, Math.max(0, Math.trunc(rawMinimumScore)));
   const discoveryIntervalHours = Math.min(168, Math.max(6, Math.trunc(rawIntervalHours)));
+  const discoveryMinimumBaseFollowers = Math.min(
+    1_000_000_000,
+    Math.max(10_000, Math.trunc(rawMinimumBaseFollowers)),
+  );
+  if (discoveryStrategy === "instagram_followers" && !baseProfiles.length) {
+    redirect("/comercial/campanhas?erro=Adicione+ao+menos+um+perfil-base+válido");
+  }
+  if (discoveryStrategy === "local_business" && (!localNiche || !localLocation)) {
+    redirect("/comercial/campanhas?erro=Informe+o+nicho+e+a+localização+da+busca+local");
+  }
   const db = await getCommercialDb();
   const [campaign] = await db
     .select({ id: campaigns.id })
@@ -202,12 +234,18 @@ export async function saveCampaignDiscoverySettings(formData: FormData) {
   await db.transaction(async (tx) => {
     await tx.update(campaigns).set({
       discoveryEnabled,
+      discoveryStrategy,
       discoveryKeywords: JSON.stringify(keywords),
       discoveryHashtags: JSON.stringify(hashtags),
       discoveryLocations: JSON.stringify(locations),
+      discoveryBaseProfiles: JSON.stringify(baseProfiles),
+      discoveryMinimumBaseFollowers,
+      discoveryLocalNiche: localNiche || null,
+      discoveryLocalLocation: localLocation || null,
       discoveryDailyLimit,
       discoveryMinimumScore,
       discoveryIntervalHours,
+      ...(discoveryStrategy === "local_business" ? { funnelType: "partner" } : {}),
       updatedAt: now,
     }).where(eq(campaigns.id, campaignId));
     await tx.insert(auditLogs).values({
@@ -218,9 +256,14 @@ export async function saveCampaignDiscoverySettings(formData: FormData) {
       entityId: campaignId,
       metadata: JSON.stringify({
         discoveryEnabled,
+        discoveryStrategy,
         keywords,
         hashtags,
         locations,
+        baseProfiles,
+        discoveryMinimumBaseFollowers,
+        localNiche,
+        localLocation,
         discoveryDailyLimit,
         discoveryMinimumScore,
         discoveryIntervalHours,
