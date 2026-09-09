@@ -5,6 +5,7 @@ import {
   extractPublicInstagramCandidate,
   instagramUsernameFromHref,
   isLikelyCommercialInstagramProfile,
+  isMassAudienceInstagramProfile,
   parseDiscoveryTermsInput,
   parseInstagramBaseProfiles,
   parseInstagramFollowerCount,
@@ -34,7 +35,7 @@ describe("domínio da descoberta segura", () => {
     });
     expect(seeds[0]).toEqual({ kind: "hashtag", value: "feitoem3d" });
     expect(seeds).toContainEqual({ kind: "keyword", value: "presente personalizado" });
-    expect(seeds).toContainEqual({ kind: "location", value: "Brasil" });
+    expect(seeds).not.toContainEqual({ kind: "location", value: "Brasil" });
   });
 
   it("normaliza perfis-base e interpreta contagens públicas de seguidores", () => {
@@ -123,5 +124,19 @@ describe("domínio da descoberta segura", () => {
       profileBio: "Mãe, apaixonada por decoração geek, livros e meus cachorros",
       discoveryQuery: "decoração geek",
     })).toBe(false);
+    expect(isLikelyCommercialInstagramProfile({
+      instagramUsername: "varejaonovabrasil",
+      name: "Varejão Nova Brasil",
+      sourceUrl: "https://www.instagram.com/varejaonovabrasil/",
+      profileBio: "Rua Floriano Peixoto, 531 · Whatsapp",
+      discoveryQuery: "Brasil",
+    })).toBe(true);
+    expect(isMassAudienceInstagramProfile({
+      instagramUsername: "netflixbrasil",
+      name: "Netflix Brasil",
+      sourceUrl: "https://www.instagram.com/netflixbrasil/",
+      profileBio: "40,7 mi seguidores · Séries e filmes",
+      discoveryQuery: "Brasil",
+    })).toBe(true);
   });
 });

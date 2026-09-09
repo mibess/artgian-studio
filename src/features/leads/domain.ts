@@ -104,6 +104,7 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   sync_catalog: "Sincronizar catálogo",
   evaluate_experiment: "Avaliar experimento",
   commercial_decision: "Decisão comercial",
+  prospect_campaign_fit: "Validar aderência à campanha",
 };
 
 export const AI_ACTIONS = [

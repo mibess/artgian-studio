@@ -179,7 +179,9 @@ export function buildDiscoverySeeds(input: {
   const seeds: DiscoverySeed[] = [
     ...input.hashtags.map((value) => ({ kind: "hashtag" as const, value })),
     ...keywords.map((value) => ({ kind: "keyword" as const, value })),
-    ...locations.map((value) => ({ kind: "location" as const, value })),
+    ...locations
+      .filter((value) => !/^(brasil|brazil)$/i.test(normalize(value)))
+      .map((value) => ({ kind: "location" as const, value })),
   ];
   const seen = new Set<string>();
   return seeds.filter((seed) => {
@@ -365,26 +367,44 @@ export function isLikelyCommercialInstagramProfile(
     candidate.publicSignal,
   ].filter(Boolean).join(" "));
   const commercialSignals = [
-    /\b(loja|lojinha|store|shop|shopping|empresa|marca|negocio|atacado|varejo)\b/u,
+    /\b(loja|lojinha|store|shop|shopping|empresa|marca|negocio|atacado|varejo|varejao|franquia|unidade)\b/u,
     /\b(atelie|studio|estudio|agencia|consultoria|fornecedor|revendedor|distribuidor)\b/u,
     /\b(empreendedor|empreendedora|empresario|empresaria|criador de conteudo|influenciador|influenciadora)\b/u,
     /\b(encomenda|encomendas|orcamento|orcamentos|pedidos|atendimento|compre|compras)\b/u,
     /\b(frete|envio|envios|delivery|catalogo|servicos|produto e servico|produtos e servicos)\b/u,
-    /\b(cnpj|whatsapp comercial|link na bio|chame no direct|chama no direct)\b/u,
+    /\b(cnpj|whatsapp|telefone|atendimento|link na bio|chame no direct|chama no direct)\b/u,
+    /\b(chocolate|chocolates|restaurante|mercado|oficina|mecanica|clinica|escritorio)\b/u,
+    /\b(rua|avenida|av\.?|rodovia)\s+[\p{L}\d]/u,
     /\b(shopee|shp[ .]?ee|mercado livre|elo7|ifood|linktree|linktr[ .]?ee)\b/u,
   ];
   return commercialSignals.some((signal) => signal.test(searchable));
+}
+
+export function isMassAudienceInstagramProfile(
+  candidate: PublicInstagramCandidate,
+  maximumFollowers = 100_000,
+) {
+  const followerCount = parseInstagramFollowerCount([
+    candidate.profileBio,
+    candidate.publicSignal,
+  ].filter(Boolean).join(" "));
+  return followerCount != null && followerCount > Math.max(0, maximumFollowers);
 }
 
 export function buildDiscoveryQualificationReason(input: {
   query: string;
   score: number;
   matches: string[];
+  aiReason?: string;
+  aiConfidence?: "high" | "medium" | "low";
 }) {
   const evidence = input.matches.length
     ? `Sinais compatíveis: ${input.matches.join(", ")}.`
     : "Aderência calculada a partir da bio e dos sinais públicos disponíveis.";
-  return `Descoberto automaticamente pela busca “${input.query}”. ${evidence} Score ICP ${input.score}.`.slice(0, 500);
+  const aiValidation = input.aiReason
+    ? ` Validado pela IA rápida (${input.aiConfidence === "high" ? "alta confiança" : "confiança moderada"}): ${input.aiReason}.`
+    : "";
+  return `Descoberto automaticamente pela busca “${input.query}”. ${evidence} Score ICP ${input.score}.${aiValidation}`.slice(0, 500);
 }
 
 export function nextDiscoveryAt(now: Date, intervalHours: number) {

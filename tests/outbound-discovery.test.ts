@@ -65,7 +65,7 @@ describe("execução segura da descoberta", () => {
       {
         discover: async () => ({
           queriesScanned: 1,
-          profilesInspected: 4,
+          profilesInspected: 5,
           candidates: [
             {
               instagramUsername: "perfil.novo",
@@ -96,7 +96,30 @@ describe("execução segura da descoberta", () => {
               publicSignal: "que você destaca decoração geek",
               discoveryQuery: "decoração geek",
             },
+            {
+              instagramUsername: "perfil.duvidoso",
+              name: "Perfil Duvidoso",
+              sourceUrl: "https://www.instagram.com/perfil.duvidoso/",
+              profileBio: "Presentes personalizados e decoração geek",
+              profileLocation: "Brasil",
+              publicSignal: "que você destaca presentes personalizados",
+              discoveryQuery: "presente personalizado",
+            },
           ],
+        }),
+        qualify: async ({ candidates }) => ({
+          available: true as const,
+          decisions: candidates.map((candidate, index) => ({
+            index,
+            fits: candidate.instagramUsername !== "perfil.duvidoso",
+            confidence: "high" as const,
+            classification: candidate.instagramUsername === "perfil.duvidoso"
+              ? "unknown" as const
+              : "consumer" as const,
+            reason: candidate.instagramUsername === "perfil.duvidoso"
+              ? "Não há evidência suficiente de intenção de compra"
+              : "Perfil pessoal compatível com presentes personalizados",
+          })),
         }),
       },
     );
@@ -117,19 +140,21 @@ describe("execução segura da descoberta", () => {
     const [run] = await db.select().from(schema.discoveryRuns);
     expect(run).toMatchObject({
       status: "completed",
-      profilesInspected: 4,
+      profilesInspected: 5,
       profilesCreated: 1,
       skippedBlocked: 1,
-      skippedLowScore: 2,
+      skippedLowScore: 3,
     });
     const remembered = await db.select().from(schema.discoveryCandidates);
-    expect(remembered).toHaveLength(4);
+    expect(remembered).toHaveLength(5);
     expect(remembered.find((item) => item.instagramUsername === "perfil.semaderencia")?.lastOutcome)
       .toBe("low_score");
+    expect(remembered.find((item) => item.instagramUsername === "perfil.duvidoso")?.lastOutcome)
+      .toBe("ai_rejected");
     const queryStats = await db.select().from(schema.discoveryQueryStats);
     expect(queryStats.find((item) => item.query === "presente personalizado")).toMatchObject({
       searches: 1,
-      profilesInspected: 3,
+      profilesInspected: 4,
       profilesCreated: 1,
     });
     const [campaign] = await db
@@ -239,6 +264,7 @@ describe("execução segura da descoberta", () => {
             }],
           };
         },
+        qualify: async () => ({ available: true as const, decisions: [] }),
       },
     );
 

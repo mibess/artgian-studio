@@ -77,16 +77,13 @@ export function scorePublicProfile(
       geography &&
       (normalize(input.location).includes(geography) || geography.includes(normalize(input.location))),
   );
-  const signalScore = input.publicSignal?.trim() ? 20 : 0;
+  const personalContext = normalize([input.bio, input.publicSignal].filter(Boolean).join(" "));
+  const consumerIdentity = input.funnelType === "consumer" && hasConsumerIdentitySignal(personalContext);
+  const signalScore = input.publicSignal?.trim() && (matches.length > 0 || consumerIdentity) ? 20 : 0;
   const categoryScore = input.category?.trim() ? 10 : 0;
   const keywordScore = Math.min(50, matches.length * 15);
-  const geographyScore = geographyMatch ? 20 : 0;
-  const personalContext = normalize([input.bio, input.publicSignal].filter(Boolean).join(" "));
-  const consumerIdentityScore = input.funnelType === "consumer" && [
-    /\bsou (?:um |uma )?(?:colecionador|colecionadora|gamer|nerd|geek|apaixonado|apaixonada)\b/u,
-    /\b(minha colecao|meu hobby|meus hobbies|minha casa|meu cantinho|meu setup)\b/u,
-    /\b(mae de|pai de|tutora de|tutor de|apaixonado por|apaixonada por)\b/u,
-  ].some((signal) => signal.test(personalContext)) ? 20 : 0;
+  const geographyScore = geographyMatch ? 10 : 0;
+  const consumerIdentityScore = consumerIdentity ? 20 : 0;
   const score = Math.min(
     100,
     signalScore + categoryScore + keywordScore + geographyScore + consumerIdentityScore,
@@ -94,8 +91,18 @@ export function scorePublicProfile(
   return {
     score,
     matches,
+    consumerIdentity,
     priority: score >= 70 ? "high" : score >= 40 ? "normal" : "low",
   } as const;
+}
+
+export function hasConsumerIdentitySignal(value: string) {
+  const personalContext = normalize(value);
+  return [
+    /\bsou (?:um |uma )?(?:colecionador|colecionadora|gamer|nerd|geek|apaixonado|apaixonada)\b/u,
+    /\b(minha colecao|meu hobby|meus hobbies|minha casa|meu cantinho|meu setup)\b/u,
+    /\b(mae de|pai de|tutora de|tutor de|apaixonado por|apaixonada por)\b/u,
+  ].some((signal) => signal.test(personalContext));
 }
 
 export function assignExperimentVariant(

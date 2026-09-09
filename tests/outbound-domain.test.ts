@@ -39,7 +39,7 @@ describe("qualificação outbound", () => {
       location: "Brasil",
       publicSignal: "seu projeto recente de organização de cozinha",
     }, business);
-    expect(result.score).toBe(80);
+    expect(result.score).toBe(70);
     expect(result.priority).toBe("high");
     expect(result.matches).toContain("arquitetura");
   });
@@ -66,6 +66,17 @@ describe("qualificação outbound", () => {
     }, business);
     expect(result.score).toBe(40);
     expect(result.priority).toBe("normal");
+  });
+
+  it("não qualifica apenas por localização e sinal genérico", () => {
+    const result = scorePublicProfile({
+      funnelType: "consumer",
+      bio: "Perfil oficial com novidades do Brasil",
+      location: "Brasil",
+      publicSignal: "que você publica novidades",
+    }, business);
+    expect(result.score).toBe(10);
+    expect(result.matches).toEqual([]);
   });
 
   it("atribui a mesma variante para a mesma chave", () => {

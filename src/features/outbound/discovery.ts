@@ -20,6 +20,7 @@ import {
   buildDiscoverySeeds,
   discoverySeedKey,
   isLikelyCommercialInstagramProfile,
+  isMassAudienceInstagramProfile,
   nextDiscoveryAt,
   normalizeDiscoveryStrategy,
   parseInstagramBaseProfiles,
@@ -30,6 +31,10 @@ import {
   type PublicLocalBusinessOpportunity,
 } from "./discovery-domain";
 import { scorePublicProfile, type OutboundFunnel } from "./domain";
+import type {
+  ProspectCampaignFitInput,
+  ProspectCampaignFitResult,
+} from "../../integrations/openai/prospect-qualification";
 
 type BrowserDiscoveryResult = {
   candidates: PublicInstagramCandidate[];
@@ -53,7 +58,9 @@ type DiscoveryBrowser = (input: {
   excludedLocalBusinessUrls?: string[];
 }) => Promise<BrowserDiscoveryResult>;
 
-type CandidateOutcome = "created" | "duplicate" | "blocked" | "low_score";
+type ProspectQualifier = (input: ProspectCampaignFitInput) => Promise<ProspectCampaignFitResult>;
+
+type CandidateOutcome = "created" | "duplicate" | "blocked" | "low_score" | "ai_rejected";
 
 type QueryRunMetrics = {
   seed: DiscoverySeed;
@@ -175,7 +182,7 @@ function startOfUtcDay(date: Date) {
 
 export async function executeCampaignDiscovery(
   input: { jobId: string; campaignId: string },
-  dependencies: { discover: DiscoveryBrowser },
+  dependencies: { discover: DiscoveryBrowser; qualify: ProspectQualifier },
 ) {
   if (process.env.INSTAGRAM_DISCOVERY_ENABLED !== "true") {
     throw new Error("Descoberta bloqueada por INSTAGRAM_DISCOVERY_ENABLED.");
@@ -439,13 +446,32 @@ export async function executeCampaignDiscovery(
       });
     };
 
+    const effectiveFunnel: OutboundFunnel = strategy === "local_business"
+      ? "partner"
+      : campaign.funnelType as OutboundFunnel;
+    const configuredMaximumConsumerFollowers = Number(
+      process.env.MAX_CONSUMER_DISCOVERY_FOLLOWERS || 100_000,
+    );
+    const maximumConsumerFollowers = Number.isFinite(configuredMaximumConsumerFollowers)
+      ? Math.max(1_000, Math.trunc(configuredMaximumConsumerFollowers))
+      : 100_000;
+    const preparedCandidates: Array<{
+      candidate: PublicInstagramCandidate;
+      instagramUsername: string;
+      lead: typeof leads.$inferSelect | undefined;
+      score: ReturnType<typeof scorePublicProfile>;
+    }> = [];
+
     for (const candidate of browserResult.candidates) {
       const instagramUsername = canonicalInstagramUsername(candidate.instagramUsername);
       if (!/^[a-z0-9._]{1,30}$/.test(instagramUsername)) continue;
       if (
         strategy !== "local_business" &&
         campaign.funnelType === "consumer" &&
-        isLikelyCommercialInstagramProfile(candidate)
+        (
+          isLikelyCommercialInstagramProfile(candidate) ||
+          isMassAudienceInstagramProfile(candidate, maximumConsumerFollowers)
+        )
       ) {
         skippedLowScore += 1;
         await rememberCandidate(candidate, instagramUsername, "low_score");
@@ -461,7 +487,7 @@ export async function executeCampaignDiscovery(
         await rememberCandidate(candidate, instagramUsername, "duplicate");
         continue;
       }
-      let [lead] = await db
+      const [lead] = await db
         .select()
         .from(leads)
         .where(eq(leads.instagramUsername, instagramUsername))
@@ -471,9 +497,6 @@ export async function executeCampaignDiscovery(
         await rememberCandidate(candidate, instagramUsername, "blocked");
         continue;
       }
-      const effectiveFunnel: OutboundFunnel = strategy === "local_business"
-        ? "partner"
-        : campaign.funnelType as OutboundFunnel;
       const score = scorePublicProfile(
         {
           category: candidate.profileCategory,
@@ -489,12 +512,62 @@ export async function executeCampaignDiscovery(
         await rememberCandidate(candidate, instagramUsername, "low_score");
         continue;
       }
+      preparedCandidates.push({ candidate, instagramUsername, lead, score });
+    }
+
+    const aiValidation = await dependencies.qualify({
+      campaign: {
+        name: campaign.name,
+        funnelType: effectiveFunnel,
+        segment: campaign.segment,
+        strategy,
+        keywords,
+        hashtags,
+        locations,
+        localNiche,
+        localLocation,
+      },
+      candidates: preparedCandidates.map((item) => item.candidate),
+    });
+    if (!aiValidation.available) {
+      throw new Error(`Qualificação pela IA rápida indisponível: ${aiValidation.reason}`);
+    }
+    const aiDecisions = new Map(
+      aiValidation.decisions.map((decision) => [decision.index, decision]),
+    );
+
+    for (const [candidateIndex, prepared] of preparedCandidates.entries()) {
+      const { candidate, instagramUsername, score } = prepared;
+      let lead = prepared.lead;
+      const aiDecision = aiDecisions.get(candidateIndex);
+      if (!aiDecision || !aiDecision.fits || aiDecision.confidence === "low") {
+        skippedLowScore += 1;
+        await rememberCandidate(candidate, instagramUsername, "ai_rejected");
+        await db.insert(auditLogs).values({
+          id: crypto.randomUUID(),
+          actor: "system",
+          action: "campaign_candidate_rejected_by_fast_ai",
+          entityType: "instagram_profile",
+          entityId: instagramUsername,
+          metadata: JSON.stringify({
+            campaignId: campaign.id,
+            reason: aiDecision?.reason || "Decisão ausente",
+            classification: aiDecision?.classification || "unknown",
+            confidence: aiDecision?.confidence || "low",
+            sendsMessages: false,
+          }),
+          createdAt: nowIso,
+        });
+        continue;
+      }
       profilesQualified += 1;
       const prospectId = crypto.randomUUID();
       const qualificationReason = buildDiscoveryQualificationReason({
         query: candidate.discoveryQuery,
         score: score.score,
         matches: score.matches,
+        aiReason: aiDecision.reason,
+        aiConfidence: aiDecision.confidence,
       });
       const inserted = await db.transaction(async (tx) => {
         if (!lead) {
@@ -561,6 +634,7 @@ export async function executeCampaignDiscovery(
             sourceUrl: candidate.sourceUrl,
             score: score.score,
             matches: score.matches,
+            aiValidation: aiDecision,
             sent: false,
           }),
           occurredAt: nowIso,
@@ -580,7 +654,7 @@ export async function executeCampaignDiscovery(
           action: "outbound_prospect_discovered_automatically",
           entityType: "outbound_prospect",
           entityId: prospectId,
-          metadata: JSON.stringify({ campaignId: campaign.id, query: candidate.discoveryQuery, sent: false }),
+          metadata: JSON.stringify({ campaignId: campaign.id, query: candidate.discoveryQuery, aiValidation: aiDecision, sent: false }),
           createdAt: nowIso,
         });
         return true;

@@ -6,11 +6,12 @@ try {
   if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 }
 
-const [{ runWorkerOnce }, { executeOutboundBrowserJob }, { executeCampaignDiscovery }, { discoverInstagramProfiles }] = await Promise.all([
+const [{ runWorkerOnce }, { executeOutboundBrowserJob }, { executeCampaignDiscovery }, { discoverInstagramProfiles }, { validateProspectCampaignFits }] = await Promise.all([
   import("../src/worker/processor"),
   import("../src/features/outbound/execute"),
   import("../src/features/outbound/discovery"),
   import("../src/integrations/browser/instagram-discovery"),
+  import("../src/integrations/openai/prospect-qualification"),
 ]);
 
 let running = true;
@@ -24,7 +25,10 @@ while (running) {
     const result = await runWorkerOnce(undefined, {
       executeOutboundBrowserJob,
       executeDiscoveryJob: (input) =>
-        executeCampaignDiscovery(input, { discover: discoverInstagramProfiles }),
+        executeCampaignDiscovery(input, {
+          discover: discoverInstagramProfiles,
+          qualify: validateProspectCampaignFits,
+        }),
     });
     consecutiveFailures = 0;
     if (!result.processed) {

@@ -101,6 +101,9 @@ export default async function CampaignsPage({
       : params.descoberta
         ? "Configuração de descoberta salva. Nenhuma mensagem foi enviada."
         : "Alteração salva. Nenhuma mensagem externa foi enviada.";
+  const reviewProspects = prospects.filter(
+    ({ prospect }) => prospect.status !== "disqualified",
+  );
 
   return (
     <>
@@ -365,14 +368,15 @@ export default async function CampaignsPage({
         </section>
 
         <section className="overflow-hidden rounded-[22px] border border-[#e1e1db] bg-white">
-          <header className="border-b border-[#ecece7] px-5 py-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8b979d]">Fila de prospecção</p><h2 className="mt-1 text-base font-semibold">{prospects.length} prospectos para análise</h2></header>
-          {!prospects.length ? <div className="p-5"><EmptyState title="Fila vazia" description="Perfis descobertos aparecerão aqui sem receber contato automático." /></div> : (
+          <header className="border-b border-[#ecece7] px-5 py-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8b979d]">Fila de prospecção</p><h2 className="mt-1 text-base font-semibold">{reviewProspects.length} prospectos para análise</h2></header>
+          {!reviewProspects.length ? <div className="p-5"><EmptyState title="Fila vazia" description="Perfis descobertos aparecerão aqui sem receber contato automático." /></div> : (
             <div className="divide-y divide-[#ecece7]">
-              {prospects.map(({ prospect, campaign, lead }) => (
+              {reviewProspects.map(({ prospect, campaign, lead }) => (
                 <article className="p-5" key={prospect.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold text-[#294653]">{prospect.name || `@${prospect.instagramUsername}`}</p><p className="mt-1 text-[10px] text-[#859197]">@{prospect.instagramUsername} · {campaign.name} · {prospect.funnelType === "partner" ? "Parceiros" : "Clientes"}</p></div><span className={`rounded-full px-3 py-1.5 text-[9px] font-bold ${prospect.contactPolicy === "inbound_window" ? "bg-[#d8ede4] text-[#2b7258]" : "bg-[#fff0c9] text-[#846214]"}`}>{policyLabels[prospect.contactPolicy] || prospect.contactPolicy}</span></div>
                   <div className="mt-3 flex flex-wrap gap-2 text-[9px]">
                     {prospect.discoverySource !== "manual" && <span className="inline-flex items-center gap-1 rounded-full bg-[#e4f2ec] px-2.5 py-1 font-bold text-[#2f7c60]"><Sparkles size={10} />Descoberto automaticamente{prospect.discoveryQuery ? ` · ${prospect.discoveryQuery}` : ""}</span>}
+                    {prospect.qualificationReason.includes("Validado pela IA rápida") && <span className="inline-flex items-center gap-1 rounded-full bg-[#eee2f0] px-2.5 py-1 font-bold text-[#74527b]"><Bot size={10} />Aderência validada pela IA rápida</span>}
                     <span className="rounded-full bg-[#edf0ed] px-2.5 py-1 font-bold text-[#52656d]">ICP {prospect.icpScore}</span><span className="rounded-full bg-[#edf0ed] px-2.5 py-1 font-bold text-[#52656d]">{OUTBOUND_PIPELINE_LABELS[prospect.pipelineStage] || prospect.pipelineStage}</span><span className="rounded-full bg-[#edf0ed] px-2.5 py-1 font-bold text-[#52656d]">Prioridade {prospect.priority === "high" ? "alta" : prospect.priority === "low" ? "baixa" : "normal"}</span>{prospect.experimentVariant && <span className="rounded-full bg-[#e8e1f2] px-2.5 py-1 font-bold text-[#6b5481]">Teste {prospect.experimentVariant === "control" ? "controle" : "variante"}</span>}
                   </div>
                   <p className="mt-3 text-[10px] leading-5 text-[#657780]">{prospect.qualificationReason}</p>

@@ -48,8 +48,18 @@ function getCostRates() {
   };
 }
 
-function estimateCostMicros(inputTokens: number, outputTokens: number) {
-  const rates = getCostRates();
+export function estimateCostMicros(
+  inputTokens: number,
+  outputTokens: number,
+  rateClass: "default" | "fast" = "default",
+) {
+  const defaults = getCostRates();
+  const rates = rateClass === "fast"
+    ? {
+        input: Number(process.env.OPENAI_FAST_INPUT_COST_PER_1M_USD || defaults.input),
+        output: Number(process.env.OPENAI_FAST_OUTPUT_COST_PER_1M_USD || defaults.output),
+      }
+    : defaults;
   return Math.round(((inputTokens / 1_000_000) * rates.input + (outputTokens / 1_000_000) * rates.output) * 1_000_000);
 }
 
