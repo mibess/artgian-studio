@@ -104,6 +104,9 @@ export default async function CampaignsPage({
   const reviewProspects = prospects.filter(
     ({ prospect }) => prospect.status !== "disqualified",
   );
+  const reviewLocalBusinessOpportunities = localBusinessOpportunities.filter(
+    (opportunity) => opportunity.status !== "instagram_found",
+  );
 
   return (
     <>
@@ -321,17 +324,17 @@ export default async function CampaignsPage({
         )}
       </section>
 
-      {localBusinessOpportunities.length > 0 && (
+      {reviewLocalBusinessOpportunities.length > 0 && (
         <section className="mt-5 overflow-hidden rounded-[22px] border border-[#ead9a6] bg-white">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f0e6c8] bg-[#fffaf0] px-5 py-4">
             <div className="flex items-center gap-3">
               <span className="grid size-10 place-items-center rounded-[13px] bg-[#fff0c9] text-[#8b6718]"><Building2 size={18} /></span>
-              <div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#9b7a2e]">Presença digital local</p><h2 className="text-base font-semibold">{localBusinessOpportunities.length} empresas para revisão</h2></div>
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#9b7a2e]">Presença digital local</p><h2 className="text-base font-semibold">{reviewLocalBusinessOpportunities.length} empresas para revisão</h2></div>
             </div>
             <span className="text-[9px] text-[#806f43]">Sem contato automático</span>
           </header>
           <div className="grid gap-px bg-[#eee9dd] md:grid-cols-2 xl:grid-cols-3">
-            {localBusinessOpportunities.map((opportunity) => (
+            {reviewLocalBusinessOpportunities.map((opportunity) => (
               <article className="bg-white p-5" key={opportunity.id}>
                 <span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ${opportunity.status === "website_opportunity" ? "bg-[#fff0c9] text-[#846214]" : "bg-[#e8eef2] text-[#526b78]"}`}>
                   {opportunity.status === "website_opportunity" ? "Oportunidade de criação de site" : "Site encontrado · Instagram não localizado"}

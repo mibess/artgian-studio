@@ -5,6 +5,8 @@ import {
   extractPublicInstagramCandidate,
   instagramUsernameFromGoogleWebResult,
   instagramUsernameFromHref,
+  LOCAL_WEB_RESULTS_VERIFIED_MARKER,
+  normalizeLocalDiscoveryTerm,
   parseInstagramFollowerCount,
   type DiscoverySeed,
   type DiscoveryStrategy,
@@ -461,8 +463,8 @@ export async function executeLocalBusinessDiscoveryOnPage(
   page: Page,
   input: Omit<BrowserDiscoveryInput, "jobId" | "strategy">,
 ) {
-  const niche = input.localNiche?.trim();
-  const location = input.localLocation?.trim();
+  const niche = normalizeLocalDiscoveryTerm(input.localNiche || "");
+  const location = normalizeLocalDiscoveryTerm(input.localLocation || "");
   if (!niche || !location) {
     throw new InstagramDiscoveryError("Informe o nicho e a localização da busca local.", "rejected");
   }
@@ -559,6 +561,18 @@ export async function executeLocalBusinessDiscoveryOnPage(
     }
 
     if (instagramUsername) {
+      localOpportunities.push({
+        businessName,
+        niche,
+        location,
+        address: address || undefined,
+        phone: phone || undefined,
+        googleMapsUrl: mapsUrl,
+        websiteUrl,
+        instagramUsername,
+        status: "instagram_found",
+        notes: `${LOCAL_WEB_RESULTS_VERIFIED_MARKER} Instagram @${instagramUsername} identificado automaticamente.`,
+      });
       if (excludedUsernames.has(instagramUsername)) continue;
       await pauseLikePerson(page, {
         minimumVariable: "DISCOVERY_MIN_ACTION_DELAY_SECONDS",
@@ -579,6 +593,7 @@ export async function executeLocalBusinessDiscoveryOnPage(
           name: candidate.name || businessName,
           profileLocation: candidate.profileLocation || location,
           publicSignal: candidate.publicSignal || `Empresa encontrada no Google Maps em ${location}`,
+          localBusinessUrl: mapsUrl,
         });
       }
       continue;
@@ -594,8 +609,8 @@ export async function executeLocalBusinessDiscoveryOnPage(
       websiteUrl,
       status: websiteUrl ? "instagram_not_found" : "website_opportunity",
       notes: websiteUrl
-        ? "Site encontrado, mas nenhum perfil do Instagram foi identificado automaticamente."
-        : "Nenhum site ou Instagram foi identificado; oportunidade de criação de site.",
+        ? `${LOCAL_WEB_RESULTS_VERIFIED_MARKER} Site encontrado, mas nenhum perfil do Instagram foi identificado automaticamente.`
+        : `${LOCAL_WEB_RESULTS_VERIFIED_MARKER} Nenhum site ou Instagram foi identificado; oportunidade de criação de site.`,
     });
   }
 

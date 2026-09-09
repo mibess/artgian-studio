@@ -79,6 +79,20 @@ describe("qualificação outbound", () => {
     expect(result.matches).toEqual([]);
   });
 
+  it("considera nicho, cidade e origem confirmada em campanhas locais", () => {
+    const result = scorePublicProfile({
+      funnelType: "partner",
+      bio: "Manicure e pedicure em Brodowski, São Paulo",
+      publicSignal: "Atendimento com hora marcada",
+      campaignTerms: ["Manicure e pedicure"],
+      targetLocations: ["Brodowski SP"],
+      discoverySource: "local_business",
+    }, business);
+    expect(result.score).toBeGreaterThanOrEqual(40);
+    expect(result.matches).toContain("manicure");
+    expect(result.matches).toContain("pedicure");
+  });
+
   it("atribui a mesma variante para a mesma chave", () => {
     expect(assignExperimentVariant("perfil", "experimento")).toBe(assignExperimentVariant("perfil", "experimento"));
   });

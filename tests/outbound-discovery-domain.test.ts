@@ -7,6 +7,7 @@ import {
   instagramUsernameFromHref,
   isLikelyCommercialInstagramProfile,
   isMassAudienceInstagramProfile,
+  normalizeLocalDiscoveryTerm,
   parseDiscoveryTermsInput,
   parseInstagramBaseProfiles,
   parseInstagramFollowerCount,
@@ -47,6 +48,10 @@ describe("domínio da descoberta segura", () => {
     expect(parseInstagramFollowerCount("625 mil seguidores")).toBe(625_000);
     expect(parseInstagramFollowerCount("1,234,567 followers")).toBe(1_234_567);
     expect(parseInstagramFollowerCount("contagem indisponível")).toBeNull();
+  });
+
+  it("corrige variações comuns no nicho local", () => {
+    expect(normalizeLocalDiscoveryTerm("  Manicuri e pedicuri  ")).toBe("manicure e pedicure");
   });
 
   it("aceita somente links que representam perfis", () => {

@@ -288,6 +288,134 @@ describe("execução segura da descoberta", () => {
     expect(outboundJobs).toHaveLength(0);
   });
 
+  it("reprocessa oportunidade antiga, reconcilia o Instagram e deixa a IA decidir", async () => {
+    const [{ getCommercialDb }, schema, { executeCampaignDiscovery }] = await Promise.all([
+      import("../src/db/commercial"),
+      import("../db/schema"),
+      import("../src/features/outbound/discovery"),
+    ]);
+    const db = await getCommercialDb();
+    const now = new Date().toISOString();
+    const mapsUrl = "https://www.google.com/maps/place/studio-local";
+    await db.insert(schema.campaigns).values({
+      id: "local-recheck-campaign",
+      name: "Parcerias locais",
+      source: "Google Maps",
+      segment: "Decoração e Utilidades",
+      funnelType: "partner",
+      status: "active",
+      discoveryEnabled: true,
+      discoveryStrategy: "local_business",
+      discoveryLocalNiche: "Manicuri e pedicuri",
+      discoveryLocalLocation: "Brodowski SP",
+      discoveryDailyLimit: 5,
+      discoveryMinimumScore: 40,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.localBusinessOpportunities).values({
+      id: "old-local-opportunity",
+      campaignId: "local-recheck-campaign",
+      businessName: "Studio Local",
+      niche: "Manicuri e pedicuri",
+      location: "Brodowski SP",
+      googleMapsUrl: mapsUrl,
+      status: "website_opportunity",
+      notes: "Nenhum site ou Instagram foi identificado.",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.discoveryCandidates).values({
+      id: "old-local-candidate",
+      campaignId: "local-recheck-campaign",
+      instagramUsername: "studio.local",
+      lastQueryKind: "local_business",
+      lastQuery: "Manicuri e pedicuri em Brodowski SP",
+      lastOutcome: "low_score",
+      lastInspectedAt: now,
+      revisitAfter: new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000).toISOString(),
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.jobs).values({
+      id: "local-recheck-job",
+      type: "discover_prospects",
+      payload: JSON.stringify({ campaignId: "local-recheck-campaign" }),
+      status: "running",
+      scheduledAt: now,
+      startedAt: now,
+      createdAt: now,
+    });
+
+    let candidatesSentToAi = 0;
+    const result = await executeCampaignDiscovery(
+      { jobId: "local-recheck-job", campaignId: "local-recheck-campaign" },
+      {
+        discover: async (input) => {
+          expect(input.localNiche).toBe("manicure e pedicure");
+          expect(input.excludedLocalBusinessUrls).not.toContain(mapsUrl);
+          expect(input.excludedUsernames).not.toContain("studio.local");
+          return {
+            queriesScanned: 1,
+            profilesInspected: 1,
+            candidates: [{
+              instagramUsername: "studio.local",
+              name: "Studio Local",
+              sourceUrl: "https://www.instagram.com/studio.local/",
+              profileBio: "Atendimento com hora marcada",
+              publicSignal: "Empresa encontrada no Google Maps",
+              discoveryKind: "local_business" as const,
+              discoveryQuery: "manicure e pedicure em Brodowski SP",
+              localBusinessUrl: mapsUrl,
+            }],
+            localOpportunities: [{
+              businessName: "Studio Local",
+              niche: "manicure e pedicure",
+              location: "Brodowski SP",
+              googleMapsUrl: mapsUrl,
+              instagramUsername: "studio.local",
+              status: "instagram_found" as const,
+              notes: "Busca completa no Maps e nos Resultados da Web. Instagram identificado.",
+            }],
+          };
+        },
+        qualify: async ({ candidates }) => {
+          candidatesSentToAi = candidates.length;
+          return {
+            available: true as const,
+            decisions: [{
+              index: 0,
+              fits: true,
+              confidence: "high" as const,
+              classification: "business" as const,
+              reason: "Empresa local compatível com o nicho definido",
+            }],
+          };
+        },
+      },
+    );
+
+    expect(candidatesSentToAi).toBe(1);
+    expect(result).toMatchObject({ status: "completed", created: 1, qualified: 1 });
+    const [opportunity] = await db
+      .select()
+      .from(schema.localBusinessOpportunities)
+      .where(eq(schema.localBusinessOpportunities.id, "old-local-opportunity"));
+    expect(opportunity).toMatchObject({
+      status: "instagram_found",
+      instagramUsername: "studio.local",
+    });
+    const [prospect] = await db
+      .select()
+      .from(schema.outboundProspects)
+      .where(eq(schema.outboundProspects.instagramUsername, "studio.local"));
+    expect(prospect).toMatchObject({
+      pipelineStage: "qualified",
+      icpScore: 40,
+      discoverySource: "google_maps",
+    });
+  });
+
   it("não consome descoberta quando o executor local não está disponível", async () => {
     const [{ getCommercialDb }, schema, { runWorkerOnce }] = await Promise.all([
       import("../src/db/commercial"),

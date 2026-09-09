@@ -21,7 +21,9 @@ import {
   discoverySeedKey,
   isLikelyCommercialInstagramProfile,
   isMassAudienceInstagramProfile,
+  LOCAL_WEB_RESULTS_VERIFIED_MARKER,
   nextDiscoveryAt,
+  normalizeLocalDiscoveryTerm,
   normalizeDiscoveryStrategy,
   parseInstagramBaseProfiles,
   parseStoredDiscoveryTerms,
@@ -217,6 +219,7 @@ export async function executeCampaignDiscovery(
       .from(localBusinessOpportunities)
       .where(and(
         eq(localBusinessOpportunities.campaignId, campaign.id),
+        inArray(localBusinessOpportunities.status, ["website_opportunity", "instagram_not_found"]),
         gte(localBusinessOpportunities.createdAt, startOfUtcDay(now)),
       )),
   ]);
@@ -237,8 +240,12 @@ export async function executeCampaignDiscovery(
   const baseProfiles = parseInstagramBaseProfiles(
     parseStoredDiscoveryTerms(campaign.discoveryBaseProfiles).join("\n"),
   );
-  const localNiche = campaign.discoveryLocalNiche?.trim() || undefined;
-  const localLocation = campaign.discoveryLocalLocation?.trim() || undefined;
+  const localNiche = campaign.discoveryLocalNiche
+    ? normalizeLocalDiscoveryTerm(campaign.discoveryLocalNiche) || undefined
+    : undefined;
+  const localLocation = campaign.discoveryLocalLocation
+    ? normalizeLocalDiscoveryTerm(campaign.discoveryLocalLocation) || undefined
+    : undefined;
   const allSeeds: DiscoverySeed[] = strategy === "instagram_followers"
     ? baseProfiles.map((value) => ({ kind: "base_profile", value }))
     : strategy === "local_business"
@@ -288,7 +295,11 @@ export async function executeCampaignDiscovery(
       ? Math.min(remaining, Math.max(1, Math.trunc(configuredRunLimit)))
       : Math.min(remaining, 10);
     const rememberedCandidates = await db
-      .select({ instagramUsername: discoveryCandidates.instagramUsername })
+      .select({
+        instagramUsername: discoveryCandidates.instagramUsername,
+        lastQueryKind: discoveryCandidates.lastQueryKind,
+        lastOutcome: discoveryCandidates.lastOutcome,
+      })
       .from(discoveryCandidates)
       .where(and(
         eq(discoveryCandidates.campaignId, campaign.id),
@@ -303,7 +314,11 @@ export async function executeCampaignDiscovery(
       .where(eq(leads.doNotContact, true));
     const knownLocalBusinesses = strategy === "local_business"
       ? await db
-          .select({ googleMapsUrl: localBusinessOpportunities.googleMapsUrl })
+          .select({
+            googleMapsUrl: localBusinessOpportunities.googleMapsUrl,
+            status: localBusinessOpportunities.status,
+            notes: localBusinessOpportunities.notes,
+          })
           .from(localBusinessOpportunities)
           .where(eq(localBusinessOpportunities.campaignId, campaign.id))
       : [];
@@ -312,17 +327,27 @@ export async function executeCampaignDiscovery(
       strategy,
       seeds,
       maximumProfiles,
-      knownLocations: locations.length ? locations : [business.targetGeography],
+      knownLocations: strategy === "local_business" && localLocation
+        ? [...new Set([localLocation, ...locations, business.targetGeography])]
+        : locations.length ? locations : [business.targetGeography],
       minimumBaseFollowers: campaign.discoveryMinimumBaseFollowers,
       localNiche,
       localLocation,
       ownUsername: business.company.instagramHandle,
       excludedUsernames: [
-        ...rememberedCandidates,
+        ...rememberedCandidates.filter((item) => !(
+          strategy === "local_business" &&
+          item.lastQueryKind === "local_business" &&
+          item.lastOutcome === "low_score"
+        )),
         ...existingProspects,
         ...blockedLeads,
       ].map((item) => item.instagramUsername),
-      excludedLocalBusinessUrls: knownLocalBusinesses.map((item) => item.googleMapsUrl),
+      excludedLocalBusinessUrls: knownLocalBusinesses
+        .filter((item) =>
+          item.status === "instagram_found" ||
+          item.notes?.includes(LOCAL_WEB_RESULTS_VERIFIED_MARKER))
+        .map((item) => item.googleMapsUrl),
     });
     let profilesQualified = 0;
     let profilesCreated = 0;
@@ -332,8 +357,17 @@ export async function executeCampaignDiscovery(
     let websiteOpportunitiesCreated = 0;
 
     for (const opportunity of browserResult.localOpportunities || []) {
-      const created = await db.insert(localBusinessOpportunities).values({
-        id: crypto.randomUUID(),
+      const [existingOpportunity] = await db
+        .select({ id: localBusinessOpportunities.id })
+        .from(localBusinessOpportunities)
+        .where(and(
+          eq(localBusinessOpportunities.campaignId, campaign.id),
+          eq(localBusinessOpportunities.googleMapsUrl, opportunity.googleMapsUrl),
+        ))
+        .limit(1);
+      const opportunityId = existingOpportunity?.id || crypto.randomUUID();
+      await db.insert(localBusinessOpportunities).values({
+        id: opportunityId,
         campaignId: campaign.id,
         businessName: opportunity.businessName,
         niche: opportunity.niche,
@@ -347,19 +381,39 @@ export async function executeCampaignDiscovery(
         notes: opportunity.notes || null,
         createdAt: nowIso,
         updatedAt: nowIso,
-      }).onConflictDoNothing().returning({ id: localBusinessOpportunities.id });
-      if (created.length && opportunity.status === "website_opportunity") {
+      }).onConflictDoUpdate({
+        target: [
+          localBusinessOpportunities.campaignId,
+          localBusinessOpportunities.googleMapsUrl,
+        ],
+        set: {
+          businessName: opportunity.businessName,
+          niche: opportunity.niche,
+          location: opportunity.location,
+          address: opportunity.address || null,
+          phone: opportunity.phone || null,
+          websiteUrl: opportunity.websiteUrl || null,
+          instagramUsername: opportunity.instagramUsername || null,
+          status: opportunity.status,
+          notes: opportunity.notes || null,
+          updatedAt: nowIso,
+        },
+      });
+      const wasCreated = !existingOpportunity;
+      if (wasCreated && opportunity.status === "website_opportunity") {
         websiteOpportunitiesCreated += 1;
       }
-      if (created.length) {
+      if (wasCreated || opportunity.status === "instagram_found") {
         await db.insert(auditLogs).values({
           id: crypto.randomUUID(),
           actor: "system",
-          action: opportunity.status === "website_opportunity"
-            ? "local_website_opportunity_discovered"
-            : "local_business_without_instagram_discovered",
+          action: opportunity.status === "instagram_found"
+            ? "local_business_instagram_reconciled"
+            : opportunity.status === "website_opportunity"
+              ? "local_website_opportunity_discovered"
+              : "local_business_without_instagram_discovered",
           entityType: "local_business_opportunity",
-          entityId: created[0].id,
+          entityId: opportunityId,
           metadata: JSON.stringify({
             campaignId: campaign.id,
             googleMapsUrl: opportunity.googleMapsUrl,
@@ -504,10 +558,13 @@ export async function executeCampaignDiscovery(
           location: candidate.profileLocation,
           publicSignal: candidate.publicSignal,
           funnelType: effectiveFunnel,
+          campaignTerms: [campaign.segment || "", ...keywords, ...hashtags, localNiche || ""],
+          targetLocations: [localLocation || "", ...locations],
+          discoverySource: strategy === "local_business" ? "local_business" : undefined,
         },
         business,
       );
-      if (score.score < campaign.discoveryMinimumScore) {
+      if (score.score < campaign.discoveryMinimumScore && strategy !== "local_business") {
         skippedLowScore += 1;
         await rememberCandidate(candidate, instagramUsername, "low_score");
         continue;
@@ -562,9 +619,16 @@ export async function executeCampaignDiscovery(
       }
       profilesQualified += 1;
       const prospectId = crypto.randomUUID();
+      const finalScore = strategy === "local_business"
+        ? Math.max(score.score, campaign.discoveryMinimumScore)
+        : score.score;
+      const finalPriority = finalScore >= 70 ? "high" : finalScore >= 40 ? "normal" : "low";
+      const finalPipelineStage = strategy === "local_business" || finalScore >= 40
+        ? "qualified"
+        : "discovered";
       const qualificationReason = buildDiscoveryQualificationReason({
         query: candidate.discoveryQuery,
-        score: score.score,
+        score: finalScore,
         matches: score.matches,
         aiReason: aiDecision.reason,
         aiConfidence: aiDecision.confidence,
@@ -581,9 +645,9 @@ export async function executeCampaignDiscovery(
               ? `Google Maps · ${campaign.name}`
               : `Descoberta Instagram · ${campaign.name}`,
             segment: campaign.segment,
-            score: score.score,
-            icpScore: score.score,
-            pipelineStage: score.score >= 40 ? "qualified" : "discovered",
+            score: finalScore,
+            icpScore: finalScore,
+            pipelineStage: finalPipelineStage,
             channelState: "human_review_required",
             createdAt: nowIso,
             updatedAt: nowIso,
@@ -614,9 +678,9 @@ export async function executeCampaignDiscovery(
           discoveryQuery: candidate.discoveryQuery,
           qualificationReason,
           funnelType: effectiveFunnel,
-          pipelineStage: score.score >= 40 ? "qualified" : "discovered",
-          icpScore: score.score,
-          priority: score.priority,
+          pipelineStage: finalPipelineStage,
+          icpScore: finalScore,
+          priority: finalPriority,
           contactPolicy: "manual_only",
           status: "identified",
           createdAt: nowIso,
@@ -632,7 +696,7 @@ export async function executeCampaignDiscovery(
           metadata: JSON.stringify({
             query: candidate.discoveryQuery,
             sourceUrl: candidate.sourceUrl,
-            score: score.score,
+            score: finalScore,
             matches: score.matches,
             aiValidation: aiDecision,
             sent: false,

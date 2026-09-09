@@ -58,7 +58,10 @@ export type PublicInstagramCandidate = {
   publicSignal?: string;
   discoveryKind?: DiscoverySeed["kind"];
   discoveryQuery: string;
+  localBusinessUrl?: string;
 };
+
+export const LOCAL_WEB_RESULTS_VERIFIED_MARKER = "Busca completa no Maps e nos Resultados da Web.";
 
 export type PublicLocalBusinessOpportunity = {
   businessName: string;
@@ -69,7 +72,7 @@ export type PublicLocalBusinessOpportunity = {
   googleMapsUrl: string;
   websiteUrl?: string;
   instagramUsername?: string;
-  status: "website_opportunity" | "instagram_not_found";
+  status: "website_opportunity" | "instagram_not_found" | "instagram_found";
   notes?: string;
 };
 
@@ -78,6 +81,14 @@ function normalize(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("pt-BR")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function normalizeLocalDiscoveryTerm(value: string) {
+  return value
+    .replace(/\bmanicuri\b/giu, "manicure")
+    .replace(/\bpedicuri\b/giu, "pedicure")
     .replace(/\s+/g, " ")
     .trim();
 }

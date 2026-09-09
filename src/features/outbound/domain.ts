@@ -55,6 +55,9 @@ export function scorePublicProfile(
     location?: string;
     publicSignal?: string;
     funnelType: OutboundFunnel;
+    campaignTerms?: string[];
+    targetLocations?: string[];
+    discoverySource?: "local_business";
   },
   business: BusinessConfig,
 ) {
@@ -67,16 +70,31 @@ export function scorePublicProfile(
     input.funnelType === "partner"
       ? business.partnershipSegments
       : business.icpSegments;
-  const keywords = [...business.icpKeywords, ...segmentTerms]
+  const campaignStopWords = new Set(["com", "das", "dos", "em", "para", "por", "uma"]);
+  const campaignTerms = (input.campaignTerms || []).flatMap((term) => {
+    const normalized = normalize(term);
+    return [
+      normalized,
+      ...normalized.split(/[^a-z0-9]+/u).filter((word) => word.length >= 4 && !campaignStopWords.has(word)),
+    ];
+  });
+  const keywords = [...business.icpKeywords, ...segmentTerms, ...campaignTerms]
     .map(normalize)
     .filter(Boolean);
   const matches = [...new Set(keywords.filter((term) => searchable.includes(term)))];
   const geography = normalize(business.targetGeography);
+  const configuredLocationTerms = (input.targetLocations || []).flatMap((location) => {
+    const normalized = normalize(location);
+    return [
+      normalized,
+      ...normalized.split(/[^a-z0-9]+/u).filter((word) => word.length >= 4),
+    ];
+  });
   const geographyMatch = Boolean(
     input.location &&
       geography &&
-      (normalize(input.location).includes(geography) || geography.includes(normalize(input.location))),
-  );
+      (normalize(input.location).includes(geography) || geography.includes(normalize(input.location)))
+  ) || configuredLocationTerms.some((term) => searchable.includes(term));
   const personalContext = normalize([input.bio, input.publicSignal].filter(Boolean).join(" "));
   const consumerIdentity = input.funnelType === "consumer" && hasConsumerIdentitySignal(personalContext);
   const signalScore = input.publicSignal?.trim() && (matches.length > 0 || consumerIdentity) ? 20 : 0;
@@ -84,9 +102,10 @@ export function scorePublicProfile(
   const keywordScore = Math.min(50, matches.length * 15);
   const geographyScore = geographyMatch ? 10 : 0;
   const consumerIdentityScore = consumerIdentity ? 20 : 0;
+  const sourceScore = input.discoverySource === "local_business" ? 20 : 0;
   const score = Math.min(
     100,
-    signalScore + categoryScore + keywordScore + geographyScore + consumerIdentityScore,
+    signalScore + categoryScore + keywordScore + geographyScore + consumerIdentityScore + sourceScore,
   );
   return {
     score,
