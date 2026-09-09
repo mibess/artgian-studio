@@ -231,11 +231,24 @@ export default async function CampaignsPage({
                 .filter((item) => item.campaignId === campaign.id)
                 .sort((left, right) => right.profilesCreated - left.profilesCreated || right.profilesQualified - left.profilesQualified)
                 .slice(0, 3);
-              const pending = jobs.some((job) => job.type === "discover_prospects" && ["pending", "running"].includes(job.status) && jobBelongsToCampaign(job.payload, campaign.id));
+              const campaignDiscoveryJobs = jobs.filter(
+                (job) =>
+                  job.type === "discover_prospects" &&
+                  ["pending", "running"].includes(job.status) &&
+                  jobBelongsToCampaign(job.payload, campaign.id),
+              );
+              const running = campaignDiscoveryJobs.some(
+                (job) => job.status === "running",
+              );
+              const nextPending = campaignDiscoveryJobs
+                .filter((job) => job.status === "pending")
+                .sort((left, right) =>
+                  left.scheduledAt.localeCompare(right.scheduledAt),
+                )[0];
               return (
                 <article className="rounded-[18px] bg-[#f7f7f2] p-4 sm:p-5" key={campaign.id}>
                   <div className="flex items-start justify-between gap-3">
-                    <div><h3 className="text-sm font-bold text-[#294653]">{campaign.name}</h3><p className="mt-1 text-[9px] text-[#859197]">{pending ? "Busca aguardando ou em execução" : "Nenhuma busca pendente"}</p></div>
+                    <div><h3 className="text-sm font-bold text-[#294653]">{campaign.name}</h3><p className="mt-1 text-[9px] text-[#859197]">{running ? "Busca em execução" : nextPending ? `Próxima busca agendada para ${formatDateTime(nextPending.scheduledAt)}` : "Nenhuma busca pendente"}</p></div>
                     <span className={`rounded-full px-2.5 py-1 text-[8px] font-bold ${campaign.discoveryEnabled ? "bg-[#d8ede4] text-[#2b7258]" : "bg-[#e7e9e6] text-[#69756f]"}`}>{campaign.discoveryEnabled ? "Ativa" : "Inativa"}</span>
                   </div>
                   <form action={saveCampaignDiscoverySettings} className="mt-4 space-y-3">
@@ -264,7 +277,7 @@ export default async function CampaignsPage({
                   {campaign.discoveryEnabled && (
                     <form action={queueCampaignDiscoveryNow} className="mt-2">
                       <input type="hidden" name="campaignId" value={campaign.id} />
-                      <SubmitButton disabled={pending || discoveryPaused} pendingLabel="Agendando…" className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#bdd6ca] bg-white px-4 py-2.5 text-[10px] font-bold text-[#2f7c60] disabled:opacity-40"><Play size={12} />Buscar agora</SubmitButton>
+                      <SubmitButton disabled={running || discoveryPaused} pendingLabel="Agendando…" className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#bdd6ca] bg-white px-4 py-2.5 text-[10px] font-bold text-[#2f7c60] disabled:opacity-40"><Play size={12} />Buscar agora</SubmitButton>
                     </form>
                   )}
                   {latestRun && <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[9px] leading-4 text-[#6d7c82]"><strong className="text-[#415967]">Última execução:</strong> {latestRun.status === "completed" ? `${latestRun.profilesCreated} novos de ${latestRun.profilesInspected} analisados` : latestRun.status === "failed" ? `falhou — ${latestRun.error || "verifique o worker"}` : "em andamento"}.</div>}

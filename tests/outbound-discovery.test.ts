@@ -178,4 +178,29 @@ describe("execução segura da descoberta", () => {
       .where(eq(schema.jobs.id, "worker-discovery-job"));
     expect(job.status).toBe("completed");
   });
+
+  it("não consome descoberta quando o executor local não está disponível", async () => {
+    const [{ getCommercialDb }, schema, { runWorkerOnce }] = await Promise.all([
+      import("../src/db/commercial"),
+      import("../db/schema"),
+      import("../src/worker/processor"),
+    ]);
+    const db = await getCommercialDb();
+    const now = new Date().toISOString();
+    await db.insert(schema.jobs).values({
+      id: "cloud-must-skip-discovery",
+      type: "discover_prospects",
+      payload: JSON.stringify({ campaignId: "discovery-campaign" }),
+      status: "pending",
+      scheduledAt: now,
+      createdAt: now,
+    });
+
+    expect(await runWorkerOnce()).toEqual({ processed: false });
+    const [job] = await db
+      .select()
+      .from(schema.jobs)
+      .where(eq(schema.jobs.id, "cloud-must-skip-discovery"));
+    expect(job).toMatchObject({ status: "pending", attempts: 0 });
+  });
 });

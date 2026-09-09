@@ -106,14 +106,14 @@ export async function runWorkerOnce(
   const db = await getCommercialDb();
   const now = new Date().toISOString();
   await recoverStaleJobs(new Date(now));
-  const defaultQueueFilter = process.env.VERCEL
-    ? and(
-        eq(jobs.status, "pending"),
-        lte(jobs.scheduledAt, now),
-        ne(jobs.type, "send_outbound"),
-        ne(jobs.type, "discover_prospects"),
-      )
-    : and(eq(jobs.status, "pending"), lte(jobs.scheduledAt, now));
+  const supportedJobFilter = and(
+    dependencies.executeOutboundBrowserJob
+      ? undefined
+      : ne(jobs.type, "send_outbound"),
+    dependencies.executeDiscoveryJob
+      ? undefined
+      : ne(jobs.type, "discover_prospects"),
+  );
   const [job] = await db
     .select()
     .from(jobs)
@@ -123,8 +123,13 @@ export async function runWorkerOnce(
             eq(jobs.id, targetJobId),
             eq(jobs.status, "pending"),
             lte(jobs.scheduledAt, now),
+            supportedJobFilter,
           )
-        : defaultQueueFilter,
+        : and(
+            eq(jobs.status, "pending"),
+            lte(jobs.scheduledAt, now),
+            supportedJobFilter,
+          ),
     )
     .orderBy(asc(jobs.scheduledAt))
     .limit(1);
