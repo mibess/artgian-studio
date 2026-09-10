@@ -2,14 +2,18 @@
 
 import { FormEvent, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { cartSelections, type CartItem } from "../../lib/cart";
-import { authClient } from "../../lib/auth-client";
 import { formatCpf, formatPhone } from "../../lib/brazil";
 import { formatBrl } from "../../lib/catalog";
 import type { ShippingOption } from "../../lib/melhor-envio";
 import ProductColorImage from "../components/ProductColorImage";
 
-type CheckoutFormProps = { items: CartItem[]; fromCart?: boolean };
+type CheckoutFormProps = {
+  customer: { name: string; email: string };
+  items: CartItem[];
+  fromCart?: boolean;
+};
 
 type QuoteResponse = {
   postalCode?: string;
@@ -22,28 +26,29 @@ function onlyPostalCodeDigits(value: string) {
 }
 
 export default function CheckoutForm({
+  customer,
   items,
   fromCart = false,
 }: CheckoutFormProps) {
+  const router = useRouter();
   const selections = cartSelections(items);
   const subtotalCents = selections.reduce(
     (sum, selection) => sum + selection.subtotalCents,
     0,
   );
-  const { data: session } = authClient.useSession();
-  const loginReturnTo = fromCart
-    ? "/comprar"
-    : `/comprar?${new URLSearchParams({
-        produto: items[0].productId,
-        cor: items[0].color,
-        quantidade: String(items[0].quantity),
-        ...(items[0].personalization
-          ? { personalizacao: items[0].personalization }
-          : {}),
-      }).toString()}`;
   const quoteVersion = useRef(0);
   const [submitting, setSubmitting] = useState(false);
   const [quoting, setQuoting] = useState(false);
+  const couponVersion = useRef(0);
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState<{
+    code: string;
+    discountCents: number;
+    subtotalCents: number;
+    expiresAt: string | null;
+  } | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
   const [error, setError] = useState("");
   const [shippingError, setShippingError] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -56,7 +61,40 @@ export default function CheckoutForm({
   const selectedShipping = shippingOptions.find(
     (option) => option.serviceId === selectedServiceId,
   );
-  const totalCents = subtotalCents + (selectedShipping?.priceCents ?? 0);
+  const appliedCoupon = coupon?.subtotalCents === subtotalCents ? coupon : null;
+  const totalCents =
+    subtotalCents -
+    (appliedCoupon?.discountCents ?? 0) +
+    (selectedShipping?.priceCents ?? 0);
+
+  async function applyCoupon() {
+    const version = ++couponVersion.current;
+    setApplyingCoupon(true);
+    setCouponError("");
+    setCoupon(null);
+    try {
+      const response = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: couponCode, items }),
+      });
+      const result = await response.json();
+      if (version !== couponVersion.current) return;
+      if (!response.ok)
+        throw new Error(result.error || "Não foi possível aplicar o cupom.");
+      setCoupon(result);
+      setCouponCode(result.code);
+    } catch (error) {
+      if (version === couponVersion.current)
+        setCouponError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível aplicar o cupom.",
+        );
+    } finally {
+      if (version === couponVersion.current) setApplyingCoupon(false);
+    }
+  }
 
   function handlePostalCodeChange(value: string) {
     setPostalCode(value);
@@ -127,6 +165,20 @@ export default function CheckoutForm({
       return;
     }
 
+    if (couponCode.trim() && !appliedCoupon) {
+      setCouponError("Aplique o cupom ou limpe o código antes de pagar.");
+      return;
+    }
+    if (
+      appliedCoupon?.expiresAt &&
+      Date.parse(appliedCoupon.expiresAt) <= Date.now()
+    ) {
+      setCoupon(null);
+      setCouponError(
+        "Este cupom expirou. Remova o código ou informe outro cupom.",
+      );
+      return;
+    }
     setSubmitting(true);
     const form = new FormData(event.currentTarget);
     const payload = Object.fromEntries(form.entries());
@@ -137,6 +189,7 @@ export default function CheckoutForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
+          couponCode: appliedCoupon?.code,
           items,
           shippingServiceId: selectedShipping.serviceId,
           shippingPriceCents: selectedShipping.priceCents,
@@ -147,6 +200,12 @@ export default function CheckoutForm({
         orderId?: string;
         error?: string;
       };
+
+      if (response.status === 401) {
+        const next = `${window.location.pathname}${window.location.search}`;
+        router.push(`/login?next=${encodeURIComponent(next)}`);
+        return;
+      }
 
       if (!response.ok || !result.checkoutUrl) {
         throw new Error(
@@ -181,23 +240,10 @@ export default function CheckoutForm({
         className="space-y-9 rounded-[2rem] border border-white bg-white/70 p-6 shadow-[0_20px_60px_rgba(11,36,71,.07)] sm:p-9"
         onSubmit={handleSubmit}
       >
-        {!session && (
-          <p className="text-sm leading-6 text-[#647087]">
-            <Link
-              href={`/login?next=${encodeURIComponent(loginReturnTo)}`}
-              className="font-semibold text-[#0b2447] underline underline-offset-4"
-            >
-              Entre na sua conta
-            </Link>{" "}
-            para acompanhar este pedido, ou continue como visitante.
-          </p>
-        )}
-        {session && (
-          <p className="text-sm text-[#647087]">
-            Comprando como{" "}
-            <strong className="text-[#0b2447]">{session.user.name}</strong>
-          </p>
-        )}
+        <p className="text-sm text-[#647087]">
+          Comprando como{" "}
+          <strong className="text-[#0b2447]">{customer.name}</strong>
+        </p>
         <section>
           <div className="flex items-center gap-3">
             <span className="grid size-8 place-items-center rounded-full border border-[#b88a3b] font-serif text-sm text-[#b88a3b]">
@@ -213,7 +259,7 @@ export default function CheckoutForm({
               <input
                 className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
                 name="customerName"
-                defaultValue={session?.user.name ?? ""}
+                defaultValue={customer.name}
                 autoComplete="name"
                 required
               />
@@ -224,8 +270,9 @@ export default function CheckoutForm({
                 className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
                 type="email"
                 name="customerEmail"
-                defaultValue={session?.user.email ?? ""}
+                value={customer.email}
                 autoComplete="email"
+                readOnly
                 required
               />
             </label>
@@ -442,6 +489,87 @@ export default function CheckoutForm({
           </div>
         </section>
 
+        <section
+          aria-labelledby="coupon-title"
+          className="rounded-2xl border border-[#b88a3b]/25 bg-[#f7f3ea] p-5"
+        >
+          <h2 id="coupon-title" className="font-serif text-2xl">
+            Cupom de desconto
+          </h2>
+          <label
+            className="mt-4 block text-xs font-semibold"
+            htmlFor="coupon-code"
+          >
+            Código do cupom
+          </label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <input
+              id="coupon-code"
+              autoComplete="off"
+              maxLength={40}
+              disabled={submitting}
+              value={couponCode}
+              placeholder="Digite seu cupom"
+              className="h-12 min-w-0 flex-1 rounded-xl border border-[#0b2447]/20 bg-white px-4 text-sm uppercase"
+              onChange={(event) => {
+                couponVersion.current += 1;
+                setApplyingCoupon(false);
+                setCouponCode(event.target.value.toUpperCase());
+                setCoupon(null);
+                setCouponError("");
+              }}
+            />
+            <button
+              type="button"
+              onClick={applyCoupon}
+              disabled={applyingCoupon || submitting || !couponCode.trim()}
+              className="rounded-full bg-[#0b2447] px-5 text-xs font-bold text-white disabled:opacity-60"
+            >
+              {applyingCoupon ? "Aplicando…" : "Aplicar cupom"}
+            </button>
+            {couponCode && (
+              <button
+                type="button"
+                disabled={submitting}
+                className="text-xs font-semibold underline"
+                onClick={() => {
+                  couponVersion.current += 1;
+                  setCouponCode("");
+                  setCoupon(null);
+                  setCouponError("");
+                  setApplyingCoupon(false);
+                }}
+              >
+                Remover cupom
+              </button>
+            )}
+          </div>
+          {appliedCoupon && (
+            <p
+              role="status"
+              className="mt-3 break-words text-sm text-emerald-800"
+            >
+              Cupom {appliedCoupon.code} aplicado: −
+              {formatBrl(appliedCoupon.discountCents)}.
+              {appliedCoupon.expiresAt &&
+                ` Válido até ${new Date(appliedCoupon.expiresAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} (Brasília).`}
+            </p>
+          )}
+          {couponError && (
+            <p role="alert" className="mt-3 text-sm text-red-700">
+              {couponError}{" "}
+              <Link href="/conta" className="underline">
+                Ver meus pedidos
+              </Link>
+            </p>
+          )}
+          <p className="mt-3 text-xs leading-5 text-[#647087]">
+            Um cupom por pedido. O desconto vale para os produtos; o frete
+            permanece igual. A disponibilidade será confirmada ao iniciar o
+            pagamento.
+          </p>
+        </section>
+
         <label className="flex items-start gap-3 text-xs leading-5 text-[#647087]">
           <input className="mt-1 accent-[#0b2447]" type="checkbox" required />
           Confirmo que os dados pessoais e de entrega estão corretos.
@@ -459,7 +587,7 @@ export default function CheckoutForm({
         <button
           className="flex h-14 w-full items-center justify-between rounded-full bg-[#0b2447] pr-2 pl-6 font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-[#173b68] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
           type="submit"
-          disabled={submitting || !selectedShipping}
+          disabled={submitting || applyingCoupon || !selectedShipping}
           aria-busy={submitting}
         >
           {submitting ? (
@@ -517,6 +645,16 @@ export default function CheckoutForm({
               <dt className="text-white/55">Subtotal</dt>
               <dd>{formatBrl(subtotalCents)}</dd>
             </div>
+            {appliedCoupon && (
+              <div className="flex justify-between gap-4 text-[#d8bc7b]">
+                <dt className="min-w-0 break-all">
+                  Desconto · {appliedCoupon.code}
+                </dt>
+                <dd className="shrink-0">
+                  −{formatBrl(appliedCoupon.discountCents)}
+                </dd>
+              </div>
+            )}
             <div className="flex justify-between gap-4">
               <dt className="text-white/55">Entrega</dt>
               <dd className="text-right">

@@ -106,6 +106,13 @@
       "when": 1789049579627,
       "tag": "0014_unusual_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1789072995027,
+      "tag": "0015_gray_manta",
+      "breakpoints": true
     }
   ]
 }

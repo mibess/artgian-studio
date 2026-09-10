@@ -46,6 +46,7 @@ const groups = [
     items: [
       { href: "/comercial/orcamentos", label: "Orçamentos", icon: BriefcaseBusiness },
       { href: "/comercial/pedidos", label: "Pedidos", icon: PackageCheck },
+      { href: "/admin/descontos", label: "Descontos", icon: Tags },
       { href: "/comercial/produtos", label: "Produtos", icon: Boxes },
       { href: "/comercial/campanhas", label: "Campanhas", icon: Tags },
       { href: "/comercial/experimentos", label: "Experimentos", icon: FlaskConical },

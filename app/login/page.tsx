@@ -31,12 +31,12 @@ export default async function LoginPage({
             com a sua cara.
           </h1>
           <p className="mt-6 max-w-sm text-sm leading-7 text-[#647087]">
-            Entre para acompanhar suas novas compras e preencher seus dados com
-            mais facilidade.
+            Entre ou crie sua conta para finalizar compras, acompanhar pedidos
+            e preencher seus dados com mais facilidade.
           </p>
           <p className="mt-5 text-xs leading-6 text-[#647087]">
-            Seu carrinho continua aqui enquanto você entra. Se preferir, também
-            pode comprar sem criar uma conta.
+            Seu carrinho e a seleção do produto continuam aqui enquanto você
+            acessa sua conta.
           </p>
         </div>
         <LoginForm

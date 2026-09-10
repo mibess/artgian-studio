@@ -5,9 +5,11 @@ import type { CartItem } from "../../lib/cart";
 import { EmptyCart } from "../carrinho/Cart";
 import CheckoutForm from "./CheckoutForm";
 export default function CheckoutContents({
+  customer,
   initialItem,
   invalidSelection,
 }: {
+  customer: { name: string; email: string };
   initialItem: CartItem | null;
   invalidSelection: boolean;
 }) {
@@ -33,6 +35,7 @@ export default function CheckoutContents({
   return (
     <CheckoutForm
       key={JSON.stringify(items)}
+      customer={customer}
       items={items}
       fromCart={!initialItem}
     />

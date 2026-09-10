@@ -76,7 +76,14 @@ export function NativeSubmitButton({
         ) {
           return;
         }
-        setPending(true);
+        // Submit while the button is still enabled: disabling in this click
+        // cancels the browser's default form submission in React 19.
+        const form = event.currentTarget.form;
+        if (form && type === "submit") {
+          event.preventDefault();
+          form.requestSubmit(event.currentTarget);
+          setPending(true);
+        }
       }}
     >
       <ButtonContent pending={pending} pendingLabel={pendingLabel}>

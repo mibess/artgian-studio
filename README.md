@@ -274,3 +274,10 @@ Referências: [Next.js e Better Auth](https://better-auth.com/docs/integrations/
 Validação local: `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build` e
 `pnpm exec playwright test tests/e2e/store-flow.spec.ts`. Os testes de loja usam
 banco isolado e respostas simuladas de frete/pagamento, sem criar cobranças reais.
+
+### Cupons de desconto
+
+O painel `/admin/descontos` gerencia cupons manuais; a API `/api/coupons/game`
+gera recompensas de 5%, 10%, 20% ou 30% válidas por 30 minutos. Consulte
+[Cupons e integração do jogo](./docs/cupons-jogo.md) para configuração,
+migração, contrato HTTP, `curl`, regras de pagamento e prompt para o jogo.

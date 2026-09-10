@@ -1,3 +1,15 @@
+export class MercadoPagoRequestError extends Error {
+  constructor(
+    public status: number,
+    detail: string,
+  ) {
+    super(`Mercado Pago respondeu ${status}: ${detail.slice(0, 500)}`);
+  }
+  get definitelyNotCreated() {
+    return [400, 401, 403, 404, 422].includes(this.status);
+  }
+}
+
 const API_BASE_URL = "https://api.mercadopago.com";
 
 export type MercadoPagoPreference = {
@@ -51,9 +63,7 @@ async function mercadoPagoRequest<T>(
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(
-      `Mercado Pago respondeu ${response.status}: ${detail.slice(0, 500)}`,
-    );
+    throw new MercadoPagoRequestError(response.status, detail);
   }
 
   return (await response.json()) as T;
@@ -61,6 +71,9 @@ async function mercadoPagoRequest<T>(
 
 export async function createCheckoutPreference(input: {
   orderId: string;
+  discountCents?: number;
+  couponCode?: string;
+  expiresAt?: string | null;
   items: {
     productId: string;
     productName: string;
@@ -78,6 +91,39 @@ export async function createCheckoutPreference(input: {
   addressNumber: string;
   appUrl: string;
 }) {
+  const subtotal = input.items.reduce(
+    (sum, item) => sum + item.quantity * item.unitPriceCents,
+    0,
+  );
+  const discount = input.discountCents ?? 0;
+  if (!Number.isSafeInteger(discount) || discount < 0 || discount > subtotal)
+    throw new Error("Desconto inválido para o pagamento.");
+  // Allocate in integer cents, splitting units when a line cannot divide evenly.
+  let accumulated = 0;
+  let allocated = 0;
+  const pricedItems = input.items.flatMap((item) => {
+    accumulated += item.unitPriceCents * item.quantity;
+    const target = Math.floor((accumulated * discount) / subtotal);
+    const lineTotal =
+      item.unitPriceCents * item.quantity - (target - allocated);
+    allocated = target;
+    const unitPriceCents = Math.floor(lineTotal / item.quantity);
+    const remainder = lineTotal % item.quantity;
+    return [
+      { ...item, unitPriceCents, quantity: item.quantity - remainder },
+      { ...item, unitPriceCents: unitPriceCents + 1, quantity: remainder },
+    ].filter((row) => row.quantity > 0 && row.unitPriceCents > 0);
+  });
+  const shippingOnly = pricedItems.length === 0;
+  if (shippingOnly)
+    pricedItems.push({
+      productId: `shipping-${input.orderId}`,
+      productName: "Entrega do pedido — produtos com desconto integral",
+      color: "",
+      personalization: null,
+      quantity: 1,
+      unitPriceCents: input.shippingCents,
+    });
   const preference = await mercadoPagoRequest<MercadoPagoPreference>(
     "/checkout/preferences",
     {
@@ -86,7 +132,7 @@ export async function createCheckoutPreference(input: {
         "X-Idempotency-Key": input.orderId,
       },
       body: JSON.stringify({
-        items: input.items.map((item) => ({
+        items: pricedItems.map((item) => ({
           id: item.productId,
           title: item.productName,
           description: [
@@ -102,7 +148,7 @@ export async function createCheckoutPreference(input: {
           unit_price: item.unitPriceCents / 100,
         })),
         shipments: {
-          cost: input.shippingCents / 100,
+          cost: shippingOnly ? 0 : input.shippingCents / 100,
           mode: "not_specified",
         },
         payer: {
@@ -120,12 +166,17 @@ export async function createCheckoutPreference(input: {
         external_reference: input.orderId,
         metadata: {
           order_id: input.orderId,
+          discount_cents: discount,
+          coupon_code: input.couponCode,
         },
         back_urls: {
           success: `${input.appUrl}/comprar/sucesso?pedido=${input.orderId}`,
           pending: `${input.appUrl}/comprar/pendente?pedido=${input.orderId}`,
           failure: `${input.appUrl}/comprar/falha?pedido=${input.orderId}`,
         },
+        ...(input.expiresAt
+          ? { expires: true, expiration_date_to: input.expiresAt }
+          : {}),
         auto_return: "approved",
         notification_url: `${input.appUrl}/api/mercado-pago/webhook`,
         statement_descriptor: "ARTGIAN STUDIO",

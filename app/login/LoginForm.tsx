@@ -298,12 +298,14 @@ export default function LoginForm({
         </Link>
         .
       </p>
-      <Link
-        href={next === "/comprar" ? "/comprar" : "/carrinho"}
-        className="mt-5 block text-center text-xs font-semibold"
-      >
-        Continuar sem entrar →
-      </Link>
+      {!next.startsWith("/comprar") && (
+        <Link
+          href="/produtos"
+          className="mt-5 block text-center text-xs font-semibold"
+        >
+          Voltar aos produtos →
+        </Link>
+      )}
     </section>
   );
 }

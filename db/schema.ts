@@ -27,6 +27,13 @@ export const orders = sqliteTable(
     city: text("city").notNull(),
     state: text("state").notNull(),
     subtotalCents: integer("subtotal_cents").notNull(),
+    couponId: text("coupon_id"),
+    couponCode: text("coupon_code"),
+    couponKind: text("coupon_kind"),
+    couponValue: integer("coupon_value"),
+    discountCents: integer("discount_cents").notNull().default(0),
+    couponRedeemedAt: text("coupon_redeemed_at"),
+    checkoutUrl: text("checkout_url"),
     shippingCents: integer("shipping_cents").notNull(),
     shippingProvider: text("shipping_provider"),
     shippingServiceId: text("shipping_service_id"),
@@ -52,9 +59,45 @@ export const orders = sqliteTable(
   (table) => [
     index("orders_status_idx").on(table.status),
     index("orders_user_idx").on(table.userId),
+    index("orders_coupon_idx").on(table.couponId),
     index("orders_payment_id_idx").on(table.mercadoPagoPaymentId),
   ],
 );
+
+export const coupons = sqliteTable("coupons", {
+  id: text("id").primaryKey(),
+  code: text("code").notNull(),
+  source: text("source", { enum: ["admin", "game"] }).notNull(),
+  kind: text("kind", { enum: ["percent", "fixed"] }).notNull(),
+  value: integer("value").notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  startsAt: text("starts_at"),
+  expiresAt: text("expires_at"),
+  maxUses: integer("max_uses"),
+  allocatedUses: integer("allocated_uses").notNull().default(0),
+  minSubtotalCents: integer("min_subtotal_cents").notNull().default(0),
+  maxDiscountCents: integer("max_discount_cents"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("coupons_code_unique").on(table.code),
+  index("coupons_expiration_idx").on(table.source, table.expiresAt),
+]);
+
+// Retained after coupon deletion: a completed game cannot mint a second reward.
+export const couponIssuances = sqliteTable("coupon_issuances", {
+  requestKey: text("request_key").primaryKey(),
+  completionHash: text("completion_hash").notNull(),
+  playerHash: text("player_hash").notNull(),
+  couponId: text("coupon_id").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [uniqueIndex("coupon_completion_unique").on(table.completionHash)]);
+
+export const couponRateLimits = sqliteTable("coupon_rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull(),
+  resetsAt: text("resets_at").notNull(),
+});
 
 export const orderItems = sqliteTable(
   "order_items",

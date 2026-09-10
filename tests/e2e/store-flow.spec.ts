@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
-test("cart persists variants, synchronizes tabs and checks out all products", async ({
+test("cart persists variants, synchronizes tabs and requires login at checkout", async ({
   page,
   context,
 }) => {
@@ -36,37 +36,9 @@ test("cart persists variants, synchronizes tabs and checks out all products", as
     .click();
   await expect(page.getByRole("article")).toHaveCount(2);
   await page.getByRole("link", { name: "Finalizar compra" }).click();
-  await expect(page.locator("aside")).toContainText("Organizador Arco");
-  await expect(page.locator("aside")).toContainText("Porta-Palhetas Solo");
-  await expect(page.locator("aside")).toContainText("Bia");
-  await page.getByLabel("CEP").fill("01001000");
-  await page.route("**/api/shipping/quote", async (route) => {
-    expect(route.request().postDataJSON().items).toHaveLength(2);
-    await route.fulfill({
-      json: {
-        postalCode: "01001000",
-        options: [
-          {
-            serviceId: "1",
-            serviceName: "PAC",
-            companyName: "Correios",
-            companyId: "1",
-            priceCents: 1500,
-            deliveryTimeDays: 5,
-            volumes: [],
-          },
-        ],
-      },
-    });
-  });
-  await page.getByRole("button", { name: /Calcular/ }).click();
-  await expect(
-    page.getByRole("button", { name: "Pagar com Mercado Pago" }),
-  ).toBeEnabled();
-  await page.getByLabel("CEP").fill("02002000");
-  await expect(
-    page.getByRole("button", { name: "Calcule a entrega para continuar" }),
-  ).toBeDisabled();
+  await expect(page).toHaveURL(/\/login\?next=%2Fcomprar/);
+  await expect(page.getByText(/Entre ou crie sua conta para finalizar/)).toBeVisible();
+  await expect(page.getByText("Continuar sem entrar →")).toHaveCount(0);
   await second.close();
 });
 

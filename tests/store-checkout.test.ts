@@ -50,7 +50,13 @@ beforeEach(() => {
   vi.stubEnv("MELHOR_ENVIO_USER_AGENT", "Test (test@example.com)");
   vi.stubEnv("MERCADO_PAGO_ACCESS_TOKEN", "test-token");
   vi.stubEnv("MERCADO_PAGO_ENVIRONMENT", "sandbox");
-  mock.session.mockResolvedValue({ user: { id: "customer-session-id" } });
+  mock.session.mockResolvedValue({
+    user: {
+      id: "customer-session-id",
+      name: "Cliente da sessão",
+      email: "account@example.com",
+    },
+  });
   mock.fetch.mockImplementation(async (url: string) =>
     url.includes("shipment/calculate")
       ? Response.json([
@@ -90,6 +96,7 @@ describe("multi-item checkout", () => {
     const order = mock.values.mock.calls[0][0];
     expect(order).toMatchObject({
       userId: "customer-session-id",
+      customerEmail: "account@example.com",
       subtotalCents: 12770,
       totalCents: 14270,
     });
@@ -104,12 +111,15 @@ describe("multi-item checkout", () => {
     ).toEqual([54.9, 17.9]);
     expect(payment.shipments.cost).toBe(15);
   });
-  it("retains guest checkout without accepting a forged account ID", async () => {
+  it("rejects checkout without an authenticated account", async () => {
     mock.session.mockResolvedValue(null);
-    expect(
-      (await POST(request({ ...payload, userId: "forged-id" }))).status,
-    ).toBe(201);
-    expect(mock.values.mock.calls[0][0].userId).toBeNull();
+    const response = await POST(request({ ...payload, userId: "forged-id" }));
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      error: "Entre na sua conta para finalizar a compra.",
+    });
+    expect(mock.batch).not.toHaveBeenCalled();
+    expect(mock.fetch).not.toHaveBeenCalled();
   });
   it("rejects shipping price changes before persisting an order", async () => {
     expect(

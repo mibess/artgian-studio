@@ -1,3 +1,4 @@
+import { requestOrigin } from "../../../lib/request-origin";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { orderItems, orders } from "../../../db/schema";
@@ -7,15 +8,22 @@ import { getCustomerSession } from "../../../lib/auth";
 import {
   createCheckoutPreference,
   getEnvironmentVariable,
+  MercadoPagoRequestError,
 } from "../../../lib/mercado-pago";
 import {
   ShippingConfigurationError,
   ShippingProviderError,
 } from "../../../lib/melhor-envio";
+import {
+  CouponError,
+  reserveCoupon,
+  releaseCouponAfterSetupFailure,
+} from "../../../lib/coupons";
 import { quoteCartShipping } from "../../../lib/shipping";
 
 type CheckoutPayload = {
   items?: unknown;
+  couponCode?: unknown;
   productId?: string;
   color?: string;
   quantity?: number;
@@ -56,8 +64,15 @@ async function resolveAppUrl(request: Request) {
 
 export async function POST(request: Request) {
   const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (origin && origin !== requestOrigin(request)) {
     return Response.json({ error: "Origem inválida." }, { status: 403 });
+  }
+  const session = await getCustomerSession(request.headers);
+  if (!session) {
+    return Response.json(
+      { error: "Entre na sua conta para finalizar a compra." },
+      { status: 401 },
+    );
   }
   let orderId: string | null = null;
 
@@ -77,10 +92,8 @@ export async function POST(request: Request) {
       (sum, selection) => sum + selection.subtotalCents,
       0,
     );
-    const session = await getCustomerSession(request.headers);
-
     const customerName = clean(payload.customerName, 120);
-    const customerEmail = clean(payload.customerEmail, 180).toLowerCase();
+    const customerEmail = session.user.email.trim().toLowerCase();
     const customerPhone = digitsOnly(payload.customerPhone, 11);
     const customerDocument = digitsOnly(payload.customerDocument, 11);
     const postalCode = digitsOnly(payload.postalCode, 8);
@@ -146,53 +159,94 @@ export async function POST(request: Request) {
     }
 
     const appUrl = await resolveAppUrl(request);
+    if (!(await getEnvironmentVariable("MERCADO_PAGO_ACCESS_TOKEN")))
+      throw new Error("Pagamento não configurado.");
     orderId = crypto.randomUUID();
     const db = await getDb();
-    const totalCents = subtotalCents + shippingOption.priceCents;
+    let discountCents = 0;
+    let couponSnapshot:
+      | {
+          couponId: string;
+          couponCode: string;
+          couponKind: string;
+          couponValue: number;
+        }
+      | undefined;
+    let couponExpiresAt: string | null = null;
+    let totalCents = subtotalCents + shippingOption.priceCents;
     const shippingQuotedAt = new Date().toISOString();
 
-    await db.batch([
-      db.insert(orders).values({
-        id: orderId,
-        userId: session?.user.id ?? null,
-        status: "pending",
-        customerName,
-        customerEmail,
-        customerPhone,
-        customerDocument,
-        postalCode,
-        streetAddress,
-        addressNumber,
-        addressComplement: addressComplement || null,
-        neighborhood,
-        city,
-        state,
-        subtotalCents,
-        shippingCents: shippingOption.priceCents,
-        shippingProvider: "melhor_envio",
-        shippingServiceId: shippingOption.serviceId,
-        shippingServiceName: shippingOption.serviceName,
-        shippingCompanyId: shippingOption.companyId,
-        shippingCompanyName: shippingOption.companyName,
-        shippingDeliveryTimeDays: shippingOption.deliveryTimeDays,
-        shippingQuotedAt,
-        totalCents,
-      }),
-      db.insert(orderItems).values(
-        selections.map((selection) => ({
-          orderId: orderId!,
-          productId: selection.productId,
-          productName: selection.product.name,
-          color: selection.color,
-          personalization: selection.personalization,
-          quantity: selection.quantity,
-          unitPriceCents: selection.product.unitPriceCents,
-        })),
-      ),
-    ]);
+    const orderValues = () => ({
+      id: orderId!,
+      userId: session.user.id,
+      status: "pending",
+      customerName,
+      customerEmail,
+      customerPhone,
+      customerDocument,
+      postalCode,
+      streetAddress,
+      addressNumber,
+      addressComplement: addressComplement || null,
+      neighborhood,
+      city,
+      state,
+      subtotalCents,
+      discountCents,
+      ...couponSnapshot,
+      shippingCents: shippingOption.priceCents,
+      shippingProvider: "melhor_envio",
+      shippingServiceId: shippingOption.serviceId,
+      shippingServiceName: shippingOption.serviceName,
+      shippingCompanyId: shippingOption.companyId,
+      shippingCompanyName: shippingOption.companyName,
+      shippingDeliveryTimeDays: shippingOption.deliveryTimeDays,
+      shippingQuotedAt,
+      totalCents,
+    });
+    const itemValues = selections.map((selection) => ({
+      orderId: orderId!,
+      productId: selection.productId,
+      productName: selection.product.name,
+      color: selection.color,
+      personalization: selection.personalization,
+      quantity: selection.quantity,
+      unitPriceCents: selection.product.unitPriceCents,
+    }));
+    if (payload.couponCode !== undefined && payload.couponCode !== "") {
+      await db.transaction(
+        async (tx) => {
+          const result = await reserveCoupon(
+            tx,
+            payload.couponCode,
+            subtotalCents,
+          );
+          discountCents = result.discountCents;
+          couponExpiresAt = result.coupon.expiresAt;
+          couponSnapshot = {
+            couponId: result.coupon.id,
+            couponCode: result.coupon.code,
+            couponKind: result.coupon.kind,
+            couponValue: result.coupon.value,
+          };
+          totalCents -= discountCents;
+          await tx.insert(orders).values(orderValues());
+          await tx.insert(orderItems).values(itemValues);
+        },
+        { behavior: "immediate" },
+      );
+    } else {
+      await db.batch([
+        db.insert(orders).values(orderValues()),
+        db.insert(orderItems).values(itemValues),
+      ]);
+    }
 
     const { preference, checkoutUrl } = await createCheckoutPreference({
       orderId,
+      discountCents,
+      couponCode: couponSnapshot?.couponCode,
+      expiresAt: couponExpiresAt,
       items: selections.map((selection) => ({
         productId: selection.productId,
         productName: selection.product.name,
@@ -215,16 +269,24 @@ export async function POST(request: Request) {
       .update(orders)
       .set({
         mercadoPagoPreferenceId: preference.id,
+        checkoutUrl,
         updatedAt: new Date().toISOString(),
       })
       .where(eq(orders.id, orderId));
 
     return Response.json({ checkoutUrl, orderId }, { status: 201 });
   } catch (error) {
+    if (error instanceof CouponError)
+      return Response.json({ error: error.message }, { status: error.status });
     if (error instanceof SyntaxError)
       return Response.json({ error: "Pedido inválido." }, { status: 400 });
     if (orderId) {
       try {
+        if (
+          error instanceof MercadoPagoRequestError &&
+          error.definitelyNotCreated
+        )
+          await releaseCouponAfterSetupFailure(orderId);
         await (
           await getDb()
         )

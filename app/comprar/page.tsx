@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import BrandHeader from "../components/BrandHeader";
 import CheckoutContents from "./CheckoutContents";
 import { getProductSelection } from "../../lib/catalog";
+import { getCustomerSession } from "../../lib/auth";
 
 export const metadata: Metadata = {
   title: "Finalizar compra | Artgian Studio",
@@ -18,10 +21,26 @@ type CheckoutPageProps = {
   }>;
 };
 
+function checkoutReturnTo(params: Awaited<CheckoutPageProps["searchParams"]>) {
+  const query = new URLSearchParams();
+  if (params.produto) query.set("produto", params.produto);
+  if (params.cor) query.set("cor", params.cor);
+  if (params.quantidade) query.set("quantidade", params.quantidade);
+  if (params.personalizacao)
+    query.set("personalizacao", params.personalizacao);
+  const serialized = query.toString();
+  return serialized ? `/comprar?${serialized}` : "/comprar";
+}
+
 export default async function CheckoutPage({
   searchParams,
 }: CheckoutPageProps) {
   const params = await searchParams;
+  const session = await getCustomerSession(await headers());
+  if (!session) {
+    const next = checkoutReturnTo(params);
+    redirect(`/login?next=${encodeURIComponent(next)}`);
+  }
   const selection = getProductSelection({
     productId: params.produto,
     color: params.cor,
@@ -53,6 +72,7 @@ export default async function CheckoutPage({
         </div>
 
         <CheckoutContents
+          customer={{ name: session.user.name, email: session.user.email }}
           initialItem={
             selection
               ? {

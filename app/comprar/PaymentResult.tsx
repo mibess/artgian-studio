@@ -128,6 +128,14 @@ export default async function PaymentResult({
                   ))}
                 </dd>
               </div>
+              {order.discountCents > 0 && (
+                <div className="flex justify-between gap-5 py-4">
+                  <dt className="text-[#647087]">Cupom {order.couponCode}</dt>
+                  <dd className="font-semibold text-emerald-800">
+                    −{formatBrl(order.discountCents)}
+                  </dd>
+                </div>
+              )}
               <div className="flex justify-between gap-5 py-4">
                 <dt className="text-[#647087]">Total</dt>
                 <dd className="font-semibold">{formatBrl(order.totalCents)}</dd>

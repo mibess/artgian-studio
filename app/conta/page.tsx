@@ -115,6 +115,21 @@ export default async function AccountPage() {
                     </span>
                     <strong>{formatBrl(order.totalCents)}</strong>
                   </div>
+                  {order.discountCents > 0 && (
+                    <p className="mt-3 text-sm text-emerald-800">
+                      Cupom {order.couponCode}: −
+                      {formatBrl(order.discountCents)}
+                    </p>
+                  )}
+                  {order.checkoutUrl &&
+                    ["pending", "rejected"].includes(order.status) && (
+                      <a
+                        href={order.checkoutUrl}
+                        className="mt-4 inline-flex rounded-full bg-[#0b2447] px-5 py-3 text-sm font-semibold text-white"
+                      >
+                        Continuar pagamento
+                      </a>
+                    )}
                   {order.shippingTrackingCode && (
                     <p className="mt-4 text-sm">
                       Rastreio: <strong>{order.shippingTrackingCode}</strong>

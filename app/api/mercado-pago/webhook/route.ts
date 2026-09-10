@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { orders, paymentEvents } from "../../../../db/schema";
+import { coupons, orders, paymentEvents } from "../../../../db/schema";
 import {
   getEnvironmentVariable,
   getPayment,
@@ -87,16 +87,47 @@ export async function POST(request: Request) {
       .onConflictDoNothing();
 
     if (matchesOrder) {
-      await db
-        .update(orders)
-        .set({
-          status: mapPaymentStatus(payment.status),
-          mercadoPagoPaymentId: String(payment.id),
-          mercadoPagoStatus: payment.status,
-          mercadoPagoStatusDetail: payment.status_detail ?? null,
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(orders.id, orderId));
+      const applyPayment = async (
+        writer: typeof db | import("../../../../lib/coupons").CouponTransaction,
+      ) => {
+        await writer
+          .update(orders)
+          .set({
+            status: mapPaymentStatus(payment.status),
+            mercadoPagoPaymentId: String(payment.id),
+            mercadoPagoStatus: payment.status,
+            mercadoPagoStatusDetail: payment.status_detail ?? null,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(orders.id, orderId));
+      };
+      if (order.couponId && payment.status === "approved") {
+        await db.transaction(
+          async (tx) => {
+            await applyPayment(tx);
+            const redeemed = await tx
+              .update(orders)
+              .set({ couponRedeemedAt: new Date().toISOString() })
+              .where(
+                and(eq(orders.id, orderId), isNull(orders.couponRedeemedAt)),
+              )
+              .returning({ couponId: orders.couponId });
+            if (redeemed.length && redeemed[0].couponId) {
+              await tx
+                .delete(coupons)
+                .where(
+                  and(
+                    eq(coupons.id, redeemed[0].couponId),
+                    eq(coupons.source, "game"),
+                  ),
+                );
+            }
+          },
+          { behavior: "immediate" },
+        );
+      } else {
+        await applyPayment(db);
+      }
     }
 
     return new Response(null, { status: 200 });
