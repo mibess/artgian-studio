@@ -145,6 +145,15 @@ describe("execução segura da descoberta", () => {
       skippedBlocked: 1,
       skippedLowScore: 3,
     });
+    const { getDiscoveryDiagnostics } = await import("../src/db/commercial");
+    const diagnostics = (await getDiscoveryDiagnostics([run.id])).map((row) => JSON.parse(row.metadata!));
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ instagramUsername: "perfil.semaderencia", stage: "pre_ai", reason: expect.stringContaining("abaixo do mínimo 40") }),
+      expect.objectContaining({ instagramUsername: "loja.presentes", stage: "pre_ai", reason: expect.stringContaining("sinais comerciais") }),
+      expect.objectContaining({ instagramUsername: "perfil.duvidoso", stage: "ai", reason: "Não há evidência suficiente de intenção de compra" }),
+      expect.objectContaining({ instagramUsername: "perfil.bloqueado", reason: "Contato bloqueado por não contato." }),
+    ]));
+    expect(await getDiscoveryDiagnostics(["other-run"])).toEqual([]);
     const remembered = await db.select().from(schema.discoveryCandidates);
     expect(remembered).toHaveLength(5);
     expect(remembered.find((item) => item.instagramUsername === "perfil.semaderencia")?.lastOutcome)

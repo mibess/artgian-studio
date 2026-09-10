@@ -12,7 +12,7 @@ import { getCommercialDb } from "../../db/commercial";
 import { canonicalInstagramUsername } from "../leads/domain";
 import {
   buildDiscoveryQualificationReason,
-  isLikelyCommercialInstagramProfile,
+  commercialInstagramProfileSignal,
   isMassAudienceInstagramProfile,
   normalizeDiscoveryStrategy,
   normalizeLocalDiscoveryTerm,
@@ -85,10 +85,11 @@ export async function qualifyAndStoreCandidates(input: {
       candidate.instagramUsername,
     );
     if (!/^[a-z0-9._]{1,30}$/.test(instagramUsername)) continue;
+    const commercialSignal = commercialInstagramProfileSignal(candidate);
     if (
       strategy !== "local_business" &&
       campaign.funnelType === "consumer" &&
-      (isLikelyCommercialInstagramProfile(candidate) ||
+      (commercialSignal ||
         isMassAudienceInstagramProfile(candidate, maximumConsumerFollowers))
     ) {
       skippedLowScore += 1;
@@ -96,7 +97,9 @@ export async function qualifyAndStoreCandidates(input: {
         candidate,
         instagramUsername,
         "low_score",
-        "Perfil não atende aos critérios mínimos da campanha.",
+        commercialSignal
+          ? `Perfil com sinais comerciais ou profissionais ("${commercialSignal}"); a campanha aceita somente consumidores finais.`
+          : `Audiência acima do limite de ${maximumConsumerFollowers} seguidores para consumidores finais.`,
       );
       continue;
     }
@@ -149,7 +152,12 @@ export async function qualifyAndStoreCandidates(input: {
       strategy !== "local_business"
     ) {
       skippedLowScore += 1;
-      await rememberCandidate(candidate, instagramUsername, "low_score");
+      await rememberCandidate(
+        candidate,
+        instagramUsername,
+        "low_score",
+        `Pontuação ${score.score} abaixo do mínimo ${campaign.discoveryMinimumScore}. Sinais compatíveis: ${score.matches.join(", ") || "nenhum"}.`,
+      );
       continue;
     }
     preparedCandidates.push({ candidate, instagramUsername, lead, score });

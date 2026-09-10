@@ -5,7 +5,7 @@ test("campanha mostra motivo de encerramento e continuidade no histórico", asyn
   page,
 }) => {
   Object.assign(process.env, {
-    DATABASE_URL: "file:./data/e2e.db",
+    DATABASE_URL: process.env.E2E_DATABASE_URL || "file:./data/e2e.db",
     COMMERCIAL_DATABASE_MODE: "local",
     TURSO_DATABASE_URL: "",
     TURSO_AUTH_TOKEN: "",

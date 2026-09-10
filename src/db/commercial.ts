@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb, getLocalCommercialDb } from "../../db";
 import {
   aiUsage,
@@ -313,6 +313,16 @@ export async function getQuotesOverview() {
 export async function getOrdersOverview() {
   const db = await getCommercialDb();
   return db.select({ order: commercialOrders, lead: leads }).from(commercialOrders).innerJoin(leads, eq(commercialOrders.leadId, leads.id)).orderBy(desc(commercialOrders.confirmedAt));
+}
+
+export async function getDiscoveryDiagnostics(runIds: string[]) {
+  if (!runIds.length) return [];
+  const db = await getCommercialDb();
+  return db.select().from(auditLogs).where(and(
+    eq(auditLogs.entityType, "discovery_run"),
+    inArray(auditLogs.entityId, runIds),
+    inArray(auditLogs.action, ["campaign_candidate_rejection_detail", "campaign_hashtag_author_unresolved"]),
+  )).orderBy(asc(auditLogs.createdAt));
 }
 
 export async function getOperationsData() {

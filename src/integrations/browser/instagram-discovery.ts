@@ -27,7 +27,10 @@ import {
   FollowersDiscoveryError,
   type FollowersDiscoveryOptions,
 } from "../../features/outbound/followers-discovery-domain";
-import type { HashtagDiscoveryOptions } from "../../features/outbound/hashtag-discovery-domain";
+import {
+  interleaveDiscoveryGroups,
+  type HashtagDiscoveryOptions,
+} from "../../features/outbound/hashtag-discovery-domain";
 
 const ALLOWED_HOSTS = new Set(["www.instagram.com", "instagram.com"]);
 let discoveryJobRunning = false;
@@ -141,14 +144,16 @@ export async function executeInstagramDiscoveryOnPage(
     30,
     100,
   );
-  const hashtagDeadline =
-    Date.now() +
+  let remainingHashtagMs =
     boundedDiscoverySetting(
       process.env.MAX_HASHTAG_DISCOVERY_SECONDS,
       600,
       1800,
-    ) *
-      1000;
+    ) * 1000;
+  const selectedSeeds = input.seeds.slice(0, 10);
+  let remainingHashtags = selectedSeeds.filter(
+    (seed) => seed.kind === "hashtag",
+  ).length;
   await page.goto("https://www.instagram.com/explore/", {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
@@ -163,7 +168,7 @@ export async function executeInstagramDiscoveryOnPage(
   const searchInput = page.getByPlaceholder(/^(Pesquisar|Search)$/i);
   await searchInput.waitFor({ state: "visible", timeout: 15_000 });
 
-  for (const seed of input.seeds.slice(0, 10)) {
+  for (const seed of selectedSeeds) {
     const query =
       seed.kind === "hashtag"
         ? `#${seed.value.replace(/^#+/, "").replace(/\s+/g, "")}`
@@ -188,21 +193,32 @@ export async function executeInstagramDiscoveryOnPage(
     const hrefs =
       seed.kind === "hashtag"
         ? await (async () => {
-            if (remainingPostBudget <= 0 || Date.now() >= hashtagDeadline)
-              return [];
+            const postBudget = Math.ceil(
+              remainingPostBudget / remainingHashtags,
+            );
+            const timeBudget = Math.ceil(
+              remainingHashtagMs / remainingHashtags,
+            );
+            remainingHashtags -= 1;
+            if (postBudget <= 0 || timeBudget <= 0) return [];
+            const started = Date.now();
             const result = await discoverHashtagAuthors(page, {
               ...input,
               hashtag: seed.value,
-              maximumAuthors: maximumProfiles * 3 - discovered.size,
-              maximumPosts: remainingPostBudget,
+              maximumAuthors: maximumProfiles * 3,
+              maximumPosts: postBudget,
               excludedUsernames: new Set([
                 ...excludedUsernames,
                 ...discovered.keys(),
                 ...(ownUsername ? [ownUsername] : []),
               ]),
-              deadline: hashtagDeadline,
+              deadline: started + timeBudget,
             });
             remainingPostBudget -= result.postsInspected;
+            remainingHashtagMs = Math.max(
+              0,
+              remainingHashtagMs - (Date.now() - started),
+            );
             return result.authors.map((username) => `/${username}/`);
           })()
         : await page
@@ -212,6 +228,7 @@ export async function executeInstagramDiscoveryOnPage(
                 .map((anchor) => anchor.getAttribute("href"))
                 .filter((href): href is string => Boolean(href)),
             );
+    let seedCandidates = 0;
     for (const href of hrefs) {
       const username = instagramUsernameFromHref(href);
       if (
@@ -222,9 +239,9 @@ export async function executeInstagramDiscoveryOnPage(
       )
         continue;
       discovered.set(username, { username, seed });
-      if (discovered.size >= maximumProfiles * 3) break;
+      seedCandidates += 1;
+      if (seedCandidates >= maximumProfiles * 3) break;
     }
-    if (discovered.size >= maximumProfiles * 3) break;
     await pauseLikePerson(page, {
       minimumVariable: "DISCOVERY_MIN_SECONDS_BETWEEN_SEARCHES",
       maximumVariable: "DISCOVERY_MAX_SECONDS_BETWEEN_SEARCHES",
@@ -236,7 +253,12 @@ export async function executeInstagramDiscoveryOnPage(
 
   const candidates: PublicInstagramCandidate[] = [];
   let profilesInspected = 0;
-  for (const discoveredProfile of discovered.values()) {
+  const balancedProfiles = interleaveDiscoveryGroups(
+    selectedSeeds.map((seed) =>
+      [...discovered.values()].filter((profile) => profile.seed === seed),
+    ),
+  );
+  for (const discoveredProfile of balancedProfiles) {
     if (profilesInspected >= maximumProfiles) break;
     if (profilesInspected > 0) {
       await pauseLikePerson(page, {

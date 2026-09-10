@@ -400,6 +400,12 @@ export function extractPublicInstagramCandidate(input: {
 export function isLikelyCommercialInstagramProfile(
   candidate: PublicInstagramCandidate,
 ) {
+  return Boolean(commercialInstagramProfileSignal(candidate));
+}
+
+export function commercialInstagramProfileSignal(
+  candidate: PublicInstagramCandidate,
+) {
   const searchable = normalize([
     candidate.instagramUsername.replace(/[._-]+/g, " "),
     candidate.name,
@@ -418,7 +424,11 @@ export function isLikelyCommercialInstagramProfile(
     /\b(rua|avenida|av\.?|rodovia)\s+[\p{L}\d]/u,
     /\b(shopee|shp[ .]?ee|mercado livre|elo7|ifood|linktree|linktr[ .]?ee)\b/u,
   ];
-  return commercialSignals.some((signal) => signal.test(searchable));
+  for (const signal of commercialSignals) {
+    const match = searchable.match(signal);
+    if (match) return match[0];
+  }
+  return null;
 }
 
 export function isMassAudienceInstagramProfile(

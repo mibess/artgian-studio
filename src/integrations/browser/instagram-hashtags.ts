@@ -23,7 +23,7 @@ function assertSession(page: Page) {
   }
 }
 
-async function readPostAuthor(page: Page) {
+export async function readPostAuthor(page: Page) {
   const signals = await page.evaluate(() => {
     const root =
       document.querySelector("article") ||
@@ -65,6 +65,20 @@ async function readPostAuthor(page: Page) {
     return {
       headerHrefs,
       structuredAuthors,
+      leadingProfileHrefs: Array.from(document.querySelectorAll("main a[href]"))
+        .filter(
+          (a) =>
+            !a.closest("aside, nav") &&
+            a.textContent?.trim() &&
+            /^\/[a-z0-9._]+\/$/i.test(a.getAttribute("href") || ""),
+        )
+        .slice(0, 2)
+        .map((a) => a.getAttribute("href") || ""),
+      firstAvatarAlt: document
+        .querySelector(
+          'main a[href] img[alt^="Foto do perfil de "], main a[href] img[alt^="Profile picture of "], main a[href] img[alt$="profile picture"]',
+        )
+        ?.getAttribute("alt"),
       title: document
         .querySelector('meta[property="og:title"]')
         ?.getAttribute("content"),
@@ -108,7 +122,7 @@ export async function discoverHashtagAuthors(
       seenPosts.add(post.postKey);
       rememberAuthor(post.instagramUsername);
     } else if (
-      post.status === "unavailable" &&
+      post.status === "author_unresolved" &&
       post.revisitAfter &&
       post.revisitAfter > new Date().toISOString()
     )
@@ -178,7 +192,7 @@ export async function discoverHashtagAuthors(
           continue;
         }
         if (
-          known?.status === "unavailable" &&
+          known?.status === "author_unresolved" &&
           known.revisitAfter &&
           known.revisitAfter > new Date().toISOString()
         )
@@ -206,14 +220,19 @@ export async function discoverHashtagAuthors(
           defaultMinimumSeconds: 4,
           defaultMaximumSeconds: 8,
         });
-        const username = await readPostAuthor(postPage);
+        let username = await readPostAuthor(postPage);
+        // React may still be rendering the byline after DOMContentLoaded.
+        if (!username && Date.now() + 1000 < input.deadline) {
+          await postPage.waitForTimeout(1000);
+          username = await readPostAuthor(postPage);
+        }
         postsInspected += 1;
         await input.onHashtagPost?.(hashtag, post.postKey, username);
         knownPosts.set(post.postKey, {
           hashtag,
           ...post,
           instagramUsername: username,
-          status: username ? "resolved" : "unavailable",
+          status: username ? "resolved" : "author_unresolved",
           revisitAfter: null,
         });
         rememberAuthor(username);

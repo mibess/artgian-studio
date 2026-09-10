@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { discoveryDiagnosticLabel } from "../../../src/features/outbound/discovery-diagnostics";
 import { followersProgressSummary } from "../../../src/features/outbound/followers-discovery-domain";
 import {
   ArrowLeft,
@@ -16,6 +17,7 @@ import {
 import { SubmitButton } from "../../components/PendingButton";
 import {
   getOperationsData,
+  getDiscoveryDiagnostics,
   getOutboundProspects,
 } from "../../../src/db/commercial";
 import {
@@ -183,6 +185,12 @@ export default async function CampaignsPage({
     (r) => r.campaignId === selected?.id,
   );
   const latestRun = campaignRuns[0];
+  const discoveryDiagnostics =
+    tab === "historico"
+      ? await getDiscoveryDiagnostics(
+          campaignRuns.slice(0, 20).map((run) => run.id),
+        )
+      : [];
   const campaignJobs = jobs.filter(
     (j) =>
       j.type === "discover_prospects" &&
@@ -1545,6 +1553,28 @@ export default async function CampaignsPage({
                                 <p className="mt-2 max-w-xs text-xs text-red-700">
                                   {run.error}
                                 </p>
+                              )}
+                              {discoveryDiagnostics.some(
+                                (entry) => entry.entityId === run.id,
+                              ) && (
+                                <details className="mt-2 max-w-md text-xs">
+                                  <summary className="cursor-pointer text-[#315d50]">
+                                    Ver motivos e falhas de leitura
+                                  </summary>
+                                  <ul className="mt-2 space-y-2 text-[#73858c]">
+                                    {discoveryDiagnostics
+                                      .filter(
+                                        (entry) => entry.entityId === run.id,
+                                      )
+                                      .map((entry) => (
+                                        <li key={entry.id}>
+                                          {discoveryDiagnosticLabel(
+                                            entry.metadata,
+                                          )}
+                                        </li>
+                                      ))}
+                                  </ul>
+                                </details>
                               )}
                             </td>
                             {[

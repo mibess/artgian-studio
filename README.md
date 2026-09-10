@@ -92,7 +92,9 @@ Publicação: aplicar as migrações pendentes em ordem, incluindo
 correção não modifica as configurações das campanhas nem dispara mensagens.
 
 Na busca por **hashtag**, o navegador entra no resultado correspondente, abre posts
-e reels e identifica seus autores por cabeçalho ou metadados públicos de autoria.
+e reels e identifica seus autores por cabeçalho, metadados públicos ou concordância
+entre a identificação superior, a identificação da legenda e a foto de perfil no
+layout sem cabeçalho semântico.
 Links de comentários, legendas e sugestões não são usados como autoria. O perfil
 passa depois pela mesma qualificação da campanha; não há curtidas, comentários ou
 mensagens automáticas nesta etapa.
@@ -101,9 +103,16 @@ O índice `hashtag_discovery_posts` guarda campanha, hashtag, código do post e 
 Posts ainda não lidos e autores ainda não qualificados são retomados nas próximas
 execuções. O histórico existente de perfis evita repetir usuários, inclusive quando
 aparecem em diferentes posts/hashtags; as janelas de reavaliação são preservadas.
-Posts sem autoria confirmada e perfis indisponíveis aguardam sete dias antes de nova
-tentativa. Limites: `MAX_HASHTAG_POSTS_PER_RUN=30`,
+Posts sem autoria confirmada ficam como `author_unresolved` e aguardam uma hora;
+isso não significa que o post esteja indisponível. Os antigos registros
+`unavailable` sem autor podem ser relidos pelo leitor corrigido. Perfis
+indisponíveis continuam aguardando sete dias. Limites: `MAX_HASHTAG_POSTS_PER_RUN=30`,
 `MAX_HASHTAG_SCROLLS_PER_QUERY=30`, `MAX_HASHTAG_DISCOVERY_SECONDS=600`.
+O tempo e o orçamento de posts são repartidos entre as hashtags selecionadas.
+As inspeções alternam entre termos/hashtags com candidatos, mantendo o limite
+total e a exclusão de usuários conhecidos. O Histórico mostra motivos individuais
+de rejeição (filtros anteriores à IA e IA) e falhas de leitura nas últimas 20
+execuções. Os detalhes valem para novas execuções; não são inferidos retroativamente.
 Antes de publicar esse ajuste, aplicar a migração aditiva
 `0012_slow_lila_cheney.sql` e atualizar o worker.
 

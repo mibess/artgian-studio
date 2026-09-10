@@ -1,6 +1,99 @@
 import { expect, test } from "@playwright/test";
 import { executeInstagramDiscoveryOnPage } from "../../src/integrations/browser/instagram-discovery";
 import type { RememberedHashtagPost } from "../../src/features/outbound/hashtag-discovery-domain";
+import { readPostAuthor } from "../../src/integrations/browser/instagram-hashtags";
+
+test("lê a autoria no layout real sem article/header, sem usar comentaristas", async ({
+  page,
+}) => {
+  await page.setContent(`<main><div><a href="/sonheem3d/">sonheem3d</a></div>
+    <a href="/sonheem3d/"><img alt="Foto do perfil de sonheem3d"></a>
+    <a href="/sonheem3d/">sonheem3d</a><p>Legenda</p>
+    <a href="/comentarista/"><img alt="Foto do perfil de comentarista"></a>
+    <a href="/comentarista/">comentarista</a></main>`);
+  expect(await readPostAuthor(page)).toBe("sonheem3d");
+  await page.setContent(
+    '<main><p>Sem autor visível</p><a href="/comentarista/">comentarista</a></main>',
+  );
+  expect(await readPostAuthor(page)).toBeNull();
+});
+
+test("divide orçamento entre hashtags e alterna candidatos entre buscas", async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(60000);
+  const previous = { ...process.env };
+  for (const suffix of [
+    "ACTION_DELAY_SECONDS",
+    "RESULTS_WAIT_SECONDS",
+    "PROFILE_DWELL_SECONDS",
+    "SECONDS_BETWEEN_PROFILES",
+    "SECONDS_BETWEEN_SEARCHES",
+  ])
+    for (const bound of ["MIN", "MAX"])
+      process.env[`DISCOVERY_${bound}_${suffix}`] = "0.25";
+  process.env.MAX_HASHTAG_POSTS_PER_RUN = "4";
+  const inspectedPosts: string[] = [];
+  await context.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname !== "www.instagram.com") return route.abort();
+    let body = "";
+    if (url.pathname === "/explore/")
+      body = `<input placeholder="Pesquisar"><div id="results"></div><script>
+      document.querySelector('input').addEventListener('input', e => {
+        const term=e.target.value;
+        document.querySelector('#results').innerHTML=term.startsWith('#')
+          ? '<a href="/explore/tags/'+term.slice(1)+'/">'+term+'</a>'
+          : [1,2,3,4,5,6,7,8,9,10,11,12,13].map(i=>'<a href="/'+term+i+'/">'+term+i+'</a>').join('');
+      });</script>`;
+    else if (url.pathname.includes("/explore/tags/")) {
+      const tag = url.pathname.split("/")[3];
+      body =
+        "<main>" +
+        [1, 2, 3, 4].map((i) => `<a href="/p/${tag}${i}/">post</a>`).join("") +
+        "</main>";
+    } else if (url.pathname.startsWith("/p/")) {
+      const key = url.pathname.split("/")[2];
+      inspectedPosts.push(key);
+      body = key.startsWith("falha")
+        ? "<main>Carregando conteúdo</main>"
+        : `<article><header><a href="/autor${key}/">autor</a></header></article>`;
+    } else {
+      const username = url.pathname.split("/")[1];
+      body = `<meta property="og:title" content="Autor (@${username}) • Instagram"><main>${username}\nMeu hobby geek</main>`;
+    }
+    await route.fulfill({ contentType: "text/html", body });
+  });
+  try {
+    const result = await executeInstagramDiscoveryOnPage(page, {
+      seeds: [
+        { kind: "keyword", value: "termoa" },
+        { kind: "hashtag", value: "falha" },
+        { kind: "keyword", value: "termob" },
+        { kind: "hashtag", value: "valido" },
+      ],
+      maximumProfiles: 4,
+      knownLocations: [],
+      excludedUsernames: ["termoa1"],
+    });
+    expect(inspectedPosts).toEqual(["falha1", "falha2", "valido1", "valido2"]);
+    expect(result.queriesScanned).toBe(4);
+    expect(result.candidates.map((c) => c.instagramUsername)).toEqual([
+      "termoa2",
+      "termob1",
+      "autorvalido1",
+      "termoa3",
+    ]);
+    expect(context.pages()).toEqual([page]);
+  } finally {
+    for (const key of Object.keys(process.env))
+      if (key.startsWith("DISCOVERY_") || key.startsWith("MAX_HASHTAG_")) {
+        if (previous[key] === undefined) delete process.env[key];
+        else process.env[key] = previous[key];
+      }
+  }
+});
 
 test("hashtag abre resultado e posts, extrai autores e retoma sem repetir usuários", async ({
   context,

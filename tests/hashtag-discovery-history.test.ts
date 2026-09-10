@@ -29,20 +29,18 @@ describe("índice persistente de hashtag, post e usuário", () => {
     const { executeCampaignDiscovery } =
       await import("../src/features/outbound/discovery");
     const db = await getCommercialDb();
-    await db
-      .insert(schema.campaigns)
-      .values({
-        id: "hashtag",
-        name: "Parcerias hashtag",
-        source: "Instagram",
-        discoveryStrategy: "instagram_search",
-        discoveryEnabled: true,
-        funnelType: "partner",
-        segment: "Presentes personalizados",
-        discoveryHashtags: '["presentes"]',
-        discoveryMinimumScore: 0,
-        discoveryDailyLimit: 10,
-      });
+    await db.insert(schema.campaigns).values({
+      id: "hashtag",
+      name: "Parcerias hashtag",
+      source: "Instagram",
+      discoveryStrategy: "instagram_search",
+      discoveryEnabled: true,
+      funnelType: "partner",
+      segment: "Presentes personalizados",
+      discoveryHashtags: '["presentes"]',
+      discoveryMinimumScore: 0,
+      discoveryDailyLimit: 10,
+    });
     const post = {
       postKey: "ABC123",
       postUrl: "https://www.instagram.com/p/ABC123/",
@@ -68,6 +66,7 @@ describe("índice persistente de hashtag, post e usuário", () => {
             post.postKey,
             "autor.validado",
           );
+          await input.onHashtagPost!("presentes", "DEF456", null);
           await input.onHashtagProfileUnavailable!(
             "presentes",
             "autor.indisponivel",
@@ -105,7 +104,19 @@ describe("índice persistente de hashtag, post e usuário", () => {
     const rows = await db.select().from(schema.hashtagDiscoveryPosts);
     expect(rows).toHaveLength(2);
     expect(rows.find((row) => row.postKey === "DEF456")?.status).toBe(
-      "pending",
+      "author_unresolved",
+    );
+    const unresolved = rows.find((row) => row.postKey === "DEF456")!;
+    expect(
+      Date.parse(unresolved.revisitAfter!) - Date.parse(unresolved.updatedAt),
+    ).toBeLessThanOrEqual(3600_000);
+    const diagnostics = await db
+      .select()
+      .from(schema.auditLogs)
+      .where(eq(schema.auditLogs.action, "campaign_hashtag_author_unresolved"));
+    expect(diagnostics).toHaveLength(1);
+    expect(JSON.parse(diagnostics[0].metadata!).reason).toContain(
+      "não significa que o post esteja indisponível",
     );
     expect(
       rows.find((row) => row.postKey === "ABC123")?.instagramUsername,

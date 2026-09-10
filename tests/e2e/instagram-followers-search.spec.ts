@@ -93,7 +93,7 @@ test("histórico informa lista parcial sem confundi-la com todos os seguidores",
   page,
 }) => {
   Object.assign(process.env, {
-    DATABASE_URL: "file:./data/e2e.db",
+    DATABASE_URL: process.env.E2E_DATABASE_URL || "file:./data/e2e.db",
     COMMERCIAL_DATABASE_MODE: "local",
     TURSO_DATABASE_URL: "",
     TURSO_AUTH_TOKEN: "",
@@ -104,33 +104,47 @@ test("histórico informa lista parcial sem confundi-la com todos os seguidores",
   const s = await import("../../db/schema");
   const db = await getCommercialDb();
   const id = `followers-history-${Date.now()}`;
-  await db
-    .insert(s.campaigns)
-    .values({
-      id,
-      name: "Seguidores · Teste de histórico",
-      source: "Instagram",
-      discoveryStrategy: "instagram_followers",
-    });
-  await db
-    .insert(s.discoveryRuns)
-    .values({
-      id: `${id}-run`,
-      campaignId: id,
-      status: "completed",
-      profilesInspected: 2,
-      profilesCreated: 1,
+  await db.insert(s.campaigns).values({
+    id,
+    name: "Seguidores · Teste de histórico",
+    source: "Instagram",
+    discoveryStrategy: "instagram_followers",
+  });
+  await db.insert(s.discoveryRuns).values({
+    id: `${id}-run`,
+    campaignId: id,
+    status: "completed",
+    profilesInspected: 2,
+    profilesCreated: 1,
+    stopReason: "followers_target_reached",
+    followerSearchProgress: JSON.stringify({
       stopReason: "followers_target_reached",
-      followerSearchProgress: JSON.stringify({
-        stopReason: "followers_target_reached",
-        visibleUsers: 12,
-        skippedKnownUsers: 7,
-        scrolls: 2,
-        pendingUsers: 3,
-        limitedBaseProfiles: ["perfilbase"],
-      }),
-    });
+      visibleUsers: 12,
+      skippedKnownUsers: 7,
+      scrolls: 2,
+      pendingUsers: 3,
+      limitedBaseProfiles: ["perfilbase"],
+    }),
+  });
+  await db.insert(s.auditLogs).values({
+    id: `${id}-diagnostic`,
+    actor: "system",
+    action: "campaign_candidate_rejection_detail",
+    entityType: "discovery_run",
+    entityId: `${id}-run`,
+    metadata: JSON.stringify({
+      instagramUsername: "perfil.teste",
+      stage: "pre_ai",
+      reason: "Pontuação 10 abaixo do mínimo 30.",
+    }),
+  });
   await page.goto(`/comercial/campanhas?id=${id}&aba=historico`);
+  await page.getByText("Ver motivos e falhas de leitura").click();
+  await expect(
+    page.getByText(
+      "@perfil.teste · Filtro anterior à IA · Pontuação 10 abaixo do mínimo 30.",
+    ),
+  ).toBeVisible();
   await expect(
     page.getByText("Meta de novos prospectos atingida", { exact: true }),
   ).toBeVisible();

@@ -1,5 +1,10 @@
 import { defineConfig } from "@playwright/test";
 
+// Share the same isolated database with tests that seed records directly.
+const databaseUrl =
+  process.env.E2E_DATABASE_URL || `file:./data/e2e-${Date.now()}.db`;
+process.env.E2E_DATABASE_URL = databaseUrl;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -23,7 +28,7 @@ export default defineConfig({
       ...process.env,
       ADMIN_USERNAME: "artgian",
       ADMIN_PASSWORD: "teste-local",
-      DATABASE_URL: `file:./data/e2e-${Date.now()}.db`,
+      DATABASE_URL: databaseUrl,
       TURSO_DATABASE_URL: "",
       TURSO_AUTH_TOKEN: "",
       BETTER_AUTH_SECRET: "e2e-only-secret-do-not-use-in-production-123456789",

@@ -517,7 +517,30 @@ export async function executeCampaignDiscovery(
       candidate: PublicInstagramCandidate,
       instagramUsername: string,
       outcome: CandidateOutcome,
+      reason?: string,
     ) => {
+      if (
+        outcome === "low_score" ||
+        outcome === "ai_rejected" ||
+        outcome === "blocked"
+      ) {
+        await db.insert(auditLogs).values({
+          id: crypto.randomUUID(),
+          actor: "system",
+          action: "campaign_candidate_rejection_detail",
+          entityType: "discovery_run",
+          entityId: runId,
+          metadata: JSON.stringify({
+            campaignId: campaign.id,
+            instagramUsername,
+            query: candidate.discoveryQuery,
+            outcome,
+            reason: reason || "Motivo não informado pelo qualificador.",
+            stage: outcome === "ai_rejected" ? "ai" : "pre_ai",
+          }),
+          createdAt: new Date().toISOString(),
+        });
+      }
       const matchingSeed = seeds.find(
         (seed) =>
           seed.value.toLocaleLowerCase("pt-BR") ===
@@ -763,10 +786,10 @@ export async function executeCampaignDiscovery(
           .update(hashtagDiscoveryPosts)
           .set({
             instagramUsername,
-            status: instagramUsername ? "resolved" : "unavailable",
+            status: instagramUsername ? "resolved" : "author_unresolved",
             revisitAfter: instagramUsername
               ? null
-              : new Date(Date.now() + 7 * 86400_000).toISOString(),
+              : new Date(Date.now() + 3600_000).toISOString(),
             updatedAt: new Date().toISOString(),
           })
           .where(
@@ -776,6 +799,22 @@ export async function executeCampaignDiscovery(
               eq(hashtagDiscoveryPosts.postKey, postKey),
             ),
           );
+        if (!instagramUsername)
+          await db.insert(auditLogs).values({
+            id: crypto.randomUUID(),
+            actor: "system",
+            action: "campaign_hashtag_author_unresolved",
+            entityType: "discovery_run",
+            entityId: runId,
+            metadata: JSON.stringify({
+              campaignId: campaign.id,
+              hashtag,
+              postKey,
+              reason:
+                "Autor não identificado com segurança. Isso não significa que o post esteja indisponível. Nova tentativa após 1 hora.",
+            }),
+            createdAt: new Date().toISOString(),
+          });
       },
       onHashtagProfileUnavailable: async (hashtag, instagramUsername) => {
         const inspectedAt = new Date().toISOString();

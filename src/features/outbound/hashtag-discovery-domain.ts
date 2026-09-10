@@ -60,6 +60,8 @@ export function postAuthorFromSignals(input: {
   headerHrefs: string[];
   title?: string | null;
   structuredAuthors?: string[];
+  leadingProfileHrefs?: string[];
+  firstAvatarAlt?: string | null;
 }) {
   const headers = [
     ...new Set(
@@ -78,8 +80,28 @@ export function postAuthorFromSignals(input: {
     ),
   ];
   if (structured.length === 1) return structured[0];
+  if (structured.length > 1) return null;
+  // Current standalone post layout has no article/header. Require matching
+  // top byline, caption byline and first avatar, not an arbitrary profile link.
+  const leading = (input.leadingProfileHrefs || []).map(
+    instagramUsernameFromHref,
+  );
+  const avatar = input.firstAvatarAlt?.match(
+    /^(?:Foto do perfil de |Profile picture of )([a-z0-9._]+)$|^([a-z0-9._]+)'s profile picture$/i,
+  );
+  const avatarUsername = (avatar?.[1] || avatar?.[2])?.toLowerCase();
+  if (leading[0] && leading[0] === leading[1] && leading[0] === avatarUsername)
+    return leading[0];
   const handle = input.title?.match(/\(@([A-Za-z0-9._]{1,30})\)/)?.[1];
   return handle ? instagramUsernameFromHref(`/${handle}/`) : null;
+}
+
+export function interleaveDiscoveryGroups<T>(groups: T[][]): T[] {
+  const result: T[] = [];
+  for (let index = 0; groups.some((group) => index < group.length); index++)
+    for (const group of groups)
+      if (index < group.length) result.push(group[index]);
+  return result;
 }
 
 export type RememberedHashtagPost = {

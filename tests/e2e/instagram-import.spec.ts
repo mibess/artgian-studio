@@ -6,7 +6,7 @@ test("importa um Instagram da empresa pendente e mantém reprovações visíveis
 }) => {
   // Mesmo banco isolado do servidor E2E; nunca usa Chrome, IA ou banco de produção.
   Object.assign(process.env, {
-    DATABASE_URL: "file:./data/e2e.db",
+    DATABASE_URL: process.env.E2E_DATABASE_URL || "file:./data/e2e.db",
     COMMERCIAL_DATABASE_MODE: "local",
     TURSO_DATABASE_URL: "",
     TURSO_AUTH_TOKEN: "",
