@@ -9,7 +9,7 @@ import * as schema from "../db/auth-schema";
 export function googleLoginEnabled() {
   return Boolean(
     process.env.GOOGLE_CLIENT_ID?.trim() &&
-    process.env.GOOGLE_CLIENT_SECRET?.trim(),
+      process.env.GOOGLE_CLIENT_SECRET?.trim(),
   );
 }
 
@@ -85,7 +85,16 @@ function createAuth(database: Awaited<ReturnType<typeof getDb>>) {
           },
         }
       : {},
-    account: { accountLinking: { enabled: false }, encryptOAuthTokens: true },
+    account: {
+      accountLinking: {
+        enabled: true,
+        requireLocalEmailVerified: true,
+        allowDifferentEmails: false,
+        // The provider must attest the email; its name alone is not proof.
+        trustedProviders: [],
+      },
+      encryptOAuthTokens: true,
+    },
     session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24 },
     rateLimit: {
       enabled: true,

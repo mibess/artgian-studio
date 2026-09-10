@@ -81,6 +81,7 @@ test("authenticated customer applies and removes a real coupon in checkout", asy
       value: "20",
       active: "on",
       minSubtotal: "0",
+      expiresAt: "2099-01-01T10:00",
     },
   });
   expect(created.ok()).toBe(true);
@@ -90,6 +91,7 @@ test("authenticated customer applies and removes a real coupon in checkout", asy
   await page.getByLabel("Código do cupom").fill(code.toLowerCase());
   await page.getByRole("button", { name: "Aplicar cupom" }).click();
   await expect(page.getByRole("status")).toContainText("21,96");
+  await expect(page.getByRole("status")).not.toContainText("Válido até");
   await expect(page.locator("aside")).toContainText(`Desconto · ${code}`);
   const usage = await client.execute({
     sql: "select allocated_uses from coupons where code = ?",

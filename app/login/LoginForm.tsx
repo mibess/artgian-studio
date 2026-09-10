@@ -5,6 +5,24 @@ import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { authClient } from "../../lib/auth-client";
 
+function googleErrorMessage(code?: string) {
+  if (!code) return "";
+  if (code === "account_not_linked")
+    return "Para usar o Google com um cadastro existente, confirme primeiro o e-mail da sua conta. Você também pode entrar com e-mail e senha.";
+  if (code === "access_denied")
+    return "O acesso com Google foi cancelado. Tente novamente quando quiser.";
+  if (
+    [
+      "state_mismatch",
+      "state_not_found",
+      "state_expired",
+      "please_restart_the_process",
+    ].includes(code)
+  )
+    return "A tentativa de acesso expirou. Clique em Continuar com Google para iniciar novamente.";
+  return "Não foi possível concluir o acesso com Google. Tente novamente.";
+}
+
 function errorMessage(code?: string, status?: number) {
   if (status === 429)
     return "Muitas tentativas. Aguarde um minuto e tente novamente.";
@@ -28,17 +46,13 @@ export default function LoginForm({
 }: {
   next: string;
   googleEnabled: boolean;
-  oauthError: boolean;
+  oauthError?: string;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState(
-    oauthError
-      ? "Não foi possível concluir o acesso com Google. Tente novamente."
-      : "",
-  );
+  const [error, setError] = useState(googleErrorMessage(oauthError));
   const verificationCallback = `/login/verificar?confirmed=1&next=${encodeURIComponent(next)}`;
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -95,7 +109,7 @@ export default function LoginForm({
       const result = await authClient.signIn.social({
         provider: "google",
         callbackURL: next,
-        errorCallbackURL: `/login?error=google&next=${encodeURIComponent(next)}`,
+        errorCallbackURL: `/login?next=${encodeURIComponent(next)}`,
       });
       if (result.error) {
         setError(errorMessage(result.error.code, result.error.status));

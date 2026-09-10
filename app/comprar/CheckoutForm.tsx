@@ -551,8 +551,6 @@ export default function CheckoutForm({
             >
               Cupom {appliedCoupon.code} aplicado: −
               {formatBrl(appliedCoupon.discountCents)}.
-              {appliedCoupon.expiresAt &&
-                ` Válido até ${new Date(appliedCoupon.expiresAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} (Brasília).`}
             </p>
           )}
           {couponError && (
