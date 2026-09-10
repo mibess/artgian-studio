@@ -15,12 +15,14 @@ import {
 } from "../../features/outbound/discovery-domain";
 import { randomInteger } from "../../features/automation/human-pacing";
 import { pauseLikePerson, typeLikePerson } from "./human-pacing";
+import { parseImportedInstagramUsername } from "../../features/outbound/instagram-import-domain";
 
 const ALLOWED_HOSTS = new Set(["www.instagram.com", "instagram.com"]);
 let discoveryJobRunning = false;
 
 type BrowserDiscoveryInput = {
   jobId: string;
+  targetUsername?: string;
   strategy?: DiscoveryStrategy;
   seeds: DiscoverySeed[];
   maximumProfiles: number;
@@ -188,6 +190,20 @@ export async function executeInstagramDiscoveryOnPage(
     profilesInspected,
     scannedSeeds,
   };
+}
+
+export async function executeInstagramProfileImportOnPage(
+  page: Page,
+  input: { instagramUsername: string; knownLocations: string[] },
+) {
+  const username = parseImportedInstagramUsername(input.instagramUsername);
+  if (!username) throw new Error("Perfil do Instagram inválido.");
+  const candidate = await profileCandidateFromPage(page, username, "local_business", `Importação de @${username}`, input.knownLocations);
+  if (instagramUsernameFromHref(page.url()) !== username) {
+    throw new InstagramDiscoveryError("A sessão do Instagram precisa de verificação no Chrome.", "unavailable");
+  }
+  if (!candidate || /this account is private|esta conta [ée] privada|conta privada|perfil privado/i.test(candidate.profileBio || "")) return null;
+  return candidate;
 }
 
 async function collectInstagramProfileLinks(page: Page) {
@@ -696,6 +712,12 @@ export async function discoverInstagramProfiles(input: BrowserDiscoveryInput) {
       const hostname = new URL(request.url()).hostname;
       errors.push(`network:${hostname}:${request.failure()?.errorText || "failed"}`);
     });
+    if (input.targetUsername) {
+      const candidate = await executeInstagramProfileImportOnPage(page, {
+        instagramUsername: input.targetUsername, knownLocations: input.knownLocations,
+      });
+      return { candidates: candidate ? [candidate] : [], queriesScanned: 0, profilesInspected: 1, scannedSeeds: [] };
+    }
     if (input.strategy === "instagram_followers") {
       return await executeInstagramFollowersDiscoveryOnPage(page, input);
     }
@@ -716,4 +738,9 @@ export async function discoverInstagramProfiles(input: BrowserDiscoveryInput) {
     await page?.close().catch(() => undefined);
     discoveryJobRunning = false;
   }
+}
+
+export async function inspectInstagramProfile(input: { jobId: string; instagramUsername: string; knownLocations: string[] }) {
+  const result = await discoverInstagramProfiles({ ...input, targetUsername: input.instagramUsername, seeds: [], maximumProfiles: 1 });
+  return result.candidates[0] || null;
 }

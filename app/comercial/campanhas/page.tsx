@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   ShieldOff,
   Sparkles,
+  Settings2,
 } from "lucide-react";
 import { SubmitButton } from "../../components/PendingButton";
 import {
@@ -39,8 +40,18 @@ import {
   setOutboundCampaignEnabled,
 } from "../actions";
 import { DiscoverySettingsForm } from "./DiscoverySettingsForm";
+import { CampaignDetailsForm } from "./CampaignDetailsForm";
+import {
+  isPendingLocalOpportunity,
+  parseInstagramImportPayload,
+} from "../../../src/features/outbound/instagram-import-domain";
+import {
+  ImportInstagramForm,
+  InstagramImportHistory,
+} from "./InstagramImports";
 
 type SearchParams = {
+  importacao?: string;
   id?: string;
   aba?: string;
   nova?: string;
@@ -62,6 +73,7 @@ const tabs = [
   ["mensagens", "Mensagens"],
   ["busca", "Busca"],
   ["historico", "Histórico"],
+  ["configuracoes", "Configurações"],
 ] as const;
 const policyLabels: Record<string, string> = {
   inbound_window: "DM inbound dentro de 24h",
@@ -145,9 +157,23 @@ export default async function CampaignsPage({
       prospect.status !== "disqualified" &&
       prospect.campaignId === selected?.id,
   );
-  const opportunities = localBusinessOpportunities.filter(
-    (o) => o.campaignId === selected?.id && o.status !== "instagram_found",
+  const knownProspectUsernames = new Set(
+    prospects
+      .filter(({ prospect }) => prospect.status !== "disqualified")
+      .map(({ prospect }) => prospect.instagramUsername.toLowerCase()),
   );
+  const opportunities = localBusinessOpportunities.filter(
+    (o) =>
+      o.campaignId === selected?.id &&
+      isPendingLocalOpportunity(o, knownProspectUsernames),
+  );
+  const importJobs = jobs
+    .filter(
+      (job) =>
+        job.type === "import_instagram_profile" &&
+        parseInstagramImportPayload(job.payload)?.campaignId === selected?.id,
+    )
+    .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt));
   const campaignRuns = discoveryRuns.filter(
     (r) => r.campaignId === selected?.id,
   );
@@ -237,6 +263,7 @@ export default async function CampaignsPage({
       `${c.name} ${c.segment || ""}`.toLocaleLowerCase("pt-BR").includes(query),
   );
   const hasSuccess =
+    params.importacao ||
     params.salvo ||
     params.prospecto ||
     params.rascunho ||
@@ -245,21 +272,25 @@ export default async function CampaignsPage({
     params.agendado ||
     params.descoberta ||
     params.busca;
-  const successMessage = params.rascunho
-    ? "Rascunho preparado. Revise o texto abaixo."
-    : params.revisado
-      ? "Revisão salva. A mensagem está pronta para agendar."
-      : params.agendado
-        ? "Mensagem agendada. Acompanhe o status na aba Mensagens."
-        : params.busca
-          ? "Busca agendada. Acompanhe a execução no Histórico."
-          : params.descoberta
-            ? "Configuração de busca atualizada."
-            : params.prospecto
-              ? "Prospecto adicionado ao público desta campanha."
-              : params.campanha
-                ? "Configuração de envio atualizada."
-                : "Campanha salva. Configure a busca para começar.";
+  const successMessage = params.importacao
+    ? params.importacao === "resolved"
+      ? "Esta empresa já tem um Instagram conciliado."
+      : "Importação agendada. Acompanhe a leitura do perfil e a validação abaixo. Nenhuma mensagem será enviada."
+    : params.rascunho
+      ? "Rascunho preparado. Revise o texto abaixo."
+      : params.revisado
+        ? "Revisão salva. A mensagem está pronta para agendar."
+        : params.agendado
+          ? "Mensagem agendada. Acompanhe o status na aba Mensagens."
+          : params.busca
+            ? "Busca agendada. Acompanhe a execução no Histórico."
+            : params.descoberta
+              ? "Configuração de busca atualizada."
+              : params.prospecto
+                ? "Prospecto adicionado ao público desta campanha."
+                : params.campanha
+                  ? "Configuração de envio atualizada."
+                  : "Campanha salva. Configure a busca para começar.";
   return (
     <>
       <PageHeader
@@ -538,6 +569,14 @@ export default async function CampaignsPage({
                           >
                             Abrir <ArrowRight size={14} />
                           </Link>
+                          <Link
+                            className="mt-2 flex items-center gap-1 text-xs font-medium text-[#657780] hover:underline"
+                            aria-label={`Editar campanha ${campaign.name}`}
+                            href={`/comercial/campanhas?id=${campaign.id}&aba=configuracoes`}
+                          >
+                            <Settings2 size={13} />
+                            Editar
+                          </Link>
                         </td>
                       </tr>
                     );
@@ -602,7 +641,11 @@ export default async function CampaignsPage({
                       : "Nenhuma busca agendada"}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <Link href={href("configuracoes")} className={secondaryButton}>
+                  <Settings2 size={14} />
+                  Editar campanha
+                </Link>
                 <StatusBadge status={selected.status} />
                 {selected.discoveryEnabled ? (
                   <form action={queueCampaignDiscoveryNow}>
@@ -835,76 +878,92 @@ export default async function CampaignsPage({
                 </div>
               )}
               {showOpportunities ? (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {opportunities
-                    .filter(
+                <>
+                  <InstagramImportHistory
+                    campaignId={selected.id}
+                    imports={importJobs}
+                  />
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    {opportunities
+                      .filter(
+                        (o) =>
+                          !query ||
+                          o.businessName
+                            .toLocaleLowerCase("pt-BR")
+                            .includes(query),
+                      )
+                      .map((opportunity) => (
+                        <article
+                          className="rounded-2xl border border-[#e1e1db] bg-white p-5"
+                          key={opportunity.id}
+                        >
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${opportunity.status === "website_opportunity" ? "bg-[#fff0c9] text-[#846214]" : "bg-[#e8eef2] text-[#526b78]"}`}
+                          >
+                            {opportunity.status === "website_opportunity"
+                              ? "Oportunidade de criação de site"
+                              : "Site encontrado · Instagram não localizado"}
+                          </span>
+                          <h3 className="mt-3 text-sm font-bold text-[#294653]">
+                            {opportunity.businessName}
+                          </h3>
+                          <p className="mt-1 text-xs text-[#7c8a90]">
+                            {opportunity.niche} · {opportunity.location}
+                          </p>
+                          {opportunity.address && (
+                            <p className="mt-3 text-xs leading-4 text-[#5f7078]">
+                              {opportunity.address}
+                            </p>
+                          )}
+                          {opportunity.phone && (
+                            <p className="mt-1 text-xs font-bold text-[#5f7078]">
+                              {opportunity.phone}
+                            </p>
+                          )}
+                          <div className="mt-4 flex flex-wrap gap-3 text-xs font-bold">
+                            <Link
+                              href={opportunity.googleMapsUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[#2f7c60]"
+                            >
+                              Abrir no Maps <ExternalLink size={10} />
+                            </Link>
+                            {opportunity.websiteUrl && (
+                              <Link
+                                href={opportunity.websiteUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[#587795]"
+                              >
+                                Abrir site <ExternalLink size={10} />
+                              </Link>
+                            )}
+                          </div>
+                          <ImportInstagramForm
+                            opportunity={opportunity}
+                            job={importJobs.find(
+                              (job) =>
+                                parseInstagramImportPayload(job.payload)
+                                  ?.opportunityId === opportunity.id,
+                            )}
+                          />
+                        </article>
+                      ))}
+                    {!opportunities.filter(
                       (o) =>
                         !query ||
                         o.businessName
                           .toLocaleLowerCase("pt-BR")
                           .includes(query),
-                    )
-                    .map((opportunity) => (
-                      <article
-                        className="rounded-2xl border border-[#e1e1db] bg-white p-5"
-                        key={opportunity.id}
-                      >
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${opportunity.status === "website_opportunity" ? "bg-[#fff0c9] text-[#846214]" : "bg-[#e8eef2] text-[#526b78]"}`}
-                        >
-                          {opportunity.status === "website_opportunity"
-                            ? "Oportunidade de criação de site"
-                            : "Site encontrado · Instagram não localizado"}
-                        </span>
-                        <h3 className="mt-3 text-sm font-bold text-[#294653]">
-                          {opportunity.businessName}
-                        </h3>
-                        <p className="mt-1 text-xs text-[#7c8a90]">
-                          {opportunity.niche} · {opportunity.location}
-                        </p>
-                        {opportunity.address && (
-                          <p className="mt-3 text-xs leading-4 text-[#5f7078]">
-                            {opportunity.address}
-                          </p>
-                        )}
-                        {opportunity.phone && (
-                          <p className="mt-1 text-xs font-bold text-[#5f7078]">
-                            {opportunity.phone}
-                          </p>
-                        )}
-                        <div className="mt-4 flex flex-wrap gap-3 text-xs font-bold">
-                          <Link
-                            href={opportunity.googleMapsUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[#2f7c60]"
-                          >
-                            Abrir no Maps <ExternalLink size={10} />
-                          </Link>
-                          {opportunity.websiteUrl && (
-                            <Link
-                              href={opportunity.websiteUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-[#587795]"
-                            >
-                              Abrir site <ExternalLink size={10} />
-                            </Link>
-                          )}
-                        </div>
-                      </article>
-                    ))}
-                  {!opportunities.filter(
-                    (o) =>
-                      !query ||
-                      o.businessName.toLocaleLowerCase("pt-BR").includes(query),
-                  ).length && (
-                    <EmptyState
-                      title="Nenhuma empresa pendente"
-                      description="Empresas sem Instagram aparecerão aqui para revisão da presença digital."
-                    />
-                  )}
-                </div>
+                    ).length && (
+                      <EmptyState
+                        title="Nenhuma empresa pendente"
+                        description="Empresas sem Instagram aparecerão aqui para revisão da presença digital."
+                      />
+                    )}
+                  </div>
+                </>
               ) : (
                 <>
                   {!visibleProspects.length ? (
@@ -1250,6 +1309,49 @@ export default async function CampaignsPage({
                 </details>
               )}
             </section>
+          )}
+          {tab === "configuracoes" && (
+            <div className="grid items-start gap-5 xl:grid-cols-[1.5fr_1fr]">
+              <section className="rounded-2xl border border-[#e1e1db] bg-white p-5 sm:p-6">
+                <h3 className="text-lg font-semibold">
+                  Configurações da campanha
+                </h3>
+                <p className="mt-2 text-sm text-[#73858c]">
+                  Veja e altere os dados de {selected.name}.
+                </p>
+                <CampaignDetailsForm key={selected.id} campaign={selected} />
+              </section>
+              <aside className="space-y-5">
+                <section className="rounded-2xl border border-[#e1e1db] bg-white p-5">
+                  <h3 className="font-semibold">Busca e automação</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#73858c]">
+                    Estratégia atual:{" "}
+                    {
+                      strategyLabels[
+                        normalizeDiscoveryStrategy(selected.discoveryStrategy)
+                      ]
+                    }
+                    . Altere nicho, região, perfis-base, critérios e recorrência
+                    na aba Busca.
+                  </p>
+                  <Link
+                    href={href("busca")}
+                    className={secondaryButton + " mt-4"}
+                  >
+                    Editar critérios de busca
+                    <ArrowRight size={14} />
+                  </Link>
+                </section>
+                <section className="rounded-2xl border border-[#cfe2d6] bg-[#edf7f1] p-5">
+                  <h3 className="font-semibold">Salvar não inicia uma ação</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#657780]">
+                    Editar estes dados não ativa a campanha, não faz uma nova
+                    busca e não envia mensagens. Os controles de busca
+                    automática e de envio ficam na aba Busca.
+                  </p>
+                </section>
+              </aside>
+            </div>
           )}
           {tab === "busca" && (
             <div className="grid items-start gap-5 xl:grid-cols-[1.5fr_1fr]">

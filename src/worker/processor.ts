@@ -19,6 +19,8 @@ import { buildFollowupDraft } from "../features/conversations/followups";
 import { scheduleNextCampaignDiscovery } from "../features/outbound/discovery";
 import { isInstagramReplyWindowOpen } from "../integrations/instagram/send";
 import { scheduleFollowupWake } from "./followup-scheduler";
+import { parseInstagramImportPayload, type InstagramImportPayload } from "../features/outbound/instagram-import-domain";
+import type { InstagramImportResult } from "../features/outbound/instagram-import";
 
 type JobPayload = {
   leadId?: string;
@@ -39,6 +41,7 @@ type OutboundExecutionResult = {
 };
 
 type WorkerDependencies = {
+  executeInstagramImportJob?: (input: InstagramImportPayload & { jobId: string }) => Promise<InstagramImportResult>;
   executeOutboundBrowserJob?: (input: {
     jobId: string;
     prospectId: string;
@@ -107,6 +110,7 @@ export async function runWorkerOnce(
   const now = new Date().toISOString();
   await recoverStaleJobs(new Date(now));
   const supportedJobFilter = and(
+    dependencies.executeInstagramImportJob ? undefined : ne(jobs.type, "import_instagram_profile"),
     dependencies.executeOutboundBrowserJob
       ? undefined
       : ne(jobs.type, "send_outbound"),
@@ -153,6 +157,25 @@ export async function runWorkerOnce(
       return { processed: true as const, paused: true as const };
     }
     const payload = JSON.parse(job.payload) as JobPayload;
+    if (job.type === "import_instagram_profile") {
+      const importPayload = parseInstagramImportPayload(job.payload);
+      if (!importPayload || !dependencies.executeInstagramImportJob) throw new Error("Importação inválida ou executor local indisponível.");
+      const result = pauses.discovery_paused
+        ? { status: "paused" as const, reason: "Importação aguardando liberação da busca." }
+        : await dependencies.executeInstagramImportJob({ ...importPayload, jobId: job.id });
+      if (result.status === "paused") {
+        await db.update(jobs).set({
+          status: "pending", attempts: job.attempts, startedAt: null,
+          scheduledAt: new Date(Date.now() + 60 * 60 * 1_000).toISOString(), lastError: result.reason,
+        }).where(eq(jobs.id, job.id));
+        return { processed: true as const, paused: true as const };
+      }
+      await db.update(jobs).set({
+        status: "completed", finishedAt: new Date().toISOString(),
+        payload: JSON.stringify({ ...importPayload, result }), lastError: null,
+      }).where(eq(jobs.id, job.id));
+      return { processed: true as const, imported: true as const, created: result.created || 0 };
+    }
     if (job.type === "discover_prospects") {
       if (pauses.discovery_paused) {
         const retryAt = new Date(Date.now() + 60 * 60 * 1_000).toISOString();

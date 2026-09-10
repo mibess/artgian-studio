@@ -107,6 +107,33 @@ test("prospecção prepara e revisa rascunho sem enviar mensagem", async ({ page
   await expect(page.getByRole("heading", { name: "Suas mensagens já estão revisadas" })).toBeVisible();
   await page.screenshot({ path: "test-results/campaign-overview.png", fullPage: true, caret: "initial" });
 
+  await page.getByRole("link", { name: "Editar campanha", exact: true }).click();
+  await expect(page).toHaveURL(/aba=configuracoes/);
+  const settingsForm = page.getByRole("form", { name: "Editar dados da campanha" });
+  await expect(settingsForm.getByLabel("Nome da campanha")).toHaveValue(`Campanha E2E ${suffix}`);
+  await settingsForm.getByLabel("Nome da campanha").fill(`Campanha editada E2E ${suffix}`);
+  await settingsForm.getByLabel("Segmento", { exact: true }).fill("Manicure e pedicure");
+  await settingsForm.getByLabel("Origem", { exact: true }).fill("Google Maps");
+  await settingsForm.getByLabel("Limite de contatos por dia").fill("7");
+  await settingsForm.getByLabel("Horário de contatos").fill("10:00-17:30");
+  await settingsForm.getByLabel("Fuso horário").fill("Fuso/invalido");
+  await settingsForm.getByRole("button", { name: "Salvar configurações" }).click();
+  await expect(settingsForm.getByRole("alert")).toContainText("fuso válido");
+  await expect(settingsForm.getByLabel("Nome da campanha")).toHaveValue(`Campanha editada E2E ${suffix}`);
+  await settingsForm.getByLabel("Fuso horário").fill("America/Sao_Paulo");
+  await settingsForm.getByRole("button", { name: "Salvar configurações" }).click();
+  await expect(settingsForm.getByRole("status")).toContainText("Configurações da campanha salvas");
+  await page.reload();
+  await expect(settingsForm.getByLabel("Nome da campanha")).toHaveValue(`Campanha editada E2E ${suffix}`);
+  await expect(settingsForm.getByLabel("Segmento", { exact: true })).toHaveValue("Manicure e pedicure");
+  await expect(settingsForm.getByLabel("Limite de contatos por dia")).toHaveValue("7");
+  await expect(settingsForm.getByLabel("Horário de contatos")).toHaveValue("10:00-17:30");
+  await page.screenshot({ path: "test-results/campaign-settings.png", fullPage: true, caret: "initial" });
+  await page.getByRole("link", { name: "Editar critérios de busca" }).click();
+  await expect(page).toHaveURL(/aba=busca/);
+  await expect(page.getByRole("button", { name: "Ativar busca automática" })).toBeVisible();
+  await expect(page.getByText("Envio outbound bloqueado")).toBeVisible();
+
   await page.getByRole("link", { name: "Nova campanha", exact: true }).click();
   await page.getByPlaceholder("Parcerias locais").fill(`Outra campanha E2E ${suffix}`);
   await page.getByRole("textbox", { name: "Origem", exact: true }).fill("Instagram");

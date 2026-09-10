@@ -1,6 +1,6 @@
 import type { Page } from "playwright-core";
 import { describe, expect, it, vi } from "vitest";
-import { executeInstagramDiscoveryOnPage } from "../src/integrations/browser/instagram-discovery";
+import { executeInstagramDiscoveryOnPage, executeInstagramProfileImportOnPage } from "../src/integrations/browser/instagram-discovery";
 
 function createDiscoveryPage() {
   let currentUrl = "about:blank";
@@ -31,6 +31,15 @@ function createDiscoveryPage() {
 }
 
 describe("descoberta no Chrome dedicado", () => {
+  it("importa apenas o @ indicado, sem pesquisar outros perfis e preservando a pausa de leitura", async () => {
+    const { page, searchInput } = createDiscoveryPage();
+    const result = await executeInstagramProfileImportOnPage(page, { instagramUsername: "@perfil.bom", knownLocations: ["Brasil"] });
+    expect(result?.instagramUsername).toBe("perfil.bom");
+    expect(page.goto).toHaveBeenCalledOnce();
+    expect(page.goto).toHaveBeenCalledWith("https://www.instagram.com/perfil.bom/", expect.any(Object));
+    expect(page.waitForTimeout).toHaveBeenCalled();
+    expect(searchInput.fill).not.toHaveBeenCalled();
+  });
   it("pesquisa, filtra rotas internas e lê perfis sem acionar mensagem", async () => {
     const { page, searchInput } = createDiscoveryPage();
     const result = await executeInstagramDiscoveryOnPage(page, {

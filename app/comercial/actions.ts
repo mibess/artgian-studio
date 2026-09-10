@@ -23,6 +23,8 @@ import {
 import { cancelPendingCampaignDiscovery, enqueueCampaignDiscovery } from "../../src/features/outbound/discovery";
 import { generateOutboundOpening } from "../../src/integrations/openai/conversation-engine";
 import { requireAdminAccess } from "../../src/auth/admin";
+import { enqueueInstagramImport } from "../../src/features/outbound/instagram-import";
+import { saveCampaignDetails } from "../../src/features/outbound/campaign-settings";
 
 export async function updateAutomationSetting(formData: FormData) {
   await requireAdminAccess();
@@ -121,10 +123,29 @@ function redirectCampaign(formData: FormData, query: string): never {
   const tab = String(formData.get("returnTab") || "");
   if (selected) params.set("id", selected);
   if (["resumo", "publico", "mensagens", "busca", "historico"].includes(tab)) params.set("aba", tab);
+  if (tab === "publico" && formData.get("returnFilter") === "empresas") params.set("filtro", "empresas");
   if (formData.get("newCampaign") === "true" && params.has("erro")) params.set("nova", "1");
   const prospectId = String(formData.get("prospectId") || "");
   const anchor = prospectId && tab === "mensagens" ? `#prospect-${encodeURIComponent(prospectId)}` : "";
   redirect(`/comercial/campanhas?${params.toString()}${anchor}`);
+}
+
+export async function importLocalBusinessInstagram(formData: FormData) {
+  await requireAdminAccess();
+  formData.set("returnTab", "publico");
+  formData.set("returnFilter", "empresas");
+  let result;
+  try {
+    result = await enqueueInstagramImport({
+      campaignId: String(formData.get("campaignId") || ""),
+      opportunityId: String(formData.get("opportunityId") || ""),
+      instagramUsername: String(formData.get("instagramUsername") || ""),
+    });
+  } catch (error) {
+    redirectCampaign(formData, new URLSearchParams({ erro: error instanceof Error ? error.message : "Não foi possível importar o Instagram." }).toString());
+  }
+  revalidatePath("/comercial", "layout");
+  redirectCampaign(formData, `importacao=${result.status}`);
 }
 
 export async function createCampaign(formData: FormData) {
@@ -196,6 +217,17 @@ export async function createCampaign(formData: FormData) {
   formData.set("selectedCampaign", campaignId);
   formData.set("returnTab", "busca");
   redirectCampaign(formData, "salvo=1");
+}
+
+export async function updateCampaignDetails(_previousState: { error?: string; success?: string }, formData: FormData): Promise<{ error?: string; success?: string }> {
+  await requireAdminAccess();
+  try {
+    await saveCampaignDetails(Object.fromEntries(formData));
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Não foi possível salvar a campanha." };
+  }
+  revalidatePath("/comercial", "layout");
+  return { success: "Configurações da campanha salvas. Nenhuma busca ou mensagem foi disparada." };
 }
 
 export async function saveCampaignDiscoverySettings(formData: FormData) {
