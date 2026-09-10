@@ -4,6 +4,7 @@ import { FormEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { cartSelections, type CartItem } from "../../lib/cart";
 import { authClient } from "../../lib/auth-client";
+import { formatCpf, formatPhone } from "../../lib/brazil";
 import { formatBrl } from "../../lib/catalog";
 import type { ShippingOption } from "../../lib/melhor-envio";
 import ProductColorImage from "../components/ProductColorImage";
@@ -45,6 +46,8 @@ export default function CheckoutForm({
   const [quoting, setQuoting] = useState(false);
   const [error, setError] = useState("");
   const [shippingError, setShippingError] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerDocument, setCustomerDocument] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [quotedPostalCode, setQuotedPostalCode] = useState("");
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
@@ -233,7 +236,13 @@ export default function CheckoutForm({
                 type="tel"
                 name="customerPhone"
                 autoComplete="tel"
+                inputMode="numeric"
                 placeholder="(00) 00000-0000"
+                maxLength={15}
+                value={customerPhone}
+                onChange={(event) =>
+                  setCustomerPhone(formatPhone(event.target.value))
+                }
                 required
               />
             </label>
@@ -248,6 +257,10 @@ export default function CheckoutForm({
                 autoComplete="off"
                 placeholder="000.000.000-00"
                 maxLength={14}
+                value={customerDocument}
+                onChange={(event) =>
+                  setCustomerDocument(formatCpf(event.target.value))
+                }
                 required
               />
               <span className="mt-2 block text-[0.7rem] leading-4 text-[#647087]">

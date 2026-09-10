@@ -20,6 +20,29 @@ export function isValidCpf(value: unknown) {
   return true;
 }
 
+export function formatCpf(value: string) {
+  const cpf = digitsOnly(value, 11);
+
+  return cpf
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
+}
+
+export function formatPhone(value: string) {
+  const phone = digitsOnly(value, 11);
+
+  if (phone.length <= 2) return phone;
+
+  const areaCode = phone.slice(0, 2);
+  const number = phone.slice(2);
+  const prefixLength = number.length > 8 ? 5 : 4;
+
+  return `(${areaCode}) ${number.slice(0, prefixLength)}${
+    number.length > prefixLength ? `-${number.slice(prefixLength)}` : ""
+  }`;
+}
+
 export function maskCpf(value: string | null) {
   const cpf = digitsOnly(value, 11);
   return cpf.length === 11 ? `***.***.***-${cpf.slice(-2)}` : "Não informado";
