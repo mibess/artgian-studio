@@ -39,6 +39,32 @@ Abra [http://localhost:3000](http://localhost:3000).
 
 ## Variáveis de ambiente
 
+### Busca local progressiva
+
+A busca no Maps mantém uma fila por campanha e por nicho/local. Resultados
+carregados são salvos antes da inspeção; a próxima execução prioriza os pendentes.
+Empresas conhecidas são ignoradas por CID/Place ID quando disponível, sem consumir
+o limite de inspeções. A lista permanece aberta enquanto as fichas são consultadas.
+
+A IA rápida valida lotes de até cinco perfis. Rejeições não encerram a busca:
+ela continua até a cota de novos resultados (prospectos e empresas sem Instagram),
+o limite de inspeções (`MAX_DISCOVERY_PROFILES_PER_RUN`, padrão 10), o limite de
+rolagens (`MAX_LOCAL_DISCOVERY_SCROLLS`, padrão 40), o tempo disponível
+(`MAX_LOCAL_DISCOVERY_SECONDS`, padrão 900) ou o fim/estagnação da lista.
+O tempo é verificado antes de iniciar cada nova empresa/rolagem; uma operação já
+iniciada pode terminar após esse prazo. Pausas de navegação continuam aplicadas.
+
+O Histórico mostra o motivo de encerramento, empresas conhecidas ignoradas,
+rolagens e pendências. Falhas de leitura/IA mantêm o lote não concluído na fila.
+A mudança não gera mensagens ou rascunhos automaticamente.
+
+**Publicação:** aplicar a migração aditiva `0011_eager_edwin_jarvis.sql` no banco
+destino antes de publicar o painel e reiniciar o worker. Ela cria a fila e os campos
+de diagnóstico, sem remover dados existentes. Testes usam bancos isolados e páginas
+simuladas; não executam buscas nem envios reais.
+
+### Configuração geral
+
 Copie `.env.example` para `.env.local` e preencha as credenciais necessárias.
 
 O checkout usa o Mercado Pago Checkout Pro. Em produção, configure a URL do

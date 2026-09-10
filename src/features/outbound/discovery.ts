@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, ne, sql } from "drizzle-orm";
 import {
   auditLogs,
   campaigns,
@@ -8,6 +8,7 @@ import {
   jobs,
   leads,
   localBusinessOpportunities,
+  localDiscoveryQueue,
   outboundProspects,
 } from "../../../db/schema";
 import { getBusinessConfig } from "../../config/business";
@@ -27,7 +28,18 @@ import {
   type PublicLocalBusinessOpportunity,
 } from "./discovery-domain";
 import type { OutboundFunnel } from "./domain";
-import { qualifyAndStoreCandidates, type CandidateOutcome, type ProspectQualifier } from "./candidate-qualification";
+import {
+  qualifyAndStoreCandidates,
+  type CandidateOutcome,
+  type ProspectQualifier,
+} from "./candidate-qualification";
+import {
+  boundedDiscoverySetting,
+  localDiscoveryQueryKey,
+  mapsBusinessKey,
+  type LocalDiscoveryOptions,
+  type LocalDiscoveryProgress,
+} from "./local-discovery-domain";
 
 type BrowserDiscoveryResult = {
   candidates: PublicInstagramCandidate[];
@@ -35,21 +47,24 @@ type BrowserDiscoveryResult = {
   profilesInspected: number;
   scannedSeeds?: DiscoverySeed[];
   localOpportunities?: PublicLocalBusinessOpportunity[];
+  localProgress?: LocalDiscoveryProgress;
 };
 
-type DiscoveryBrowser = (input: {
-  jobId: string;
-  strategy: ReturnType<typeof normalizeDiscoveryStrategy>;
-  seeds: DiscoverySeed[];
-  maximumProfiles: number;
-  knownLocations: string[];
-  minimumBaseFollowers: number;
-  localNiche?: string;
-  localLocation?: string;
-  ownUsername?: string;
-  excludedUsernames?: string[];
-  excludedLocalBusinessUrls?: string[];
-}) => Promise<BrowserDiscoveryResult>;
+type DiscoveryBrowser = (
+  input: LocalDiscoveryOptions & {
+    jobId: string;
+    strategy: ReturnType<typeof normalizeDiscoveryStrategy>;
+    seeds: DiscoverySeed[];
+    maximumProfiles: number;
+    knownLocations: string[];
+    minimumBaseFollowers: number;
+    localNiche?: string;
+    localLocation?: string;
+    ownUsername?: string;
+    excludedUsernames?: string[];
+    excludedLocalBusinessUrls?: string[];
+  },
+) => Promise<BrowserDiscoveryResult>;
 
 type QueryRunMetrics = {
   seed: DiscoverySeed;
@@ -85,17 +100,23 @@ export async function enqueueCampaignDiscovery(input: {
   const existing = openJobs.find((job) => {
     if (job.id === input.excludeJobId) return false;
     try {
-      return (JSON.parse(job.payload) as { campaignId?: string }).campaignId === input.campaignId;
+      return (
+        (JSON.parse(job.payload) as { campaignId?: string }).campaignId ===
+        input.campaignId
+      );
     } catch {
       return false;
     }
   });
   if (existing) {
     if (input.rescheduleExisting && input.scheduledAt) {
-      await db.update(jobs).set({
-        scheduledAt: input.scheduledAt,
-        lastError: null,
-      }).where(and(eq(jobs.id, existing.id), eq(jobs.status, "pending")));
+      await db
+        .update(jobs)
+        .set({
+          scheduledAt: input.scheduledAt,
+          lastError: null,
+        })
+        .where(and(eq(jobs.id, existing.id), eq(jobs.status, "pending")));
     }
     return { created: false as const, jobId: existing.id };
   }
@@ -121,10 +142,13 @@ export async function cancelPendingCampaignDiscovery(campaignId: string) {
   const pending = await db
     .select({ id: jobs.id, payload: jobs.payload })
     .from(jobs)
-    .where(and(eq(jobs.type, "discover_prospects"), eq(jobs.status, "pending")));
+    .where(
+      and(eq(jobs.type, "discover_prospects"), eq(jobs.status, "pending")),
+    );
   const ids = pending.flatMap((job) => {
     try {
-      return (JSON.parse(job.payload) as { campaignId?: string }).campaignId === campaignId
+      return (JSON.parse(job.payload) as { campaignId?: string }).campaignId ===
+        campaignId
         ? [job.id]
         : [];
     } catch {
@@ -161,12 +185,17 @@ export async function scheduleNextCampaignDiscovery(input: {
   return enqueueCampaignDiscovery({
     campaignId: input.campaignId,
     excludeJobId: input.currentJobId,
-    scheduledAt: nextDiscoveryAt(input.from || new Date(), campaign.discoveryIntervalHours),
+    scheduledAt: nextDiscoveryAt(
+      input.from || new Date(),
+      campaign.discoveryIntervalHours,
+    ),
   });
 }
 
 function startOfUtcDay(date: Date) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString();
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  ).toISOString();
 }
 
 export async function executeCampaignDiscovery(
@@ -187,7 +216,10 @@ export async function executeCampaignDiscovery(
   }
   const settings = await getSystemSettings();
   if (settings.discovery_paused === "true") {
-    return { status: "paused" as const, reason: "Descoberta pausada no painel." };
+    return {
+      status: "paused" as const,
+      reason: "Descoberta pausada no painel.",
+    };
   }
 
   const now = new Date();
@@ -196,27 +228,64 @@ export async function executeCampaignDiscovery(
     db
       .select({ count: sql<number>`count(*)` })
       .from(outboundProspects)
-      .where(and(
-        eq(outboundProspects.campaignId, campaign.id),
-        inArray(outboundProspects.discoverySource, ["instagram_browser", "instagram_followers", "google_maps"]),
-        gte(outboundProspects.createdAt, startOfUtcDay(now)),
-      )),
+      .where(
+        and(
+          eq(outboundProspects.campaignId, campaign.id),
+          inArray(outboundProspects.discoverySource, [
+            "instagram_browser",
+            "instagram_followers",
+            "google_maps",
+          ]),
+          gte(outboundProspects.createdAt, startOfUtcDay(now)),
+        ),
+      ),
     db
       .select({ count: sql<number>`count(*)` })
       .from(localBusinessOpportunities)
-      .where(and(
-        eq(localBusinessOpportunities.campaignId, campaign.id),
-        inArray(localBusinessOpportunities.status, ["website_opportunity", "instagram_not_found"]),
-        gte(localBusinessOpportunities.createdAt, startOfUtcDay(now)),
-      )),
+      .where(
+        and(
+          eq(localBusinessOpportunities.campaignId, campaign.id),
+          inArray(localBusinessOpportunities.status, [
+            "website_opportunity",
+            "instagram_not_found",
+          ]),
+          gte(localBusinessOpportunities.createdAt, startOfUtcDay(now)),
+        ),
+      ),
   ]);
-  const alreadyCreatedToday = Number(todayProfiles[0]?.count || 0) +
+  const alreadyCreatedToday =
+    Number(todayProfiles[0]?.count || 0) +
     Number(todayLocalOpportunities[0]?.count || 0);
-  const remaining = Math.max(0, campaign.discoveryDailyLimit - alreadyCreatedToday);
+  const remaining = Math.max(
+    0,
+    campaign.discoveryDailyLimit - alreadyCreatedToday,
+  );
   if (!remaining) {
-    await db.update(campaigns).set({ lastDiscoveryAt: nowIso, updatedAt: nowIso }).where(eq(campaigns.id, campaign.id));
-    await scheduleNextCampaignDiscovery({ campaignId: campaign.id, currentJobId: input.jobId, from: now });
-    return { status: "completed" as const, created: 0, dailyLimitReached: true };
+    await db
+      .insert(discoveryRuns)
+      .values({
+        id: crypto.randomUUID(),
+        campaignId: campaign.id,
+        jobId: input.jobId,
+        status: "completed",
+        stopReason: "daily_limit",
+        startedAt: nowIso,
+        finishedAt: nowIso,
+      });
+    await db
+      .update(campaigns)
+      .set({ lastDiscoveryAt: nowIso, updatedAt: nowIso })
+      .where(eq(campaigns.id, campaign.id));
+    await scheduleNextCampaignDiscovery({
+      campaignId: campaign.id,
+      currentJobId: input.jobId,
+      from: now,
+    });
+    return {
+      status: "completed" as const,
+      created: 0,
+      dailyLimitReached: true,
+    };
   }
 
   const business = await getBusinessConfig();
@@ -233,21 +302,28 @@ export async function executeCampaignDiscovery(
   const localLocation = campaign.discoveryLocalLocation
     ? normalizeLocalDiscoveryTerm(campaign.discoveryLocalLocation) || undefined
     : undefined;
-  const allSeeds: DiscoverySeed[] = strategy === "instagram_followers"
-    ? baseProfiles.map((value) => ({ kind: "base_profile", value }))
-    : strategy === "local_business"
-      ? localNiche && localLocation
-        ? [{ kind: "local_business", value: `${localNiche} em ${localLocation}` }]
-        : []
-      : buildDiscoverySeeds({
-          funnelType: campaign.funnelType as OutboundFunnel,
-          segment: campaign.segment,
-          keywords,
-          hashtags,
-          locations,
-          business,
-        });
-  if (!allSeeds.length) throw new Error("A campanha não possui critérios de descoberta.");
+  const allSeeds: DiscoverySeed[] =
+    strategy === "instagram_followers"
+      ? baseProfiles.map((value) => ({ kind: "base_profile", value }))
+      : strategy === "local_business"
+        ? localNiche && localLocation
+          ? [
+              {
+                kind: "local_business",
+                value: `${localNiche} em ${localLocation}`,
+              },
+            ]
+          : []
+        : buildDiscoverySeeds({
+            funnelType: campaign.funnelType as OutboundFunnel,
+            segment: campaign.segment,
+            keywords,
+            hashtags,
+            locations,
+            business,
+          });
+  if (!allSeeds.length)
+    throw new Error("A campanha não possui critérios de descoberta.");
   const previousPerformance = await db
     .select()
     .from(discoveryQueryStats)
@@ -277,10 +353,15 @@ export async function executeCampaignDiscovery(
   });
 
   try {
-    const configuredRunLimit = Number(process.env.MAX_DISCOVERY_PROFILES_PER_RUN || 10);
-    const maximumProfiles = Number.isFinite(configuredRunLimit)
-      ? Math.min(remaining, Math.max(1, Math.trunc(configuredRunLimit)))
-      : Math.min(remaining, 10);
+    const configuredRunLimit = boundedDiscoverySetting(
+      process.env.MAX_DISCOVERY_PROFILES_PER_RUN,
+      10,
+      30,
+    );
+    const maximumProfiles =
+      strategy === "local_business"
+        ? configuredRunLimit
+        : Math.min(remaining, configuredRunLimit);
     const rememberedCandidates = await db
       .select({
         instagramUsername: discoveryCandidates.instagramUsername,
@@ -288,10 +369,12 @@ export async function executeCampaignDiscovery(
         lastOutcome: discoveryCandidates.lastOutcome,
       })
       .from(discoveryCandidates)
-      .where(and(
-        eq(discoveryCandidates.campaignId, campaign.id),
-        gt(discoveryCandidates.revisitAfter, nowIso),
-      ));
+      .where(
+        and(
+          eq(discoveryCandidates.campaignId, campaign.id),
+          gt(discoveryCandidates.revisitAfter, nowIso),
+        ),
+      );
     const existingProspects = await db
       .select({ instagramUsername: outboundProspects.instagramUsername })
       .from(outboundProspects);
@@ -299,132 +382,121 @@ export async function executeCampaignDiscovery(
       .select({ instagramUsername: leads.instagramUsername })
       .from(leads)
       .where(eq(leads.doNotContact, true));
-    const knownLocalBusinesses = strategy === "local_business"
-      ? await db
-          .select({
-            googleMapsUrl: localBusinessOpportunities.googleMapsUrl,
-            status: localBusinessOpportunities.status,
-            notes: localBusinessOpportunities.notes,
-          })
-          .from(localBusinessOpportunities)
-          .where(eq(localBusinessOpportunities.campaignId, campaign.id))
-      : [];
-    const browserResult = await dependencies.discover({
-      jobId: input.jobId,
-      strategy,
-      seeds,
-      maximumProfiles,
-      knownLocations: strategy === "local_business" && localLocation
-        ? [...new Set([localLocation, ...locations, business.targetGeography])]
-        : locations.length ? locations : [business.targetGeography],
-      minimumBaseFollowers: campaign.discoveryMinimumBaseFollowers,
-      localNiche,
-      localLocation,
-      ownUsername: business.company.instagramHandle,
-      excludedUsernames: [
-        ...rememberedCandidates.filter((item) => !(
-          strategy === "local_business" &&
-          item.lastQueryKind === "local_business" &&
-          item.lastOutcome === "low_score"
-        )),
-        ...existingProspects,
-        ...blockedLeads,
-      ].map((item) => item.instagramUsername),
-      excludedLocalBusinessUrls: knownLocalBusinesses
-        .filter((item) =>
-          item.status === "instagram_found" ||
-          item.notes?.includes(LOCAL_WEB_RESULTS_VERIFIED_MARKER))
-        .map((item) => item.googleMapsUrl),
-    });
+    const knownLocalBusinesses =
+      strategy === "local_business"
+        ? await db
+            .select({
+              googleMapsUrl: localBusinessOpportunities.googleMapsUrl,
+              status: localBusinessOpportunities.status,
+              notes: localBusinessOpportunities.notes,
+            })
+            .from(localBusinessOpportunities)
+            .where(eq(localBusinessOpportunities.campaignId, campaign.id))
+        : [];
     let websiteOpportunitiesCreated = 0;
-
-    for (const opportunity of browserResult.localOpportunities || []) {
-      const [existingOpportunity] = await db
-        .select({ id: localBusinessOpportunities.id })
-        .from(localBusinessOpportunities)
-        .where(and(
-          eq(localBusinessOpportunities.campaignId, campaign.id),
-          eq(localBusinessOpportunities.googleMapsUrl, opportunity.googleMapsUrl),
-        ))
-        .limit(1);
-      const opportunityId = existingOpportunity?.id || crypto.randomUUID();
-      await db.insert(localBusinessOpportunities).values({
-        id: opportunityId,
-        campaignId: campaign.id,
-        businessName: opportunity.businessName,
-        niche: opportunity.niche,
-        location: opportunity.location,
-        address: opportunity.address || null,
-        phone: opportunity.phone || null,
-        googleMapsUrl: opportunity.googleMapsUrl,
-        websiteUrl: opportunity.websiteUrl || null,
-        instagramUsername: opportunity.instagramUsername || null,
-        status: opportunity.status,
-        notes: opportunity.notes || null,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      }).onConflictDoUpdate({
-        target: [
-          localBusinessOpportunities.campaignId,
-          localBusinessOpportunities.googleMapsUrl,
-        ],
-        set: {
-          businessName: opportunity.businessName,
-          niche: opportunity.niche,
-          location: opportunity.location,
-          address: opportunity.address || null,
-          phone: opportunity.phone || null,
-          websiteUrl: opportunity.websiteUrl || null,
-          instagramUsername: opportunity.instagramUsername || null,
+    let pendingOpportunitiesCreated = 0;
+    const knownByKey = new Map(
+      knownLocalBusinesses.map((item) => [
+        mapsBusinessKey(item.googleMapsUrl),
+        item,
+      ]),
+    );
+    async function persistOpportunities(
+      opportunities: PublicLocalBusinessOpportunity[],
+    ) {
+      for (const rawOpportunity of opportunities) {
+        const key = mapsBusinessKey(rawOpportunity.googleMapsUrl);
+        const opportunity = {
+          ...rawOpportunity,
+          googleMapsUrl:
+            knownByKey.get(key)?.googleMapsUrl || rawOpportunity.googleMapsUrl,
+        };
+        const [existingOpportunity] = await db
+          .select({ id: localBusinessOpportunities.id })
+          .from(localBusinessOpportunities)
+          .where(
+            and(
+              eq(localBusinessOpportunities.campaignId, campaign.id),
+              eq(
+                localBusinessOpportunities.googleMapsUrl,
+                opportunity.googleMapsUrl,
+              ),
+            ),
+          )
+          .limit(1);
+        const opportunityId = existingOpportunity?.id || crypto.randomUUID();
+        await db
+          .insert(localBusinessOpportunities)
+          .values({
+            id: opportunityId,
+            campaignId: campaign.id,
+            businessName: opportunity.businessName,
+            niche: opportunity.niche,
+            location: opportunity.location,
+            address: opportunity.address || null,
+            phone: opportunity.phone || null,
+            googleMapsUrl: opportunity.googleMapsUrl,
+            websiteUrl: opportunity.websiteUrl || null,
+            instagramUsername: opportunity.instagramUsername || null,
+            status: opportunity.status,
+            notes: opportunity.notes || null,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          })
+          .onConflictDoUpdate({
+            target: [
+              localBusinessOpportunities.campaignId,
+              localBusinessOpportunities.googleMapsUrl,
+            ],
+            set: {
+              businessName: opportunity.businessName,
+              niche: opportunity.niche,
+              location: opportunity.location,
+              address: opportunity.address || null,
+              phone: opportunity.phone || null,
+              websiteUrl: opportunity.websiteUrl || null,
+              instagramUsername: opportunity.instagramUsername || null,
+              status: opportunity.status,
+              notes: opportunity.notes || null,
+              updatedAt: nowIso,
+            },
+            // Um resultado antigo de busca não pode reabrir uma empresa já conciliada.
+            setWhere: ne(localBusinessOpportunities.status, "instagram_found"),
+          });
+        knownByKey.set(key, {
+          googleMapsUrl: opportunity.googleMapsUrl,
           status: opportunity.status,
           notes: opportunity.notes || null,
-          updatedAt: nowIso,
-        },
-        // Um resultado antigo de busca não pode reabrir uma empresa já conciliada.
-        setWhere: ne(localBusinessOpportunities.status, "instagram_found"),
-      });
-      const wasCreated = !existingOpportunity;
-      if (wasCreated && opportunity.status === "website_opportunity") {
-        websiteOpportunitiesCreated += 1;
-      }
-      if (wasCreated || opportunity.status === "instagram_found") {
-        await db.insert(auditLogs).values({
-          id: crypto.randomUUID(),
-          actor: "system",
-          action: opportunity.status === "instagram_found"
-            ? "local_business_instagram_reconciled"
-            : opportunity.status === "website_opportunity"
-              ? "local_website_opportunity_discovered"
-              : "local_business_without_instagram_discovered",
-          entityType: "local_business_opportunity",
-          entityId: opportunityId,
-          metadata: JSON.stringify({
-            campaignId: campaign.id,
-            googleMapsUrl: opportunity.googleMapsUrl,
-            sendsMessages: false,
-          }),
-          createdAt: nowIso,
         });
+        const wasCreated = !existingOpportunity;
+        if (wasCreated && opportunity.status !== "instagram_found")
+          pendingOpportunitiesCreated += 1;
+        if (wasCreated && opportunity.status === "website_opportunity") {
+          websiteOpportunitiesCreated += 1;
+        }
+        if (wasCreated || opportunity.status === "instagram_found") {
+          await db.insert(auditLogs).values({
+            id: crypto.randomUUID(),
+            actor: "system",
+            action:
+              opportunity.status === "instagram_found"
+                ? "local_business_instagram_reconciled"
+                : opportunity.status === "website_opportunity"
+                  ? "local_website_opportunity_discovered"
+                  : "local_business_without_instagram_discovered",
+            entityType: "local_business_opportunity",
+            entityId: opportunityId,
+            metadata: JSON.stringify({
+              campaignId: campaign.id,
+              googleMapsUrl: opportunity.googleMapsUrl,
+              sendsMessages: false,
+            }),
+            createdAt: nowIso,
+          });
+        }
       }
     }
-
-    const scannedSeeds = browserResult.scannedSeeds || seeds.slice(0, browserResult.queriesScanned);
     const queryMetrics = new Map<string, QueryRunMetrics>();
-    for (const seed of scannedSeeds) {
-      const key = discoverySeedKey(seed);
-      const current = queryMetrics.get(key);
-      if (current) current.searches += 1;
-      else queryMetrics.set(key, {
-        seed,
-        searches: 1,
-        inspected: 0,
-        qualified: 0,
-        created: 0,
-        duplicates: 0,
-        blocked: 0,
-        lowScore: 0,
-      });
-    }
     const revisitDaysValue = Number(process.env.DISCOVERY_REVISIT_DAYS || 45);
     const revisitDays = Number.isFinite(revisitDaysValue)
       ? Math.min(365, Math.max(7, Math.trunc(revisitDaysValue)))
@@ -434,17 +506,31 @@ export async function executeCampaignDiscovery(
       instagramUsername: string,
       outcome: CandidateOutcome,
     ) => {
-      const matchingSeed = seeds.find((seed) =>
-        seed.value.toLocaleLowerCase("pt-BR") === candidate.discoveryQuery.toLocaleLowerCase("pt-BR") &&
-        (!candidate.discoveryKind || candidate.discoveryKind === seed.kind));
-      const seed = matchingSeed || {
-        kind: candidate.discoveryKind || "keyword",
-        value: candidate.discoveryQuery,
-      } satisfies DiscoverySeed;
+      const matchingSeed = seeds.find(
+        (seed) =>
+          seed.value.toLocaleLowerCase("pt-BR") ===
+            candidate.discoveryQuery.toLocaleLowerCase("pt-BR") &&
+          (!candidate.discoveryKind || candidate.discoveryKind === seed.kind),
+      );
+      const seed =
+        matchingSeed ||
+        ({
+          kind: candidate.discoveryKind || "keyword",
+          value: candidate.discoveryQuery,
+        } satisfies DiscoverySeed);
       const key = discoverySeedKey(seed);
       let metrics = queryMetrics.get(key);
       if (!metrics) {
-        metrics = { seed, searches: 0, inspected: 0, qualified: 0, created: 0, duplicates: 0, blocked: 0, lowScore: 0 };
+        metrics = {
+          seed,
+          searches: 0,
+          inspected: 0,
+          qualified: 0,
+          created: 0,
+          duplicates: 0,
+          blocked: 0,
+          lowScore: 0,
+        };
         queryMetrics.set(key, metrics);
       }
       metrics.inspected += 1;
@@ -454,92 +540,287 @@ export async function executeCampaignDiscovery(
       } else if (outcome === "duplicate") metrics.duplicates += 1;
       else if (outcome === "blocked") metrics.blocked += 1;
       else metrics.lowScore += 1;
-      const permanentOutcome = outcome === "created" || outcome === "duplicate" || outcome === "blocked";
+      const permanentOutcome =
+        outcome === "created" ||
+        outcome === "duplicate" ||
+        outcome === "blocked";
       const revisitAfter = new Date(
-        now.getTime() + (permanentOutcome ? 3650 : revisitDays) * 24 * 60 * 60 * 1_000,
+        now.getTime() +
+          (permanentOutcome ? 3650 : revisitDays) * 24 * 60 * 60 * 1_000,
       ).toISOString();
-      await db.insert(discoveryCandidates).values({
-        id: crypto.randomUUID(),
-        campaignId: campaign.id,
-        instagramUsername,
-        lastQueryKind: seed.kind,
-        lastQuery: seed.value,
-        lastOutcome: outcome,
-        inspectionCount: 1,
-        lastInspectedAt: nowIso,
-        revisitAfter,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      }).onConflictDoUpdate({
-        target: [discoveryCandidates.campaignId, discoveryCandidates.instagramUsername],
-        set: {
+      await db
+        .insert(discoveryCandidates)
+        .values({
+          id: crypto.randomUUID(),
+          campaignId: campaign.id,
+          instagramUsername,
           lastQueryKind: seed.kind,
           lastQuery: seed.value,
           lastOutcome: outcome,
-          inspectionCount: sql`${discoveryCandidates.inspectionCount} + 1`,
+          inspectionCount: 1,
           lastInspectedAt: nowIso,
           revisitAfter,
+          createdAt: nowIso,
           updatedAt: nowIso,
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: [
+            discoveryCandidates.campaignId,
+            discoveryCandidates.instagramUsername,
+          ],
+          set: {
+            lastQueryKind: seed.kind,
+            lastQuery: seed.value,
+            lastOutcome: outcome,
+            inspectionCount: sql`${discoveryCandidates.inspectionCount} + 1`,
+            lastInspectedAt: nowIso,
+            revisitAfter,
+            updatedAt: nowIso,
+          },
+        });
     };
 
-    const { profilesQualified, profilesCreated, skippedDuplicates, skippedBlocked, skippedLowScore } =
-      await qualifyAndStoreCandidates({ campaign, candidates: browserResult.candidates, business, qualify: dependencies.qualify, rememberCandidate });
+    const queryKey = localDiscoveryQueryKey(
+      localNiche || "",
+      localLocation || "",
+    );
+    const queued =
+      strategy === "local_business"
+        ? await db
+            .select()
+            .from(localDiscoveryQueue)
+            .where(
+              and(
+                eq(localDiscoveryQueue.campaignId, campaign.id),
+                eq(localDiscoveryQueue.queryKey, queryKey),
+              ),
+            )
+            .orderBy(
+              asc(localDiscoveryQueue.createdAt),
+              asc(localDiscoveryQueue.businessKey),
+            )
+        : [];
+    let profilesQualified = 0,
+      profilesCreated = 0,
+      skippedDuplicates = 0,
+      skippedBlocked = 0,
+      skippedLowScore = 0;
+    async function qualifyBatch(candidates: PublicInstagramCandidate[]) {
+      if (!candidates.length) return;
+      const result = await qualifyAndStoreCandidates({
+        campaign,
+        candidates,
+        business,
+        qualify: dependencies.qualify,
+        rememberCandidate,
+      });
+      profilesQualified += result.profilesQualified;
+      profilesCreated += result.profilesCreated;
+      skippedDuplicates += result.skippedDuplicates;
+      skippedBlocked += result.skippedBlocked;
+      skippedLowScore += result.skippedLowScore;
+    }
+    const browserResult = await dependencies.discover({
+      jobId: input.jobId,
+      strategy,
+      seeds,
+      maximumProfiles,
+      maximumNewResults: remaining,
+      pendingLocalBusinessUrls: queued
+        .filter((row) => row.status === "pending")
+        .map((row) => row.googleMapsUrl),
+      onLocalLinks:
+        strategy === "local_business"
+          ? async (urls) => {
+              for (const url of urls) {
+                const businessKey = mapsBusinessKey(url);
+                if (!businessKey) continue;
+                await db
+                  .insert(localDiscoveryQueue)
+                  .values({
+                    campaignId: campaign.id,
+                    queryKey,
+                    businessKey,
+                    googleMapsUrl: url,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  })
+                  .onConflictDoNothing();
+              }
+            }
+          : undefined,
+      onLocalBatch:
+        strategy === "local_business"
+          ? async (batch) => {
+              const before = profilesCreated + pendingOpportunitiesCreated;
+              // Persist qualification first. On AI/read failure the queue stays pending.
+              await qualifyBatch(batch.candidates);
+              await persistOpportunities(batch.localOpportunities);
+              const keys = batch.processedUrls.flatMap(
+                (url) => mapsBusinessKey(url) || [],
+              );
+              if (keys.length)
+                await db
+                  .update(localDiscoveryQueue)
+                  .set({
+                    status: "completed",
+                    updatedAt: new Date().toISOString(),
+                  })
+                  .where(
+                    and(
+                      eq(localDiscoveryQueue.campaignId, campaign.id),
+                      eq(localDiscoveryQueue.queryKey, queryKey),
+                      inArray(localDiscoveryQueue.businessKey, keys),
+                    ),
+                  );
+              // Keep completed batch counts even if a later page or AI call fails.
+              await db
+                .update(discoveryRuns)
+                .set({
+                  queriesScanned: 1,
+                  profilesInspected: sql`${discoveryRuns.profilesInspected} + ${batch.processedUrls.length}`,
+                  profilesQualified,
+                  profilesCreated,
+                  skippedDuplicates,
+                  skippedBlocked,
+                  skippedLowScore,
+                  websiteOpportunitiesCreated,
+                })
+                .where(eq(discoveryRuns.id, runId));
+              return profilesCreated + pendingOpportunitiesCreated - before;
+            }
+          : undefined,
+      knownLocations:
+        strategy === "local_business" && localLocation
+          ? [
+              ...new Set([
+                localLocation,
+                ...locations,
+                business.targetGeography,
+              ]),
+            ]
+          : locations.length
+            ? locations
+            : [business.targetGeography],
+      minimumBaseFollowers: campaign.discoveryMinimumBaseFollowers,
+      localNiche,
+      localLocation,
+      ownUsername: business.company.instagramHandle,
+      excludedUsernames: [
+        ...rememberedCandidates.filter(
+          (item) =>
+            !(
+              strategy === "local_business" &&
+              item.lastQueryKind === "local_business" &&
+              item.lastOutcome === "low_score"
+            ),
+        ),
+        ...existingProspects,
+        ...blockedLeads,
+      ].map((item) => item.instagramUsername),
+      excludedLocalBusinessUrls: [
+        ...queued
+          .filter((row) => row.status === "completed")
+          .map((row) => row.googleMapsUrl),
+        ...knownLocalBusinesses
+          .filter(
+            (item) =>
+              item.status === "instagram_found" ||
+              item.notes?.includes(LOCAL_WEB_RESULTS_VERIFIED_MARKER),
+          )
+          .map((item) => item.googleMapsUrl),
+      ],
+    });
+
+    const scannedSeeds =
+      browserResult.scannedSeeds ||
+      seeds.slice(0, browserResult.queriesScanned);
+    for (const seed of scannedSeeds) {
+      const key = discoverySeedKey(seed);
+      const current = queryMetrics.get(key);
+      if (current) current.searches += 1;
+      else
+        queryMetrics.set(key, {
+          seed,
+          searches: 1,
+          inspected: 0,
+          qualified: 0,
+          created: 0,
+          duplicates: 0,
+          blocked: 0,
+          lowScore: 0,
+        });
+    }
+
+    await qualifyBatch(browserResult.candidates);
+    await persistOpportunities(browserResult.localOpportunities || []);
 
     const finishedAt = new Date().toISOString();
     await db.transaction(async (tx) => {
-      await tx.update(discoveryRuns).set({
-        status: "completed",
-        queriesScanned: browserResult.queriesScanned,
-        profilesInspected: browserResult.profilesInspected,
-        profilesQualified,
-        profilesCreated,
-        skippedDuplicates,
-        skippedBlocked,
-        skippedLowScore,
-        websiteOpportunitiesCreated,
-        finishedAt,
-      }).where(eq(discoveryRuns.id, runId));
-      await tx.update(campaigns).set({
-        discoveryCursor: campaign.discoveryCursor + 1,
-        lastDiscoveryAt: finishedAt,
-        updatedAt: finishedAt,
-      }).where(eq(campaigns.id, campaign.id));
-      for (const metrics of queryMetrics.values()) {
-        await tx.insert(discoveryQueryStats).values({
-          id: crypto.randomUUID(),
-          campaignId: campaign.id,
-          queryKind: metrics.seed.kind,
-          query: metrics.seed.value,
-          searches: metrics.searches,
-          profilesInspected: metrics.inspected,
-          profilesQualified: metrics.qualified,
-          profilesCreated: metrics.created,
-          skippedDuplicates: metrics.duplicates,
-          skippedBlocked: metrics.blocked,
-          skippedLowScore: metrics.lowScore,
-          lastSearchedAt: finishedAt,
-          createdAt: finishedAt,
+      await tx
+        .update(discoveryRuns)
+        .set({
+          status: "completed",
+          queriesScanned: browserResult.queriesScanned,
+          profilesInspected: browserResult.profilesInspected,
+          stopReason: browserResult.localProgress?.stopReason || null,
+          localSearchProgress: browserResult.localProgress
+            ? JSON.stringify(browserResult.localProgress)
+            : null,
+          profilesQualified,
+          profilesCreated,
+          skippedDuplicates,
+          skippedBlocked,
+          skippedLowScore,
+          websiteOpportunitiesCreated,
+          finishedAt,
+        })
+        .where(eq(discoveryRuns.id, runId));
+      await tx
+        .update(campaigns)
+        .set({
+          discoveryCursor: campaign.discoveryCursor + 1,
+          lastDiscoveryAt: finishedAt,
           updatedAt: finishedAt,
-        }).onConflictDoUpdate({
-          target: [
-            discoveryQueryStats.campaignId,
-            discoveryQueryStats.queryKind,
-            discoveryQueryStats.query,
-          ],
-          set: {
-            searches: sql`${discoveryQueryStats.searches} + ${metrics.searches}`,
-            profilesInspected: sql`${discoveryQueryStats.profilesInspected} + ${metrics.inspected}`,
-            profilesQualified: sql`${discoveryQueryStats.profilesQualified} + ${metrics.qualified}`,
-            profilesCreated: sql`${discoveryQueryStats.profilesCreated} + ${metrics.created}`,
-            skippedDuplicates: sql`${discoveryQueryStats.skippedDuplicates} + ${metrics.duplicates}`,
-            skippedBlocked: sql`${discoveryQueryStats.skippedBlocked} + ${metrics.blocked}`,
-            skippedLowScore: sql`${discoveryQueryStats.skippedLowScore} + ${metrics.lowScore}`,
+        })
+        .where(eq(campaigns.id, campaign.id));
+      for (const metrics of queryMetrics.values()) {
+        await tx
+          .insert(discoveryQueryStats)
+          .values({
+            id: crypto.randomUUID(),
+            campaignId: campaign.id,
+            queryKind: metrics.seed.kind,
+            query: metrics.seed.value,
+            searches: metrics.searches,
+            profilesInspected: metrics.inspected,
+            profilesQualified: metrics.qualified,
+            profilesCreated: metrics.created,
+            skippedDuplicates: metrics.duplicates,
+            skippedBlocked: metrics.blocked,
+            skippedLowScore: metrics.lowScore,
             lastSearchedAt: finishedAt,
+            createdAt: finishedAt,
             updatedAt: finishedAt,
-          },
-        });
+          })
+          .onConflictDoUpdate({
+            target: [
+              discoveryQueryStats.campaignId,
+              discoveryQueryStats.queryKind,
+              discoveryQueryStats.query,
+            ],
+            set: {
+              searches: sql`${discoveryQueryStats.searches} + ${metrics.searches}`,
+              profilesInspected: sql`${discoveryQueryStats.profilesInspected} + ${metrics.inspected}`,
+              profilesQualified: sql`${discoveryQueryStats.profilesQualified} + ${metrics.qualified}`,
+              profilesCreated: sql`${discoveryQueryStats.profilesCreated} + ${metrics.created}`,
+              skippedDuplicates: sql`${discoveryQueryStats.skippedDuplicates} + ${metrics.duplicates}`,
+              skippedBlocked: sql`${discoveryQueryStats.skippedBlocked} + ${metrics.blocked}`,
+              skippedLowScore: sql`${discoveryQueryStats.skippedLowScore} + ${metrics.lowScore}`,
+              lastSearchedAt: finishedAt,
+              updatedAt: finishedAt,
+            },
+          });
       }
       await tx.insert(auditLogs).values({
         id: crypto.randomUUID(),
@@ -560,7 +841,11 @@ export async function executeCampaignDiscovery(
         createdAt: finishedAt,
       });
     });
-    await scheduleNextCampaignDiscovery({ campaignId: campaign.id, currentJobId: input.jobId, from: new Date(finishedAt) });
+    await scheduleNextCampaignDiscovery({
+      campaignId: campaign.id,
+      currentJobId: input.jobId,
+      from: new Date(finishedAt),
+    });
     return {
       status: "completed" as const,
       created: profilesCreated,
@@ -569,11 +854,14 @@ export async function executeCampaignDiscovery(
       websiteOpportunitiesCreated,
     };
   } catch (error) {
-    await db.update(discoveryRuns).set({
-      status: "failed",
-      error: error instanceof Error ? error.message : "Falha desconhecida",
-      finishedAt: new Date().toISOString(),
-    }).where(eq(discoveryRuns.id, runId));
+    await db
+      .update(discoveryRuns)
+      .set({
+        status: "failed",
+        error: error instanceof Error ? error.message : "Falha desconhecida",
+        finishedAt: new Date().toISOString(),
+      })
+      .where(eq(discoveryRuns.id, runId));
     throw error;
   }
 }

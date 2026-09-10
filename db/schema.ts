@@ -408,6 +408,8 @@ export const discoveryRuns = sqliteTable(
     skippedLowScore: integer("skipped_low_score").notNull().default(0),
     websiteOpportunitiesCreated: integer("website_opportunities_created").notNull().default(0),
     error: text("error"),
+    stopReason: text("stop_reason"),
+    localSearchProgress: text("local_search_progress"),
     startedAt: text("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     finishedAt: text("finished_at"),
   },
@@ -416,6 +418,19 @@ export const discoveryRuns = sqliteTable(
     index("discovery_runs_status_idx").on(table.status),
   ],
 );
+
+export const localDiscoveryQueue = sqliteTable("local_discovery_queue", {
+  campaignId: text("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
+  queryKey: text("query_key").notNull(),
+  businessKey: text("business_key").notNull(),
+  googleMapsUrl: text("google_maps_url").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("local_discovery_queue_identity").on(table.campaignId, table.queryKey, table.businessKey),
+  index("local_discovery_queue_pending").on(table.campaignId, table.queryKey, table.status),
+]);
 
 export const localBusinessOpportunities = sqliteTable(
   "local_business_opportunities",

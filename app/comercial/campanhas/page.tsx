@@ -24,6 +24,10 @@ import {
 } from "../../../src/features/outbound/discovery-domain";
 import { OUTBOUND_PIPELINE_LABELS } from "../../../src/features/outbound/domain";
 import {
+  localProgressSummary,
+  localStopLabel,
+} from "../../../src/features/outbound/local-discovery-domain";
+import {
   EmptyState,
   PageHeader,
   StatusBadge,
@@ -787,6 +791,11 @@ export default async function CampaignsPage({
                           : "Busca em andamento; resultados disponíveis ao concluir."
                       : "Esta campanha ainda não realizou uma busca."}
                   </p>
+                  {latestRun?.stopReason && (
+                    <p className="mt-2 text-xs text-[#73858c]">
+                      {localStopLabel(latestRun.stopReason)}
+                    </p>
+                  )}
                 </div>
                 <Link href={href("historico")} className={secondaryButton}>
                   Ver histórico <ArrowRight size={14} />
@@ -1512,6 +1521,18 @@ export default async function CampaignsPage({
                             </td>
                             <td className="px-4 py-4">
                               <StatusBadge status={run.status} />
+                              {run.stopReason && (
+                                <p className="mt-2 max-w-xs text-xs text-[#73858c]">
+                                  {localStopLabel(run.stopReason)}
+                                </p>
+                              )}
+                              {run.localSearchProgress && (
+                                <p className="mt-2 max-w-xs text-xs text-[#73858c]">
+                                  {localProgressSummary(
+                                    run.localSearchProgress,
+                                  )}
+                                </p>
+                              )}
                               {run.error && (
                                 <p className="mt-2 max-w-xs text-xs text-red-700">
                                   {run.error}
