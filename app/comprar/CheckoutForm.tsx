@@ -1,21 +1,14 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
+import Link from "next/link";
+import { cartSelections, type CartItem } from "../../lib/cart";
+import { authClient } from "../../lib/auth-client";
 import { formatBrl } from "../../lib/catalog";
 import type { ShippingOption } from "../../lib/melhor-envio";
 import ProductColorImage from "../components/ProductColorImage";
 
-type CheckoutFormProps = {
-  productId: string;
-  productName: string;
-  productImage: string;
-  productAlt: string;
-  subtotalCents: number;
-  color: string;
-  colorName: string;
-  quantity: number;
-  personalization: string | null;
-};
+type CheckoutFormProps = { items: CartItem[]; fromCart?: boolean };
 
 type QuoteResponse = {
   postalCode?: string;
@@ -28,16 +21,26 @@ function onlyPostalCodeDigits(value: string) {
 }
 
 export default function CheckoutForm({
-  productId,
-  productName,
-  productImage,
-  productAlt,
-  subtotalCents,
-  color,
-  colorName,
-  quantity,
-  personalization,
+  items,
+  fromCart = false,
 }: CheckoutFormProps) {
+  const selections = cartSelections(items);
+  const subtotalCents = selections.reduce(
+    (sum, selection) => sum + selection.subtotalCents,
+    0,
+  );
+  const { data: session } = authClient.useSession();
+  const loginReturnTo = fromCart
+    ? "/comprar"
+    : `/comprar?${new URLSearchParams({
+        produto: items[0].productId,
+        cor: items[0].color,
+        quantidade: String(items[0].quantity),
+        ...(items[0].personalization
+          ? { personalizacao: items[0].personalization }
+          : {}),
+      }).toString()}`;
+  const quoteVersion = useRef(0);
   const [submitting, setSubmitting] = useState(false);
   const [quoting, setQuoting] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +57,8 @@ export default function CheckoutForm({
 
   function handlePostalCodeChange(value: string) {
     setPostalCode(value);
+    quoteVersion.current += 1;
+    setQuoting(false);
     if (onlyPostalCodeDigits(value) !== quotedPostalCode) {
       setShippingOptions([]);
       setSelectedServiceId("");
@@ -67,6 +72,7 @@ export default function CheckoutForm({
       return;
     }
 
+    const version = ++quoteVersion.current;
     setQuoting(true);
     setShippingError("");
     setError("");
@@ -76,23 +82,24 @@ export default function CheckoutForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productId,
-          color,
-          quantity,
-          personalization,
+          items,
           postalCode: normalizedPostalCode,
         }),
       });
       const result = (await response.json()) as QuoteResponse;
 
+      if (version !== quoteVersion.current) return;
       if (!response.ok || !result.options?.length || !result.postalCode) {
-        throw new Error(result.error || "Não encontramos entrega para esse CEP.");
+        throw new Error(
+          result.error || "Não encontramos entrega para esse CEP.",
+        );
       }
 
       setShippingOptions(result.options);
       setQuotedPostalCode(result.postalCode);
       setSelectedServiceId(result.options[0].serviceId);
     } catch (quoteError) {
+      if (version !== quoteVersion.current) return;
       setShippingOptions([]);
       setSelectedServiceId("");
       setShippingError(
@@ -101,7 +108,7 @@ export default function CheckoutForm({
           : "Não foi possível calcular a entrega.",
       );
     } finally {
-      setQuoting(false);
+      if (version === quoteVersion.current) setQuoting(false);
     }
   }
 
@@ -109,7 +116,10 @@ export default function CheckoutForm({
     event.preventDefault();
     setError("");
 
-    if (!selectedShipping || quotedPostalCode !== onlyPostalCodeDigits(postalCode)) {
+    if (
+      !selectedShipping ||
+      quotedPostalCode !== onlyPostalCodeDigits(postalCode)
+    ) {
       setShippingError("Calcule e escolha uma modalidade de entrega.");
       return;
     }
@@ -124,23 +134,33 @@ export default function CheckoutForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
-          productId,
-          color,
-          quantity,
-          personalization,
+          items,
           shippingServiceId: selectedShipping.serviceId,
           shippingPriceCents: selectedShipping.priceCents,
         }),
       });
       const result = (await response.json()) as {
         checkoutUrl?: string;
+        orderId?: string;
         error?: string;
       };
 
       if (!response.ok || !result.checkoutUrl) {
-        throw new Error(result.error || "Não foi possível iniciar o pagamento.");
+        throw new Error(
+          result.error || "Não foi possível iniciar o pagamento.",
+        );
       }
 
+      if (fromCart && result.orderId) {
+        try {
+          sessionStorage.setItem(
+            `artgian:checkout:${result.orderId}`,
+            JSON.stringify(items),
+          );
+        } catch {
+          /* Cart remains available when storage is blocked. */
+        }
+      }
       window.location.assign(result.checkoutUrl);
     } catch (submissionError) {
       setError(
@@ -158,6 +178,23 @@ export default function CheckoutForm({
         className="space-y-9 rounded-[2rem] border border-white bg-white/70 p-6 shadow-[0_20px_60px_rgba(11,36,71,.07)] sm:p-9"
         onSubmit={handleSubmit}
       >
+        {!session && (
+          <p className="text-sm leading-6 text-[#647087]">
+            <Link
+              href={`/login?next=${encodeURIComponent(loginReturnTo)}`}
+              className="font-semibold text-[#0b2447] underline underline-offset-4"
+            >
+              Entre na sua conta
+            </Link>{" "}
+            para acompanhar este pedido, ou continue como visitante.
+          </p>
+        )}
+        {session && (
+          <p className="text-sm text-[#647087]">
+            Comprando como{" "}
+            <strong className="text-[#0b2447]">{session.user.name}</strong>
+          </p>
+        )}
         <section>
           <div className="flex items-center gap-3">
             <span className="grid size-8 place-items-center rounded-full border border-[#b88a3b] font-serif text-sm text-[#b88a3b]">
@@ -167,19 +204,43 @@ export default function CheckoutForm({
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label className="sm:col-span-2">
-              <span className="mb-2 block text-xs font-semibold">Nome completo</span>
-              <input className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15" name="customerName" autoComplete="name" required />
+              <span className="mb-2 block text-xs font-semibold">
+                Nome completo
+              </span>
+              <input
+                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                name="customerName"
+                defaultValue={session?.user.name ?? ""}
+                autoComplete="name"
+                required
+              />
             </label>
             <label>
               <span className="mb-2 block text-xs font-semibold">E-mail</span>
-              <input className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15" type="email" name="customerEmail" autoComplete="email" required />
+              <input
+                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                type="email"
+                name="customerEmail"
+                defaultValue={session?.user.email ?? ""}
+                autoComplete="email"
+                required
+              />
             </label>
             <label>
               <span className="mb-2 block text-xs font-semibold">Telefone</span>
-              <input className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15" type="tel" name="customerPhone" autoComplete="tel" placeholder="(00) 00000-0000" required />
+              <input
+                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                type="tel"
+                name="customerPhone"
+                autoComplete="tel"
+                placeholder="(00) 00000-0000"
+                required
+              />
             </label>
             <label className="sm:col-span-2">
-              <span className="mb-2 block text-xs font-semibold">CPF para emissão da etiqueta</span>
+              <span className="mb-2 block text-xs font-semibold">
+                CPF para emissão da etiqueta
+              </span>
               <input
                 className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
                 name="customerDocument"
@@ -225,19 +286,31 @@ export default function CheckoutForm({
                 disabled={quoting}
                 aria-busy={quoting}
               >
-                {quoting ? <><span className="ui-spinner" aria-hidden="true" />Calculando…</> : "Calcular entrega"}
+                {quoting ? (
+                  <>
+                    <span className="ui-spinner" aria-hidden="true" />
+                    Calculando…
+                  </>
+                ) : (
+                  "Calcular entrega"
+                )}
               </button>
             </div>
 
             {shippingError && (
-              <p className="sm:col-span-6 rounded-xl border border-red-700/20 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+              <p
+                className="sm:col-span-6 rounded-xl border border-red-700/20 bg-red-50 px-4 py-3 text-sm text-red-800"
+                role="alert"
+              >
                 {shippingError}
               </p>
             )}
 
             {shippingOptions.length > 0 && (
               <fieldset className="sm:col-span-6 space-y-2">
-                <legend className="mb-2 text-xs font-semibold">Escolha a modalidade</legend>
+                <legend className="mb-2 text-xs font-semibold">
+                  Escolha a modalidade
+                </legend>
                 {shippingOptions.map((option) => (
                   <label
                     className={`flex cursor-pointer items-center justify-between gap-4 rounded-xl border p-4 transition ${
@@ -257,11 +330,18 @@ export default function CheckoutForm({
                         onChange={() => setSelectedServiceId(option.serviceId)}
                       />
                       <span>
-                        <strong className="block text-sm">{option.companyName} · {option.serviceName}</strong>
-                        <span className="mt-1 block text-xs text-[#647087]">Até {option.deliveryTimeDays} dias úteis após a postagem</span>
+                        <strong className="block text-sm">
+                          {option.companyName} · {option.serviceName}
+                        </strong>
+                        <span className="mt-1 block text-xs text-[#647087]">
+                          Até {option.deliveryTimeDays} dias úteis após a
+                          postagem
+                        </span>
                       </span>
                     </span>
-                    <strong className="shrink-0 text-sm">{formatBrl(option.priceCents)}</strong>
+                    <strong className="shrink-0 text-sm">
+                      {formatBrl(option.priceCents)}
+                    </strong>
                   </label>
                 ))}
               </fieldset>
@@ -269,42 +349,81 @@ export default function CheckoutForm({
 
             <label className="sm:col-span-5">
               <span className="mb-2 block text-xs font-semibold">Endereço</span>
-              <input className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15" name="streetAddress" autoComplete="address-line1" required />
+              <input
+                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                name="streetAddress"
+                autoComplete="address-line1"
+                required
+              />
             </label>
             <label>
               <span className="mb-2 block text-xs font-semibold">Número</span>
-              <input className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15" name="addressNumber" required />
+              <input
+                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                name="addressNumber"
+                required
+              />
             </label>
             <label className="sm:col-span-3">
-              <span className="mb-2 block text-xs font-semibold">Complemento</span>
-              <input className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15" name="addressComplement" autoComplete="address-line2" />
+              <span className="mb-2 block text-xs font-semibold">
+                Complemento
+              </span>
+              <input
+                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                name="addressComplement"
+                autoComplete="address-line2"
+              />
             </label>
             <label className="sm:col-span-3">
               <span className="mb-2 block text-xs font-semibold">Bairro</span>
-              <input className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15" name="neighborhood" required />
+              <input
+                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                name="neighborhood"
+                required
+              />
             </label>
             <label className="sm:col-span-5">
               <span className="mb-2 block text-xs font-semibold">Cidade</span>
-              <input className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15" name="city" autoComplete="address-level2" required />
+              <input
+                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                name="city"
+                autoComplete="address-level2"
+                required
+              />
             </label>
             <label>
               <span className="mb-2 block text-xs font-semibold">UF</span>
-              <input className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 uppercase outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15" name="state" autoComplete="address-level1" maxLength={2} required />
+              <input
+                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 uppercase outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                name="state"
+                autoComplete="address-level1"
+                maxLength={2}
+                required
+              />
             </label>
           </div>
         </section>
 
         <section>
           <div className="flex items-center gap-3">
-            <span className="grid size-8 place-items-center rounded-full border border-[#b88a3b] font-serif text-sm text-[#b88a3b]">3</span>
+            <span className="grid size-8 place-items-center rounded-full border border-[#b88a3b] font-serif text-sm text-[#b88a3b]">
+              3
+            </span>
             <h2 className="font-serif text-2xl font-normal">Pagamento</h2>
           </div>
           <div className="mt-5 rounded-2xl border border-dashed border-[#0b2447]/20 bg-[#f7f3ea] p-5">
             <div className="flex items-start gap-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#d8bc7b]/30">◇</span>
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#d8bc7b]/30">
+                ◇
+              </span>
               <div>
-                <strong className="text-sm">Pagamento seguro pelo Mercado Pago</strong>
-                <p className="mt-1 text-xs leading-5 text-[#647087]">Você será direcionado ao Mercado Pago para escolher Pix, cartão ou outro meio disponível.</p>
+                <strong className="text-sm">
+                  Pagamento seguro pelo Mercado Pago
+                </strong>
+                <p className="mt-1 text-xs leading-5 text-[#647087]">
+                  Você será direcionado ao Mercado Pago para escolher Pix,
+                  cartão ou outro meio disponível.
+                </p>
               </div>
             </div>
           </div>
@@ -316,7 +435,12 @@ export default function CheckoutForm({
         </label>
 
         {error && (
-          <p className="rounded-xl border border-red-700/20 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>
+          <p
+            className="rounded-xl border border-red-700/20 bg-red-50 px-4 py-3 text-sm text-red-800"
+            role="alert"
+          >
+            {error}
+          </p>
         )}
 
         <button
@@ -325,33 +449,84 @@ export default function CheckoutForm({
           disabled={submitting || !selectedShipping}
           aria-busy={submitting}
         >
-          {submitting ? <span className="flex items-center gap-2"><span className="ui-spinner" aria-hidden="true" />Abrindo o Mercado Pago…</span> : selectedShipping ? "Pagar com Mercado Pago" : "Calcule a entrega para continuar"}
-          <span className="grid size-10 place-items-center rounded-full bg-[#d8bc7b] text-xl text-[#0b2447]">→</span>
+          {submitting ? (
+            <span className="flex items-center gap-2">
+              <span className="ui-spinner" aria-hidden="true" />
+              Abrindo o Mercado Pago…
+            </span>
+          ) : selectedShipping ? (
+            "Pagar com Mercado Pago"
+          ) : (
+            "Calcule a entrega para continuar"
+          )}
+          <span className="grid size-10 place-items-center rounded-full bg-[#d8bc7b] text-xl text-[#0b2447]">
+            →
+          </span>
         </button>
       </form>
 
       <aside className="rounded-[2rem] bg-[#0b2447] p-5 text-white shadow-[0_24px_70px_rgba(11,36,71,.16)] lg:sticky lg:top-6">
-        <div className="overflow-hidden rounded-[1.4rem] bg-white">
-          <ProductColorImage className="aspect-square w-full object-cover" product={productId} src={productImage} alt={productAlt} initialColor={color} />
-        </div>
-        <div className="px-2 pt-6 pb-3">
-          <span className="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-[#d8bc7b]">Resumo do pedido</span>
-          <div className="mt-3 flex items-start justify-between gap-5">
-            <div>
-              <h2 className="font-serif text-2xl font-normal">{productName}</h2>
-              <p className="mt-1 text-xs text-white/55">Cor {colorName} · Quantidade {quantity}</p>
-              {personalization && <p className="mt-1 text-xs text-[#d8bc7b]">Personalização: “{personalization}”</p>}
-            </div>
-            <strong className="shrink-0 text-sm">{formatBrl(subtotalCents)}</strong>
+        <div className="px-2 pt-3 pb-3">
+          <span className="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-[#d8bc7b]">
+            Resumo do pedido
+          </span>
+          <div className="mt-5 space-y-5">
+            {selections.map((selection, index) => (
+              <div key={index} className="flex items-start gap-4">
+                <ProductColorImage
+                  className="size-16 shrink-0 rounded-xl object-cover"
+                  product={selection.productId}
+                  src={selection.product.image}
+                  alt={`${selection.product.name} — ${selection.color}`}
+                  initialColor={selection.colorKey}
+                />
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-serif text-xl font-normal">
+                    {selection.product.name}
+                  </h2>
+                  <p className="mt-1 text-xs text-white/65">
+                    Cor {selection.color} · Quantidade {selection.quantity}
+                  </p>
+                  {selection.personalization && (
+                    <p className="mt-1 break-words text-xs text-[#d8bc7b]">
+                      Personalização: “{selection.personalization}”
+                    </p>
+                  )}
+                  <p className="mt-2 text-sm font-semibold">
+                    {formatBrl(selection.subtotalCents)}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
           <dl className="mt-7 space-y-3 border-y border-white/15 py-5 text-xs">
-            <div className="flex justify-between"><dt className="text-white/55">Subtotal</dt><dd>{formatBrl(subtotalCents)}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-white/55">Entrega</dt><dd className="text-right">{selectedShipping ? formatBrl(selectedShipping.priceCents) : "Calcule pelo CEP"}</dd></div>
-            {selectedShipping && <div className="flex justify-between gap-4"><dt className="text-white/55">Modalidade</dt><dd className="text-right">{selectedShipping.companyName} · {selectedShipping.serviceName}</dd></div>}
+            <div className="flex justify-between">
+              <dt className="text-white/55">Subtotal</dt>
+              <dd>{formatBrl(subtotalCents)}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-white/55">Entrega</dt>
+              <dd className="text-right">
+                {selectedShipping
+                  ? formatBrl(selectedShipping.priceCents)
+                  : "Calcule pelo CEP"}
+              </dd>
+            </div>
+            {selectedShipping && (
+              <div className="flex justify-between gap-4">
+                <dt className="text-white/55">Modalidade</dt>
+                <dd className="text-right">
+                  {selectedShipping.companyName} ·{" "}
+                  {selectedShipping.serviceName}
+                </dd>
+              </div>
+            )}
           </dl>
           <div className="mt-5 flex items-end justify-between">
             <span className="text-xs text-white/55">Total</span>
-            <strong className="font-serif text-3xl font-normal text-[#d8bc7b]">{selectedShipping ? formatBrl(totalCents) : "—"}</strong>
+            <strong className="font-serif text-3xl font-normal text-[#d8bc7b]">
+              {selectedShipping ? formatBrl(totalCents) : "—"}
+            </strong>
           </div>
         </div>
       </aside>

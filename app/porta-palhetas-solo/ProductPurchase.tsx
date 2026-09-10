@@ -1,5 +1,6 @@
 "use client";
 
+import AddToCartButton from "../components/AddToCartButton";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { announceProductColor } from "../components/ProductColorImage";
@@ -131,6 +132,7 @@ export default function ProductPurchase() {
           </span>
         </button>
       </div>
+      <AddToCartButton item={{ productId: "porta-palhetas-solo", color: color, quantity, personalization: name.trim() }} disabled={!name.trim()} />
       <p className="mt-4 text-center text-[0.66rem] leading-5 text-[#182645]/55 sm:text-left">
         Produção sob encomenda · Personalização incluída
       </p>

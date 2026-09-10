@@ -137,7 +137,11 @@ function normalizeQuote(quote: MelhorEnvioQuote): ShippingOption | null {
     .map(parseVolume)
     .filter((volume): volume is ShippingVolume => volume !== null);
 
-  if (!priceCents || !Number.isFinite(deliveryTimeDays) || volumes.length === 0) {
+  if (
+    !priceCents ||
+    !Number.isFinite(deliveryTimeDays) ||
+    volumes.length === 0
+  ) {
     return null;
   }
 
@@ -173,10 +177,7 @@ function providerErrorMessage(payload: unknown) {
   return null;
 }
 
-async function melhorEnvioRequest<T>(
-  pathname: string,
-  init: RequestInit = {},
-) {
+async function melhorEnvioRequest<T>(pathname: string, init: RequestInit = {}) {
   const response = await fetch(`${API_URLS[getEnvironment()]}${pathname}`, {
     ...init,
     headers: {
@@ -207,29 +208,48 @@ async function melhorEnvioRequest<T>(
   return payload;
 }
 
-export async function calculateShipping(input: {
-  destinationPostalCode: string;
+export type ShippingLine = {
   package: ShippingPackage;
   productId: string;
   quantity: number;
   unitPriceCents: number;
+};
+
+export async function calculateShipping(
+  input: ShippingLine & { destinationPostalCode: string },
+) {
+  return calculateCartShipping({
+    items: [input],
+    destinationPostalCode: input.destinationPostalCode,
+  });
+}
+
+export async function calculateCartShipping(input: {
+  items: ShippingLine[];
+  destinationPostalCode: string;
 }) {
-  const packageValues = [
-    input.package.widthCm,
-    input.package.heightCm,
-    input.package.lengthCm,
-    input.package.weightKg,
-  ];
-  if (packageValues.some((value) => !Number.isFinite(value) || value <= 0)) {
-    throw new ShippingConfigurationError(
-      "As medidas e o peso da embalagem devem ser maiores que zero.",
-    );
+  if (!input.items.length)
+    throw new ShippingProviderError("O carrinho está vazio.", 400);
+  for (const item of input.items) {
+    const values = [
+      item.package.widthCm,
+      item.package.heightCm,
+      item.package.lengthCm,
+      item.package.weightKg,
+    ];
+    if (values.some((value) => !Number.isFinite(value) || value <= 0)) {
+      throw new ShippingConfigurationError(
+        "As medidas e o peso da embalagem devem ser maiores que zero.",
+      );
+    }
   }
 
   const originPostalCode = normalizePostalCode(
     requiredEnvironmentVariable("MELHOR_ENVIO_ORIGIN_POSTAL_CODE"),
   );
-  const destinationPostalCode = normalizePostalCode(input.destinationPostalCode);
+  const destinationPostalCode = normalizePostalCode(
+    input.destinationPostalCode,
+  );
   if (originPostalCode.length !== 8) {
     throw new ShippingConfigurationError(
       "MELHOR_ENVIO_ORIGIN_POSTAL_CODE deve conter um CEP válido.",
@@ -246,17 +266,15 @@ export async function calculateShipping(input: {
       body: JSON.stringify({
         from: { postal_code: originPostalCode },
         to: { postal_code: destinationPostalCode },
-        products: [
-          {
-            id: input.productId,
-            width: input.package.widthCm,
-            height: input.package.heightCm,
-            length: input.package.lengthCm,
-            weight: input.package.weightKg,
-            insurance_value: input.unitPriceCents / 100,
-            quantity: input.quantity,
-          },
-        ],
+        products: input.items.map((item, index) => ({
+          id: `${item.productId}-${index}`,
+          width: item.package.widthCm,
+          height: item.package.heightCm,
+          length: item.package.lengthCm,
+          weight: item.package.weightKg,
+          insurance_value: item.unitPriceCents / 100,
+          quantity: item.quantity,
+        })),
         options: { receipt: false, own_hand: false },
       }),
     },
@@ -296,7 +314,11 @@ function getSandboxSender() {
       "MELHOR_ENVIO_SENDER_DOCUMENT deve conter um CPF válido.",
     );
   }
-  if (![10, 11].includes(phone.length) || postalCode.length !== 8 || state.length !== 2) {
+  if (
+    ![10, 11].includes(phone.length) ||
+    postalCode.length !== 8 ||
+    state.length !== 2
+  ) {
     throw new ShippingConfigurationError(
       "Telefone, CEP ou UF do remetente estão inválidos.",
     );
@@ -322,16 +344,20 @@ export async function createAndPurchaseSandboxLabel(input: {
   orderId: string;
   serviceId: string;
   recipient: SandboxLabelRecipient;
-  product: {
+  products: {
     name: string;
     quantity: number;
     unitPriceCents: number;
-  };
+  }[];
   volumes: ShippingVolume[];
 }) {
   requireSandboxForLabels();
   const service = Number(input.serviceId);
-  if (!Number.isInteger(service) || service <= 0 || !isValidCpf(input.recipient.document)) {
+  if (
+    !Number.isInteger(service) ||
+    service <= 0 ||
+    !isValidCpf(input.recipient.document)
+  ) {
     throw new ShippingConfigurationError(
       "Serviço de entrega ou CPF do destinatário inválido.",
     );
@@ -356,19 +382,20 @@ export async function createAndPurchaseSandboxLabel(input: {
         country_id: "BR",
         postal_code: normalizePostalCode(input.recipient.postalCode),
       },
-      products: [
-        {
-          name: input.product.name,
-          quantity: input.product.quantity,
-          unitary_value: input.product.unitPriceCents / 100,
-        },
-      ],
+      products: input.products.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        unitary_value: item.unitPriceCents / 100,
+      })),
       volumes: input.volumes,
       options: {
         platform: "Artgian Studio Sandbox",
         reminder: `Pedido ${input.orderId}`,
         insurance_value:
-          (input.product.unitPriceCents * input.product.quantity) / 100,
+          input.products.reduce(
+            (sum, item) => sum + item.unitPriceCents * item.quantity,
+            0,
+          ) / 100,
         receipt: false,
         own_hand: false,
         reverse: false,

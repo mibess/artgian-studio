@@ -1,5 +1,6 @@
 "use client";
 
+import AddToCartButton from "../components/AddToCartButton";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { announceProductColor } from "../components/ProductColorImage";
@@ -99,6 +100,7 @@ export default function ProductPurchase() {
           </span>
         </button>
       </div>
+      <AddToCartButton item={{ productId: "bandeja-aurora", color: color, quantity }} />
       <p className="mt-4 text-center text-[0.66rem] leading-5 text-[#152849]/55 sm:text-left">
         Produção sob encomenda · Envio calculado no checkout
       </p>

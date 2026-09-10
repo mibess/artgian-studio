@@ -176,3 +176,92 @@ produção deverá ser implementada separadamente, depois da regularização fis
 
 O projeto pode ser publicado como uma aplicação Next.js na Vercel. O arquivo
 `vercel.json` mantém a detecção explícita do framework.
+
+## Carrinho e contas de clientes
+
+O cabeçalho oferece acesso a `/carrinho`, `/login` e `/conta`. Todas as páginas
+com compra permitem adicionar peças, mantendo cor, quantidade e personalização.
+O carrinho fica no navegador (`localStorage`), acompanha as abas da mesma origem
+e permanece ao entrar ou sair da conta. O limite é de 9 unidades por variante e
+30 itens diferentes. Ele não é sincronizado entre dispositivos.
+
+`/comprar` finaliza o carrinho inteiro. Os links antigos de compra direta
+(`/comprar?produto=...&cor=...&quantidade=...`) continuam funcionando e compram
+apenas a seleção do link. Preços vêm do catálogo no servidor; o frete é cotado
+novamente antes de criar o pagamento. A etiqueta sandbox e o painel administrativo
+incluem todos os itens. O carrinho só desconta os itens comprados quando a página
+de retorno recebe do banco o estado `paid`, confirmado pelo webhook; falhas e
+pagamentos pendentes preservam os itens. A limpeza usa um registro da aba de
+checkout, de modo que um retorno em outra aba pode manter o carrinho.
+
+A autenticação usa Better Auth, com cadastro por e-mail e senha, sessões em
+cookies HttpOnly e limite de tentativas persistido no banco. As senhas são
+armazenadas em hash. `/conta` exige sessão validada no servidor e mostra apenas
+pedidos associados ao ID do cliente durante o checkout. Pedidos como visitante
+não são vinculados por coincidência de e-mail. É possível comprar sem login.
+O acesso administrativo continua usando sua autenticação separada.
+
+### Ativar a autenticação
+
+1. Aplique a migração aditiva `drizzle/0014_unusual_cassandra_nova.sql` antes de
+   publicar. Ela cria as tabelas `store_*` e acrescenta `orders.user_id`, sem
+   alterar pedidos antigos. O banco local aplica migrações ao iniciar; no Turso,
+   execute `pnpm db:migrate` com `COMMERCIAL_DATABASE_MODE=turso`,
+   `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN` do ambiente desejado.
+2. Configure `BETTER_AUTH_SECRET` com um segredo aleatório de pelo menos
+   32 caracteres (`openssl rand -base64 32`) e `BETTER_AUTH_URL` com a origem
+   exata da loja, incluindo protocolo. Não reutilize o segredo dos testes.
+3. Para Google, crie um cliente OAuth do tipo **Aplicativo da Web** no Google
+   Cloud e configure `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no servidor.
+   Cadastre os retornos autorizados:
+   - Local: `http://localhost:3000/api/auth/callback/google`
+   - Produção: `https://www.artgian.com.br/api/auth/callback/google`
+   O domínio deve ser exatamente o de `BETTER_AUTH_URL`. Se o aplicativo OAuth
+   estiver em teste, adicione os e-mails autorizados à tela de consentimento.
+4. Reinicie o servidor após alterar as variáveis. Sem as credenciais Google,
+   o botão informa a indisponibilidade e o acesso por e-mail continua disponível.
+
+As contas Google e senha não são vinculadas automaticamente por e-mail.
+
+### Confirmação de e-mail e recuperação de senha
+
+O cadastro com senha exige confirmação do endereço. O login de contas ainda
+não confirmadas reenvia o link; o cliente também pode solicitar outro em
+`/login/verificar`. O link vale por 1 hora. Após confirmar, o cliente entra com
+sua senha; abrir a mensagem não cria uma sessão automaticamente.
+
+A recuperação está em `/login/recuperar`. O link vale por 30 minutos, só pode
+ser usado uma vez e encerra todas as sessões da conta após a troca da senha.
+Respostas públicas não revelam se um e-mail está cadastrado. Solicitações de
+recuperação e reenvio têm limite de 3 por minuto por IP.
+
+Antes de publicar esta versão, configure e valide o envio SMTP:
+
+1. Na caixa Zoho que enviará as mensagens, consulte o servidor SMTP da região e
+   do plano. Contas gratuitas normalmente usam `smtp.zoho.com`; contas pagas
+   com domínio próprio podem usar `smtppro.zoho.com`.
+2. Crie uma senha de aplicativo Zoho exclusiva para a loja. Configure
+   `SMTP_HOST`, `SMTP_PORT` (465/SSL ou 587/STARTTLS), `SMTP_USER`,
+   `SMTP_PASSWORD`, `AUTH_EMAIL_FROM` e `AUTH_EMAIL_REPLY_TO` no ambiente local
+   e na Vercel Production. O remetente precisa ser a caixa ou um alias autorizado.
+3. Valide uma mensagem real e seus registros SPF/DKIM no provedor. Só então
+   publique: exigir confirmação sem um remetente funcional impediria os acessos
+   por senha de contas não verificadas. O login Google continua independente.
+
+O envio usa TLS com certificado verificado e roda com `after` do Next.js para
+concluir na Vercel após a resposta HTTP. Falhas geram um erro `[auth-email]` sem
+registrar endereços, senhas ou links. O usuário pode solicitar outro link quando
+a entrega falhar. Não há migração de banco adicional.
+
+Os testes de navegador usam uma caixa isolada em `data/e2e-auth-emails.jsonl`:
+`AUTH_EMAIL_TEST_OUTBOX` só funciona em desenvolvimento local, sem `VERCEL`, e
+nunca em produção. Não configure essa variável em deploys.
+
+Referência SMTP: https://www.zoho.com/pt-br/mail/help/zoho-smtp.html.
+
+Referências: [Next.js e Better Auth](https://better-auth.com/docs/integrations/next),
+[configuração do Google](https://better-auth.com/docs/authentication/google).
+
+Validação local: `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build` e
+`pnpm exec playwright test tests/e2e/store-flow.spec.ts`. Os testes de loja usam
+banco isolado e respostas simuladas de frete/pagamento, sem criar cobranças reais.

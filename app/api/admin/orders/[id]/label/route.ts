@@ -3,7 +3,7 @@ import { getDb } from "@/db";
 import { orderItems, orders } from "@/db/schema";
 import { isProductId, products } from "@/lib/catalog";
 import {
-  calculateShipping,
+  calculateCartShipping,
   createAndPurchaseSandboxLabel,
   generateAndPrintSandboxLabel,
 } from "@/lib/melhor-envio";
@@ -12,7 +12,11 @@ type LabelRouteContext = {
   params: Promise<{ id: string }>;
 };
 
-function adminRedirect(request: Request, type: "message" | "error", value: string) {
+function adminRedirect(
+  request: Request,
+  type: "message" | "error",
+  value: string,
+) {
   const url = new URL("/admin/pedidos", request.url);
   url.searchParams.set(type, value.slice(0, 280));
   return Response.redirect(url, 303);
@@ -20,7 +24,10 @@ function adminRedirect(request: Request, type: "message" | "error", value: strin
 
 export async function POST(request: Request, context: LabelRouteContext) {
   const requestOrigin = request.headers.get("origin");
-  if (requestOrigin && new URL(requestOrigin).host !== new URL(request.url).host) {
+  if (
+    requestOrigin &&
+    new URL(requestOrigin).host !== new URL(request.url).host
+  ) {
     return new Response("Origem inválida.", { status: 403 });
   }
 
@@ -28,46 +35,70 @@ export async function POST(request: Request, context: LabelRouteContext) {
   const form = await request.formData();
   const action = String(form.get("action") || "");
   const db = await getDb();
-  const [order] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
-  const [item] = await db
+  const [order] = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, id))
+    .limit(1);
+  const items = await db
     .select()
     .from(orderItems)
-    .where(eq(orderItems.orderId, id))
-    .limit(1);
+    .where(eq(orderItems.orderId, id));
 
-  if (!order || !item) return adminRedirect(request, "error", "Pedido não encontrado.");
+  if (!order || !items.length)
+    return adminRedirect(request, "error", "Pedido não encontrado.");
   if (order.status !== "paid") {
-    return adminRedirect(request, "error", "A etiqueta só pode ser criada para um pedido pago.");
+    return adminRedirect(
+      request,
+      "error",
+      "A etiqueta só pode ser criada para um pedido pago.",
+    );
   }
 
   try {
     if (action === "create") {
       if (order.shippingLabelId) {
-        return adminRedirect(request, "error", "Este pedido já possui uma etiqueta vinculada.");
+        return adminRedirect(
+          request,
+          "error",
+          "Este pedido já possui uma etiqueta vinculada.",
+        );
       }
       if (!order.customerDocument) {
-        return adminRedirect(request, "error", "O pedido não possui CPF do destinatário.");
+        return adminRedirect(
+          request,
+          "error",
+          "O pedido não possui CPF do destinatário.",
+        );
       }
-      if (!isProductId(item.productId)) {
-        return adminRedirect(request, "error", "Produto do pedido não está mais no catálogo.");
-      }
-      const product = products[item.productId];
-      if (!product.shippingPackage) {
-        return adminRedirect(request, "error", "Peso e medidas do produto não estão configurados.");
-      }
-
-      const options = await calculateShipping({
+      const lines = items.map((item) => {
+        if (!isProductId(item.productId))
+          throw new Error("Produto do pedido não está mais no catálogo.");
+        const product = products[item.productId];
+        if (!product.shippingPackage)
+          throw new Error(
+            `Peso e medidas de ${item.productName} não estão configurados.`,
+          );
+        return {
+          package: product.shippingPackage,
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPriceCents: item.unitPriceCents,
+        };
+      });
+      const options = await calculateCartShipping({
         destinationPostalCode: order.postalCode,
-        package: product.shippingPackage,
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPriceCents: item.unitPriceCents,
+        items: lines,
       });
       const selectedOption = options.find(
         (option) => option.serviceId === order.shippingServiceId,
       );
       if (!selectedOption) {
-        return adminRedirect(request, "error", "A modalidade de entrega não está mais disponível.");
+        return adminRedirect(
+          request,
+          "error",
+          "A modalidade de entrega não está mais disponível.",
+        );
       }
       if (selectedOption.priceCents !== order.shippingCents) {
         return adminRedirect(
@@ -93,11 +124,13 @@ export async function POST(request: Request, context: LabelRouteContext) {
           state: order.state,
           postalCode: order.postalCode,
         },
-        product: {
-          name: item.productName,
+        products: items.map((item) => ({
+          name: [item.productName, item.color, item.personalization]
+            .filter(Boolean)
+            .join(" · "),
           quantity: item.quantity,
           unitPriceCents: item.unitPriceCents,
-        },
+        })),
         volumes: selectedOption.volumes,
       });
       await db
@@ -119,9 +152,15 @@ export async function POST(request: Request, context: LabelRouteContext) {
 
     if (action === "generate") {
       if (!order.shippingLabelId) {
-        return adminRedirect(request, "error", "A etiqueta ainda não foi criada.");
+        return adminRedirect(
+          request,
+          "error",
+          "A etiqueta ainda não foi criada.",
+        );
       }
-      const labelUrl = await generateAndPrintSandboxLabel(order.shippingLabelId);
+      const labelUrl = await generateAndPrintSandboxLabel(
+        order.shippingLabelId,
+      );
       await db
         .update(orders)
         .set({
@@ -132,7 +171,11 @@ export async function POST(request: Request, context: LabelRouteContext) {
           updatedAt: new Date().toISOString(),
         })
         .where(eq(orders.id, order.id));
-      return adminRedirect(request, "message", "Etiqueta sandbox gerada com sucesso.");
+      return adminRedirect(
+        request,
+        "message",
+        "Etiqueta sandbox gerada com sucesso.",
+      );
     }
 
     return adminRedirect(request, "error", "Ação inválida.");

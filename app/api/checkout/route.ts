@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { orderItems, orders } from "../../../db/schema";
 import { digitsOnly, isValidCpf } from "../../../lib/brazil";
-import { getProductSelection } from "../../../lib/catalog";
+import { cartSelections, checkoutItems } from "../../../lib/cart";
+import { getCustomerSession } from "../../../lib/auth";
 import {
   createCheckoutPreference,
   getEnvironmentVariable,
@@ -11,9 +12,10 @@ import {
   ShippingConfigurationError,
   ShippingProviderError,
 } from "../../../lib/melhor-envio";
-import { quoteProductShipping } from "../../../lib/shipping";
+import { quoteCartShipping } from "../../../lib/shipping";
 
 type CheckoutPayload = {
+  items?: unknown;
   productId?: string;
   color?: string;
   quantity?: number;
@@ -46,29 +48,36 @@ async function resolveAppUrl(request: Request) {
     url.hostname.endsWith(".local");
 
   if (isLocal) {
-    throw new Error(
-      "Configure APP_URL com a URL pública HTTPS da loja.",
-    );
+    throw new Error("Configure APP_URL com a URL pública HTTPS da loja.");
   }
 
   return url.origin;
 }
 
 export async function POST(request: Request) {
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) {
+    return Response.json({ error: "Origem inválida." }, { status: 403 });
+  }
   let orderId: string | null = null;
 
   try {
     const payload = (await request.json()) as CheckoutPayload;
-    const selection = getProductSelection({
-      productId: clean(payload.productId, 80),
-      color: clean(payload.color, 40),
-      quantity: payload.quantity,
-      personalization: clean(payload.personalization, 18),
-    });
-
-    if (!selection) {
-      return Response.json({ error: "Produto inválido." }, { status: 400 });
+    if (!payload || typeof payload !== "object")
+      return Response.json({ error: "Pedido inválido." }, { status: 400 });
+    const items = checkoutItems(payload);
+    if (!items?.length) {
+      return Response.json(
+        { error: "Carrinho inválido. Confira os produtos e as quantidades." },
+        { status: 400 },
+      );
     }
+    const selections = cartSelections(items);
+    const subtotalCents = selections.reduce(
+      (sum, selection) => sum + selection.subtotalCents,
+      0,
+    );
+    const session = await getCustomerSession(request.headers);
 
     const customerName = clean(payload.customerName, 120);
     const customerEmail = clean(payload.customerEmail, 180).toLowerCase();
@@ -113,26 +122,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const shippingQuote = await quoteProductShipping({
-      productId: selection.productId,
-      color: payload.color,
-      quantity: selection.quantity,
-      personalization: selection.personalization ?? undefined,
-      destinationPostalCode: postalCode,
-    });
+    const shippingQuote = await quoteCartShipping(items, postalCode);
     const shippingOption = shippingQuote?.options.find(
       (option) => option.serviceId === shippingServiceId,
     );
 
     if (!shippingOption) {
       return Response.json(
-        { error: "A modalidade de entrega não está mais disponível. Calcule novamente." },
+        {
+          error:
+            "A modalidade de entrega não está mais disponível. Calcule novamente.",
+        },
         { status: 409 },
       );
     }
     if (shippingOption.priceCents !== claimedShippingPriceCents) {
       return Response.json(
-        { error: "O valor da entrega mudou. Calcule novamente antes de pagar." },
+        {
+          error: "O valor da entrega mudou. Calcule novamente antes de pagar.",
+        },
         { status: 409 },
       );
     }
@@ -140,12 +148,13 @@ export async function POST(request: Request) {
     const appUrl = await resolveAppUrl(request);
     orderId = crypto.randomUUID();
     const db = await getDb();
-    const totalCents = selection.subtotalCents + shippingOption.priceCents;
+    const totalCents = subtotalCents + shippingOption.priceCents;
     const shippingQuotedAt = new Date().toISOString();
 
     await db.batch([
       db.insert(orders).values({
         id: orderId,
+        userId: session?.user.id ?? null,
         status: "pending",
         customerName,
         customerEmail,
@@ -158,7 +167,7 @@ export async function POST(request: Request) {
         neighborhood,
         city,
         state,
-        subtotalCents: selection.subtotalCents,
+        subtotalCents,
         shippingCents: shippingOption.priceCents,
         shippingProvider: "melhor_envio",
         shippingServiceId: shippingOption.serviceId,
@@ -169,25 +178,29 @@ export async function POST(request: Request) {
         shippingQuotedAt,
         totalCents,
       }),
-      db.insert(orderItems).values({
-        orderId,
+      db.insert(orderItems).values(
+        selections.map((selection) => ({
+          orderId: orderId!,
+          productId: selection.productId,
+          productName: selection.product.name,
+          color: selection.color,
+          personalization: selection.personalization,
+          quantity: selection.quantity,
+          unitPriceCents: selection.product.unitPriceCents,
+        })),
+      ),
+    ]);
+
+    const { preference, checkoutUrl } = await createCheckoutPreference({
+      orderId,
+      items: selections.map((selection) => ({
         productId: selection.productId,
         productName: selection.product.name,
         color: selection.color,
         personalization: selection.personalization,
         quantity: selection.quantity,
         unitPriceCents: selection.product.unitPriceCents,
-      }),
-    ]);
-
-    const { preference, checkoutUrl } = await createCheckoutPreference({
-      orderId,
-      productId: selection.productId,
-      productName: selection.product.name,
-      color: selection.color,
-      personalization: selection.personalization,
-      quantity: selection.quantity,
-      unitPriceCents: selection.product.unitPriceCents,
+      })),
       shippingCents: shippingOption.priceCents,
       customerName,
       customerEmail,
@@ -208,9 +221,13 @@ export async function POST(request: Request) {
 
     return Response.json({ checkoutUrl, orderId }, { status: 201 });
   } catch (error) {
+    if (error instanceof SyntaxError)
+      return Response.json({ error: "Pedido inválido." }, { status: 400 });
     if (orderId) {
       try {
-        await (await getDb())
+        await (
+          await getDb()
+        )
           .update(orders)
           .set({
             status: "payment_setup_failed",
@@ -232,10 +249,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Não foi possível iniciar o pagamento.";
-    return Response.json({ error: message }, { status: 500 });
+    return Response.json(
+      {
+        error:
+          "Não foi possível iniciar o pagamento. Tente novamente em instantes.",
+      },
+      { status: 500 },
+    );
   }
 }

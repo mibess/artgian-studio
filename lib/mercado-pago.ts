@@ -61,12 +61,14 @@ async function mercadoPagoRequest<T>(
 
 export async function createCheckoutPreference(input: {
   orderId: string;
-  productId: string;
-  productName: string;
-  color: string;
-  personalization: string | null;
-  quantity: number;
-  unitPriceCents: number;
+  items: {
+    productId: string;
+    productName: string;
+    color: string;
+    personalization: string | null;
+    quantity: number;
+    unitPriceCents: number;
+  }[];
   shippingCents: number;
   customerName: string;
   customerEmail: string;
@@ -76,13 +78,6 @@ export async function createCheckoutPreference(input: {
   addressNumber: string;
   appUrl: string;
 }) {
-  const description = [
-    input.color,
-    input.personalization ? `Personalização: ${input.personalization}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
   const preference = await mercadoPagoRequest<MercadoPagoPreference>(
     "/checkout/preferences",
     {
@@ -91,16 +86,21 @@ export async function createCheckoutPreference(input: {
         "X-Idempotency-Key": input.orderId,
       },
       body: JSON.stringify({
-        items: [
-          {
-            id: input.productId,
-            title: input.productName,
-            description,
-            currency_id: "BRL",
-            quantity: input.quantity,
-            unit_price: input.unitPriceCents / 100,
-          },
-        ],
+        items: input.items.map((item) => ({
+          id: item.productId,
+          title: item.productName,
+          description: [
+            item.color,
+            item.personalization
+              ? `Personalização: ${item.personalization}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          currency_id: "BRL",
+          quantity: item.quantity,
+          unit_price: item.unitPriceCents / 100,
+        })),
         shipments: {
           cost: input.shippingCents / 100,
           mode: "not_specified",
@@ -138,7 +138,7 @@ export async function createCheckoutPreference(input: {
   const checkoutUrl =
     environment === "production"
       ? preference.init_point
-      : preference.sandbox_init_point ?? preference.init_point;
+      : (preference.sandbox_init_point ?? preference.init_point);
 
   return { preference, checkoutUrl };
 }

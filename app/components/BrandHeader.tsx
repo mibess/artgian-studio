@@ -1,4 +1,5 @@
 import Link from "next/link";
+import StoreHeaderActions from "./StoreHeaderActions";
 
 type BrandHeaderProps = {
   fixed?: boolean;
@@ -52,19 +53,22 @@ export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
           ))}
         </nav>
 
-        <Link
-          className="relative z-10 inline-flex items-center gap-2 rounded-full bg-[#0b2447] py-2.5 pr-3 pl-4 text-xs font-semibold text-[#fffdf8] shadow-lg shadow-[#0b2447]/15 transition hover:-translate-y-0.5 hover:bg-[#143866] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] sm:gap-3 sm:py-3 sm:pr-4 sm:pl-5 sm:text-sm"
-          href="/#orcamento"
-        >
-          <span className="hidden sm:inline">Pedir orçamento</span>
-          <span className="sm:hidden">Orçamento</span>
-          <span
-            className="grid size-7 place-items-center rounded-full bg-[#d8bc7b] text-base text-[#0b2447]"
-            aria-hidden="true"
+        <div className="flex items-center gap-1 sm:gap-3">
+          <StoreHeaderActions />
+          <Link
+            className="relative z-10 inline-flex items-center gap-2 rounded-full bg-[#0b2447] py-2.5 pr-3 pl-4 text-xs font-semibold text-[#fffdf8] shadow-lg shadow-[#0b2447]/15 transition hover:-translate-y-0.5 hover:bg-[#143866] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] sm:gap-3 sm:py-3 sm:pr-4 sm:pl-5 sm:text-sm"
+            href="/#orcamento"
           >
-            ↗
-          </span>
-        </Link>
+            <span className="hidden sm:inline">Pedir orçamento</span>
+            <span className="sm:hidden">Orçamento</span>
+            <span
+              className="grid size-7 place-items-center rounded-full bg-[#d8bc7b] text-base text-[#0b2447]"
+              aria-hidden="true"
+            >
+              ↗
+            </span>
+          </Link>
+        </div>
       </div>
     </header>
   );

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ClearPurchasedCart from "./ClearPurchasedCart";
 import { eq } from "drizzle-orm";
 import BrandHeader from "../components/BrandHeader";
 import { getDb } from "../../db";
@@ -49,7 +50,7 @@ export default async function PaymentResult({
   returnState,
 }: PaymentResultProps) {
   let order: typeof orders.$inferSelect | null = null;
-  let item: typeof orderItems.$inferSelect | null = null;
+  let items: (typeof orderItems.$inferSelect)[] = [];
 
   if (orderId) {
     try {
@@ -59,11 +60,10 @@ export default async function PaymentResult({
         .from(orders)
         .where(eq(orders.id, orderId))
         .limit(1);
-      [item] = await db
+      items = await db
         .select()
         .from(orderItems)
-        .where(eq(orderItems.orderId, orderId))
-        .limit(1);
+        .where(eq(orderItems.orderId, orderId));
     } catch {
       // Keep the return page useful even if persistence is temporarily unavailable.
     }
@@ -87,6 +87,7 @@ export default async function PaymentResult({
   return (
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
       <BrandHeader />
+      {order?.status === "paid" && <ClearPurchasedCart orderId={order.id} />}
       <div className="mx-auto max-w-3xl px-5 py-16 sm:px-8 lg:py-24">
         <section className="rounded-[2rem] border border-white bg-white/75 p-7 text-center shadow-[0_20px_60px_rgba(11,36,71,.07)] sm:p-12">
           <span className="mx-auto grid size-16 place-items-center rounded-full bg-[#0b2447] font-serif text-3xl text-[#d8bc7b]">
@@ -102,7 +103,7 @@ export default async function PaymentResult({
             {pageContent.description}
           </p>
 
-          {order && item ? (
+          {order && items.length ? (
             <dl className="mx-auto mt-9 max-w-lg divide-y divide-[#0b2447]/10 rounded-2xl bg-[#f7f3ea] px-5 text-left text-sm">
               <div className="flex justify-between gap-5 py-4">
                 <dt className="text-[#647087]">Estado</dt>
@@ -115,9 +116,16 @@ export default async function PaymentResult({
                 <dd className="font-mono text-xs">{order.id.slice(0, 8)}</dd>
               </div>
               <div className="flex justify-between gap-5 py-4">
-                <dt className="text-[#647087]">Item</dt>
+                <dt className="text-[#647087]">Itens</dt>
                 <dd className="text-right">
-                  {item.productName} · {item.color}
+                  {items.map((item) => (
+                    <p key={item.id}>
+                      {item.quantity} × {item.productName} · {item.color}
+                      {item.personalization
+                        ? ` · “${item.personalization}”`
+                        : ""}
+                    </p>
+                  ))}
                 </dd>
               </div>
               <div className="flex justify-between gap-5 py-4">

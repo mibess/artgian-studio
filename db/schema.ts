@@ -1,4 +1,6 @@
 import { sql } from "drizzle-orm";
+import { user } from "./auth-schema";
+export * from "./auth-schema";
 import {
   index,
   integer,
@@ -11,6 +13,7 @@ export const orders = sqliteTable(
   "orders",
   {
     id: text("id").primaryKey(),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     status: text("status").notNull().default("pending"),
     customerName: text("customer_name").notNull(),
     customerEmail: text("customer_email").notNull(),
@@ -48,6 +51,7 @@ export const orders = sqliteTable(
   },
   (table) => [
     index("orders_status_idx").on(table.status),
+    index("orders_user_idx").on(table.userId),
     index("orders_payment_id_idx").on(table.mercadoPagoPaymentId),
   ],
 );

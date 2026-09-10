@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, inArray } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { orderItems, orders } from "../../../db/schema";
 import { maskCpf } from "../../../lib/brazil";
@@ -23,12 +23,9 @@ export default async function AdminOrdersPage({
 }: AdminOrdersPageProps) {
   const params = await searchParams;
   const db = await getDb();
-  const rows = await db
-    .select({ order: orders, item: orderItems })
-    .from(orders)
-    .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
-    .orderBy(desc(orders.createdAt))
-    .limit(50);
+  const recentOrders = await db.select().from(orders).orderBy(desc(orders.createdAt)).limit(50);
+  const items = recentOrders.length ? await db.select().from(orderItems).where(inArray(orderItems.orderId, recentOrders.map((order) => order.id))) : [];
+  const rows = recentOrders.map((order) => ({ order, items: items.filter((item) => item.orderId === order.id) }));
   const isSandbox = process.env.MELHOR_ENVIO_ENVIRONMENT === "sandbox";
 
   return (
@@ -65,7 +62,7 @@ export default async function AdminOrdersPage({
               Nenhum pedido encontrado.
             </p>
           )}
-          {rows.map(({ order, item }) => {
+          {rows.map(({ order, items }) => {
             const canCreateLabel =
               order.status === "paid" &&
               Boolean(order.customerDocument) &&
@@ -74,13 +71,14 @@ export default async function AdminOrdersPage({
               order.status === "paid" && Boolean(order.shippingLabelId) && !order.shippingLabelUrl;
 
             return (
-              <article className="rounded-2xl border border-[#0b2447]/10 bg-white p-5 shadow-sm sm:p-6" key={`${order.id}:${item?.id ?? 0}`}>
+              <article className="rounded-2xl border border-[#0b2447]/10 bg-white p-5 shadow-sm sm:p-6" key={order.id}>
                 <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr_1fr_auto] lg:items-center">
                   <div>
                     <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[#647087]">
                       {formatDate(order.createdAt)} · {order.id.slice(0, 8)}
                     </p>
-                    <h2 className="mt-2 font-serif text-2xl">{item?.productName ?? "Pedido"}</h2>
+                    <h2 className="mt-2 font-serif text-2xl">Pedido #{order.id.slice(0, 8)}</h2>
+                    <ul className="mt-2 space-y-1 text-xs text-[#647087]">{items.map((item) => <li key={item.id}>{item.quantity} × {item.productName} · {item.color}{item.personalization ? ` · “${item.personalization}”` : ""}</li>)}</ul>
                     <p className="mt-1 text-xs text-[#647087]">
                       {order.customerName} · {maskCpf(order.customerDocument)}
                     </p>

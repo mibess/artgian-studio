@@ -1,5 +1,6 @@
 "use client";
 
+import AddToCartButton from "../components/AddToCartButton";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -78,6 +79,7 @@ export default function ProductPurchase() {
           </span>
         </button>
       </div>
+      <AddToCartButton item={{ productId: "kit-dia-dos-pais", color: "preto", quantity }} />
       <p className="mt-4 text-center text-[0.66rem] leading-5 text-[#132746]/55 sm:text-left">
         Feito sob encomenda · Embalagem para presente incluída
       </p>

@@ -92,8 +92,17 @@ export const products = {
 export type ProductId = keyof typeof products;
 
 export function isProductId(value: string): value is ProductId {
-  return value in products;
+  return Object.hasOwn(products, value);
 }
+
+export const productColors: Record<ProductId, readonly string[]> = {
+  "kit-dia-dos-pais": ["preto"],
+  "bandeja-aurora": ["areia", "preto", "branco", "rosa"],
+  "organizador-arco": ["rosa-marfim", "marrom-branco", "areia-branco"],
+  "porta-palhetas-solo": ["terracota", "preto", "branco"],
+  "porta-incenso-samurai": ["preto"],
+  "suporte-pocket": ["preto", "branco", "rosa"],
+};
 
 export function getProductSelection(input: {
   productId?: string;
@@ -109,9 +118,13 @@ export function getProductSelection(input: {
   const parsedQuantity = Number(input.quantity);
   const quantity = Math.min(
     9,
-    Math.max(1, Number.isFinite(parsedQuantity) ? Math.trunc(parsedQuantity) : 1),
+    Math.max(
+      1,
+      Number.isFinite(parsedQuantity) ? Math.trunc(parsedQuantity) : 1,
+    ),
   );
-  const colorKey = input.color?.trim() ?? "";
+  const colorKey = input.color?.trim() || productColors[input.productId][0];
+  if (!productColors[input.productId].includes(colorKey)) return null;
   const color = colorNames[colorKey] ?? product.defaultColor;
   const personalization = product.customizable
     ? input.personalization?.trim().slice(0, 18) || "Seu Nome"

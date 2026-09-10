@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import BrandHeader from "../components/BrandHeader";
-import CheckoutForm from "./CheckoutForm";
+import CheckoutContents from "./CheckoutContents";
 import { getProductSelection } from "../../lib/catalog";
 
 export const metadata: Metadata = {
@@ -52,35 +52,19 @@ export default async function CheckoutPage({
           </Link>
         </div>
 
-        {!selection ? (
-          <div className="rounded-[2rem] border border-[#0b2447]/10 bg-white p-8 text-center sm:p-14">
-            <span className="font-serif text-5xl text-[#b88a3b]">◇</span>
-            <h2 className="mt-5 font-serif text-3xl font-normal">
-              Seu carrinho está vazio.
-            </h2>
-            <p className="mt-3 text-sm text-[#647087]">
-              Escolha uma criação para começar o pedido.
-            </p>
-            <Link
-              className="mt-7 inline-flex rounded-full bg-[#0b2447] px-6 py-3 text-sm font-semibold text-white"
-              href="/produtos"
-            >
-              Ver criações
-            </Link>
-          </div>
-        ) : (
-          <CheckoutForm
-            productId={selection.productId}
-            productName={selection.product.name}
-            productImage={selection.product.image}
-            productAlt={selection.product.alt}
-            subtotalCents={selection.subtotalCents}
-            color={selection.colorKey}
-            colorName={selection.color}
-            quantity={selection.quantity}
-            personalization={selection.personalization}
-          />
-        )}
+        <CheckoutContents
+          initialItem={
+            selection
+              ? {
+                  productId: selection.productId,
+                  color: selection.colorKey,
+                  quantity: selection.quantity,
+                  personalization: selection.personalization,
+                }
+              : null
+          }
+          invalidSelection={Boolean(params.produto && !selection)}
+        />
       </div>
     </main>
   );
