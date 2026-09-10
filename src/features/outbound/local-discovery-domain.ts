@@ -2,6 +2,7 @@ import type {
   PublicInstagramCandidate,
   PublicLocalBusinessOpportunity,
 } from "./discovery-domain";
+import { FOLLOWER_STOP_LABELS } from "./followers-discovery-domain";
 
 // Prefer Google's stable feature ID; tracking, viewport and language are not identity.
 export function mapsBusinessKey(value: string): string | null {
@@ -56,7 +57,11 @@ export const LOCAL_STOP_LABELS = {
   daily_limit: "Limite diário de novos resultados atingido",
 } as const;
 export function localStopLabel(reason: string | null | undefined) {
-  return reason ? LOCAL_STOP_LABELS[reason as LocalStopReason] || reason : null;
+  return reason
+    ? LOCAL_STOP_LABELS[reason as LocalStopReason] ||
+        FOLLOWER_STOP_LABELS[reason as keyof typeof FOLLOWER_STOP_LABELS] ||
+        reason
+    : null;
 }
 export function localProgressSummary(value: string | null | undefined) {
   try {

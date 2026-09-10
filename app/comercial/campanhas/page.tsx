@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { followersProgressSummary } from "../../../src/features/outbound/followers-discovery-domain";
 import {
   ArrowLeft,
   ArrowRight,
@@ -1524,6 +1525,13 @@ export default async function CampaignsPage({
                               {run.stopReason && (
                                 <p className="mt-2 max-w-xs text-xs text-[#73858c]">
                                   {localStopLabel(run.stopReason)}
+                                </p>
+                              )}
+                              {run.followerSearchProgress && (
+                                <p className="mt-2 max-w-xs text-xs text-[#73858c]">
+                                  {followersProgressSummary(
+                                    run.followerSearchProgress,
+                                  )}
                                 </p>
                               )}
                               {run.localSearchProgress && (

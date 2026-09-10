@@ -7,7 +7,6 @@ import {
   instagramUsernameFromHref,
   LOCAL_WEB_RESULTS_VERIFIED_MARKER,
   normalizeLocalDiscoveryTerm,
-  parseInstagramFollowerCount,
   type DiscoverySeed,
   type DiscoveryStrategy,
   type PublicInstagramCandidate,
@@ -22,24 +21,33 @@ import {
   type LocalStopReason,
 } from "../../features/outbound/local-discovery-domain";
 import { MapsResultFeed, mapsFeedDriver } from "./maps-result-feed";
+import { discoverHashtagAuthors } from "./instagram-hashtags";
+import { executeFollowersDiscovery } from "./instagram-followers";
+import {
+  FollowersDiscoveryError,
+  type FollowersDiscoveryOptions,
+} from "../../features/outbound/followers-discovery-domain";
+import type { HashtagDiscoveryOptions } from "../../features/outbound/hashtag-discovery-domain";
 
 const ALLOWED_HOSTS = new Set(["www.instagram.com", "instagram.com"]);
 let discoveryJobRunning = false;
 
-type BrowserDiscoveryInput = LocalDiscoveryOptions & {
-  jobId: string;
-  targetUsername?: string;
-  strategy?: DiscoveryStrategy;
-  seeds: DiscoverySeed[];
-  maximumProfiles: number;
-  knownLocations: string[];
-  minimumBaseFollowers?: number;
-  localNiche?: string;
-  localLocation?: string;
-  ownUsername?: string;
-  excludedUsernames?: string[];
-  excludedLocalBusinessUrls?: string[];
-};
+type BrowserDiscoveryInput = LocalDiscoveryOptions &
+  FollowersDiscoveryOptions &
+  HashtagDiscoveryOptions & {
+    jobId: string;
+    targetUsername?: string;
+    strategy?: DiscoveryStrategy;
+    seeds: DiscoverySeed[];
+    maximumProfiles: number;
+    knownLocations: string[];
+    minimumBaseFollowers?: number;
+    localNiche?: string;
+    localLocation?: string;
+    ownUsername?: string;
+    excludedUsernames?: string[];
+    excludedLocalBusinessUrls?: string[];
+  };
 
 function assertInstagramUrl(value: string) {
   const url = new URL(value);
@@ -77,11 +85,11 @@ async function profileCandidateFromPage(
   const [title, description, mainText] = await Promise.all([
     page
       .locator('meta[property="og:title"]')
-      .getAttribute("content")
+      .getAttribute("content", { timeout: 5_000 })
       .catch(() => null),
     page
       .locator('meta[property="og:description"]')
-      .getAttribute("content")
+      .getAttribute("content", { timeout: 5_000 })
       .catch(() => null),
     page
       .locator("main")
@@ -102,7 +110,7 @@ async function profileCandidateFromPage(
 
 export async function executeInstagramDiscoveryOnPage(
   page: Page,
-  input: {
+  input: HashtagDiscoveryOptions & {
     seeds: DiscoverySeed[];
     maximumProfiles: number;
     knownLocations: string[];
@@ -128,6 +136,19 @@ export async function executeInstagramDiscoveryOnPage(
   >();
   const scannedSeeds: DiscoverySeed[] = [];
   let queriesScanned = 0;
+  let remainingPostBudget = boundedDiscoverySetting(
+    process.env.MAX_HASHTAG_POSTS_PER_RUN,
+    30,
+    100,
+  );
+  const hashtagDeadline =
+    Date.now() +
+    boundedDiscoverySetting(
+      process.env.MAX_HASHTAG_DISCOVERY_SECONDS,
+      600,
+      1800,
+    ) *
+      1000;
   await page.goto("https://www.instagram.com/explore/", {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
@@ -162,15 +183,35 @@ export async function executeInstagramDiscoveryOnPage(
       defaultMinimumSeconds: 4,
       defaultMaximumSeconds: 8,
     });
-    const hrefs = await page
-      .locator("a[href]")
-      .evaluateAll((anchors) =>
-        anchors
-          .map((anchor) => anchor.getAttribute("href"))
-          .filter((href): href is string => Boolean(href)),
-      );
     queriesScanned += 1;
     scannedSeeds.push(seed);
+    const hrefs =
+      seed.kind === "hashtag"
+        ? await (async () => {
+            if (remainingPostBudget <= 0 || Date.now() >= hashtagDeadline)
+              return [];
+            const result = await discoverHashtagAuthors(page, {
+              ...input,
+              hashtag: seed.value,
+              maximumAuthors: maximumProfiles * 3 - discovered.size,
+              maximumPosts: remainingPostBudget,
+              excludedUsernames: new Set([
+                ...excludedUsernames,
+                ...discovered.keys(),
+                ...(ownUsername ? [ownUsername] : []),
+              ]),
+              deadline: hashtagDeadline,
+            });
+            remainingPostBudget -= result.postsInspected;
+            return result.authors.map((username) => `/${username}/`);
+          })()
+        : await page
+            .locator("a[href]")
+            .evaluateAll((anchors) =>
+              anchors
+                .map((anchor) => anchor.getAttribute("href"))
+                .filter((href): href is string => Boolean(href)),
+            );
     for (const href of hrefs) {
       const username = instagramUsernameFromHref(href);
       if (
@@ -214,7 +255,20 @@ export async function executeInstagramDiscoveryOnPage(
       discoveredProfile.seed.value,
       input.knownLocations,
     );
+    if (
+      discoveredProfile.seed.kind === "hashtag" &&
+      instagramUsernameFromHref(page.url()) !== discoveredProfile.username
+    )
+      throw new InstagramDiscoveryError(
+        "O perfil autor da hashtag redirecionou para uma página inesperada. Confira a sessão do Chrome.",
+        "unavailable",
+      );
     if (candidate) candidates.push(candidate);
+    else if (discoveredProfile.seed.kind === "hashtag")
+      await input.onHashtagProfileUnavailable?.(
+        discoveredProfile.seed.value,
+        discoveredProfile.username,
+      );
   }
   return {
     candidates,
@@ -253,152 +307,11 @@ export async function executeInstagramProfileImportOnPage(
   return candidate;
 }
 
-async function collectInstagramProfileLinks(page: Page) {
-  const hrefs = await page
-    .locator("a[href]")
-    .evaluateAll((anchors) =>
-      anchors
-        .map((anchor) => anchor.getAttribute("href"))
-        .filter((href): href is string => Boolean(href)),
-    );
-  return hrefs.flatMap((href) => {
-    const username = instagramUsernameFromHref(href);
-    return username ? [username] : [];
-  });
-}
-
 export async function executeInstagramFollowersDiscoveryOnPage(
   page: Page,
   input: Omit<BrowserDiscoveryInput, "jobId" | "strategy">,
 ) {
-  const maximumProfiles = Math.min(
-    30,
-    Math.max(1, Math.trunc(input.maximumProfiles)),
-  );
-  const minimumFollowers = Math.max(
-    0,
-    Math.trunc(input.minimumBaseFollowers ?? 500_000),
-  );
-  const ownUsername = input.ownUsername
-    ?.replace(/^@/, "")
-    .toLocaleLowerCase("en-US");
-  const excluded = new Set(
-    (input.excludedUsernames || []).map((username) =>
-      username.toLocaleLowerCase("en-US"),
-    ),
-  );
-  const discovered = new Map<
-    string,
-    { username: string; seed: DiscoverySeed }
-  >();
-  const scannedSeeds: DiscoverySeed[] = [];
-  let profilesInspected = 0;
-
-  for (const seed of input.seeds
-    .filter((item) => item.kind === "base_profile")
-    .slice(0, 8)) {
-    const baseUsername = seed.value
-      .replace(/^@/, "")
-      .toLocaleLowerCase("en-US");
-    await page.goto(`https://www.instagram.com/${baseUsername}/`, {
-      waitUntil: "domcontentloaded",
-      timeout: 30_000,
-    });
-    assertInstagramUrl(page.url());
-    await pauseLikePerson(page, {
-      minimumVariable: "DISCOVERY_MIN_PROFILE_DWELL_SECONDS",
-      maximumVariable: "DISCOVERY_MAX_PROFILE_DWELL_SECONDS",
-      defaultMinimumSeconds: 4,
-      defaultMaximumSeconds: 9,
-      absoluteMaximumSeconds: 45,
-    });
-    const [description, mainText] = await Promise.all([
-      page
-        .locator('meta[property="og:description"]')
-        .getAttribute("content")
-        .catch(() => null),
-      page
-        .locator("main")
-        .innerText({ timeout: 8_000 })
-        .catch(() => null),
-    ]);
-    const followers = parseInstagramFollowerCount(
-      `${description || ""} ${mainText || ""}`,
-    );
-    if (followers == null || followers <= minimumFollowers) continue;
-
-    scannedSeeds.push(seed);
-    await page.goto(`https://www.instagram.com/${baseUsername}/followers/`, {
-      waitUntil: "domcontentloaded",
-      timeout: 30_000,
-    });
-    assertInstagramUrl(page.url());
-    for (
-      let scroll = 0;
-      scroll < 5 && discovered.size < maximumProfiles * 3;
-      scroll += 1
-    ) {
-      await pauseLikePerson(page, {
-        minimumVariable: "DISCOVERY_MIN_RESULTS_WAIT_SECONDS",
-        maximumVariable: "DISCOVERY_MAX_RESULTS_WAIT_SECONDS",
-        defaultMinimumSeconds: 3,
-        defaultMaximumSeconds: 6,
-      });
-      for (const username of await collectInstagramProfileLinks(page)) {
-        if (
-          username === baseUsername ||
-          username === ownUsername ||
-          excluded.has(username) ||
-          discovered.has(username)
-        )
-          continue;
-        discovered.set(username, { username, seed });
-      }
-      await page
-        .locator('div[role="dialog"]')
-        .evaluate((element) => {
-          element.scrollTop = element.scrollHeight;
-        })
-        .catch(() => page.mouse.wheel(0, 900));
-    }
-  }
-
-  if (!scannedSeeds.length) {
-    throw new InstagramDiscoveryError(
-      `Nenhum perfil-base possui mais de ${minimumFollowers.toLocaleString("pt-BR")} seguidores públicos verificáveis.`,
-      "rejected",
-    );
-  }
-
-  const candidates: PublicInstagramCandidate[] = [];
-  for (const profile of discovered.values()) {
-    if (profilesInspected >= maximumProfiles) break;
-    if (profilesInspected > 0) {
-      await pauseLikePerson(page, {
-        minimumVariable: "DISCOVERY_MIN_SECONDS_BETWEEN_PROFILES",
-        maximumVariable: "DISCOVERY_MAX_SECONDS_BETWEEN_PROFILES",
-        defaultMinimumSeconds: 8,
-        defaultMaximumSeconds: 20,
-        absoluteMaximumSeconds: 90,
-      });
-    }
-    profilesInspected += 1;
-    const candidate = await profileCandidateFromPage(
-      page,
-      profile.username,
-      "base_profile",
-      profile.seed.value,
-      input.knownLocations,
-    );
-    if (candidate) candidates.push(candidate);
-  }
-  return {
-    candidates,
-    localOpportunities: [] as PublicLocalBusinessOpportunity[],
-    queriesScanned: scannedSeeds.length,
-    profilesInspected,
-    scannedSeeds,
-  };
+  return executeFollowersDiscovery(page, input, profileCandidateFromPage);
 }
 
 function isSafePublicWebsiteUrl(value: string | null | undefined) {
@@ -968,6 +881,13 @@ export async function discoverInstagramProfiles(input: BrowserDiscoveryInput) {
       : null;
     const message =
       error instanceof Error ? error.message : "Falha desconhecida";
+    if (error instanceof FollowersDiscoveryError)
+      throw new FollowersDiscoveryError(
+        diagnosticsDirectory
+          ? `${message} Diagnóstico local: ${diagnosticsDirectory}`
+          : message,
+        error.progress,
+      );
     throw new InstagramDiscoveryError(
       diagnosticsDirectory
         ? `${message} Diagnóstico local: ${diagnosticsDirectory}`

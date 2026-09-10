@@ -65,6 +65,48 @@ simuladas; não executam buscas nem envios reais.
 
 ### Configuração geral
 
+### Busca por seguidores de perfis-base
+
+O motor abre o perfil-base, verifica o mínimo de seguidores e **clica no controle
+de seguidores**. Só lê usuários da janela de seguidores validada; não usa a rota
+`/followers/` diretamente nem coleta sugestões da página. A rolagem atua no
+contêiner interno, mantendo a lista aberta enquanto os perfis são lidos em outra aba.
+
+`MAX_DISCOVERY_PROFILES_PER_RUN` limita inspeções, independentemente das vagas
+diárias restantes. A IA rápida qualifica lotes de até cinco perfis, reduzidos à
+cota restante; rejeições permitem continuar, sem ultrapassar a meta de novos
+prospectos. Usuários já conhecidos/bloqueados são excluídos, pendências ficam em
+`follower_discovery_queue` por campanha/perfil-base/usuário e a conclusão do lote
+só é registrada após qualificação. Perfis sem leitura aguardam sete dias antes de
+nova tentativa; as demais janelas de reavaliação permanecem iguais.
+
+Limites de navegação: `MAX_FOLLOWERS_DISCOVERY_SECONDS=900` e
+`MAX_FOLLOWERS_DISCOVERY_SCROLLS=40`. O tempo é verificado antes da próxima
+inspeção/rolagem, sem interromper à força a operação em andamento. O Histórico
+registra motivo da parada e restrições do Instagram. Listas parciais não são
+apresentadas como completas, e não há tentativa de acessar seguidores ocultos.
+Falha para abrir/carregar a lista é erro, não uma busca bem-sucedida com zero perfis.
+
+Publicação: aplicar as migrações pendentes em ordem, incluindo
+`0013_hot_falcon.sql`, antes de atualizar o painel e reiniciar o worker. Esta
+correção não modifica as configurações das campanhas nem dispara mensagens.
+
+Na busca por **hashtag**, o navegador entra no resultado correspondente, abre posts
+e reels e identifica seus autores por cabeçalho ou metadados públicos de autoria.
+Links de comentários, legendas e sugestões não são usados como autoria. O perfil
+passa depois pela mesma qualificação da campanha; não há curtidas, comentários ou
+mensagens automáticas nesta etapa.
+
+O índice `hashtag_discovery_posts` guarda campanha, hashtag, código do post e autor.
+Posts ainda não lidos e autores ainda não qualificados são retomados nas próximas
+execuções. O histórico existente de perfis evita repetir usuários, inclusive quando
+aparecem em diferentes posts/hashtags; as janelas de reavaliação são preservadas.
+Posts sem autoria confirmada e perfis indisponíveis aguardam sete dias antes de nova
+tentativa. Limites: `MAX_HASHTAG_POSTS_PER_RUN=30`,
+`MAX_HASHTAG_SCROLLS_PER_QUERY=30`, `MAX_HASHTAG_DISCOVERY_SECONDS=600`.
+Antes de publicar esse ajuste, aplicar a migração aditiva
+`0012_slow_lila_cheney.sql` e atualizar o worker.
+
 Copie `.env.example` para `.env.local` e preencha as credenciais necessárias.
 
 O checkout usa o Mercado Pago Checkout Pro. Em produção, configure a URL do

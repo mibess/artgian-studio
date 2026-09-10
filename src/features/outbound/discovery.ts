@@ -9,6 +9,8 @@ import {
   leads,
   localBusinessOpportunities,
   localDiscoveryQueue,
+  hashtagDiscoveryPosts,
+  followerDiscoveryQueue,
   outboundProspects,
 } from "../../../db/schema";
 import { getBusinessConfig } from "../../config/business";
@@ -40,6 +42,15 @@ import {
   type LocalDiscoveryOptions,
   type LocalDiscoveryProgress,
 } from "./local-discovery-domain";
+import {
+  normalizeHashtag,
+  type HashtagDiscoveryOptions,
+} from "./hashtag-discovery-domain";
+import {
+  FollowersDiscoveryError,
+  type FollowersDiscoveryOptions,
+  type FollowersProgress,
+} from "./followers-discovery-domain";
 
 type BrowserDiscoveryResult = {
   candidates: PublicInstagramCandidate[];
@@ -48,22 +59,25 @@ type BrowserDiscoveryResult = {
   scannedSeeds?: DiscoverySeed[];
   localOpportunities?: PublicLocalBusinessOpportunity[];
   localProgress?: LocalDiscoveryProgress;
+  followerProgress?: FollowersProgress;
 };
 
 type DiscoveryBrowser = (
-  input: LocalDiscoveryOptions & {
-    jobId: string;
-    strategy: ReturnType<typeof normalizeDiscoveryStrategy>;
-    seeds: DiscoverySeed[];
-    maximumProfiles: number;
-    knownLocations: string[];
-    minimumBaseFollowers: number;
-    localNiche?: string;
-    localLocation?: string;
-    ownUsername?: string;
-    excludedUsernames?: string[];
-    excludedLocalBusinessUrls?: string[];
-  },
+  input: LocalDiscoveryOptions &
+    FollowersDiscoveryOptions &
+    HashtagDiscoveryOptions & {
+      jobId: string;
+      strategy: ReturnType<typeof normalizeDiscoveryStrategy>;
+      seeds: DiscoverySeed[];
+      maximumProfiles: number;
+      knownLocations: string[];
+      minimumBaseFollowers: number;
+      localNiche?: string;
+      localLocation?: string;
+      ownUsername?: string;
+      excludedUsernames?: string[];
+      excludedLocalBusinessUrls?: string[];
+    },
 ) => Promise<BrowserDiscoveryResult>;
 
 type QueryRunMetrics = {
@@ -261,17 +275,15 @@ export async function executeCampaignDiscovery(
     campaign.discoveryDailyLimit - alreadyCreatedToday,
   );
   if (!remaining) {
-    await db
-      .insert(discoveryRuns)
-      .values({
-        id: crypto.randomUUID(),
-        campaignId: campaign.id,
-        jobId: input.jobId,
-        status: "completed",
-        stopReason: "daily_limit",
-        startedAt: nowIso,
-        finishedAt: nowIso,
-      });
+    await db.insert(discoveryRuns).values({
+      id: crypto.randomUUID(),
+      campaignId: campaign.id,
+      jobId: input.jobId,
+      status: "completed",
+      stopReason: "daily_limit",
+      startedAt: nowIso,
+      finishedAt: nowIso,
+    });
     await db
       .update(campaigns)
       .set({ lastDiscoveryAt: nowIso, updatedAt: nowIso })
@@ -359,7 +371,7 @@ export async function executeCampaignDiscovery(
       30,
     );
     const maximumProfiles =
-      strategy === "local_business"
+      strategy === "local_business" || strategy === "instagram_followers"
         ? configuredRunLimit
         : Math.min(remaining, configuredRunLimit);
     const rememberedCandidates = await db
@@ -625,6 +637,176 @@ export async function executeCampaignDiscovery(
       strategy,
       seeds,
       maximumProfiles,
+      pendingFollowers:
+        strategy === "instagram_followers"
+          ? await db
+              .select({
+                baseUsername: followerDiscoveryQueue.baseUsername,
+                instagramUsername: followerDiscoveryQueue.instagramUsername,
+              })
+              .from(followerDiscoveryQueue)
+              .where(
+                and(
+                  eq(followerDiscoveryQueue.campaignId, campaign.id),
+                  eq(followerDiscoveryQueue.status, "pending"),
+                ),
+              )
+              .orderBy(asc(followerDiscoveryQueue.createdAt))
+          : [],
+      onFollowerLinks:
+        strategy === "instagram_followers"
+          ? async (baseUsername, usernames) => {
+              for (const instagramUsername of usernames)
+                await db
+                  .insert(followerDiscoveryQueue)
+                  .values({
+                    campaignId: campaign.id,
+                    baseUsername,
+                    instagramUsername,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  })
+                  .onConflictDoNothing();
+            }
+          : undefined,
+      onFollowerBatch:
+        strategy === "instagram_followers"
+          ? async (batch) => {
+              const before = profilesCreated;
+              await qualifyBatch(batch.candidates);
+              for (const instagramUsername of batch.unreadableUsernames) {
+                const timestamp = new Date().toISOString();
+                const state = {
+                  lastQueryKind: "base_profile",
+                  lastQuery: batch.baseUsername,
+                  lastOutcome: "unavailable",
+                  lastInspectedAt: timestamp,
+                  revisitAfter: new Date(
+                    Date.now() + 7 * 86400_000,
+                  ).toISOString(),
+                  updatedAt: timestamp,
+                };
+                await db
+                  .insert(discoveryCandidates)
+                  .values({
+                    id: crypto.randomUUID(),
+                    campaignId: campaign.id,
+                    instagramUsername,
+                    ...state,
+                    createdAt: timestamp,
+                  })
+                  .onConflictDoUpdate({
+                    target: [
+                      discoveryCandidates.campaignId,
+                      discoveryCandidates.instagramUsername,
+                    ],
+                    set: {
+                      ...state,
+                      inspectionCount: sql`${discoveryCandidates.inspectionCount} + 1`,
+                    },
+                  });
+              }
+              if (batch.inspectedUsernames.length)
+                await db
+                  .update(followerDiscoveryQueue)
+                  .set({
+                    status: "completed",
+                    updatedAt: new Date().toISOString(),
+                  })
+                  .where(
+                    and(
+                      eq(followerDiscoveryQueue.campaignId, campaign.id),
+                      inArray(
+                        followerDiscoveryQueue.instagramUsername,
+                        batch.inspectedUsernames,
+                      ),
+                    ),
+                  );
+              await db
+                .update(discoveryRuns)
+                .set({
+                  profilesInspected: sql`${discoveryRuns.profilesInspected} + ${batch.inspectedUsernames.length}`,
+                  profilesQualified,
+                  profilesCreated,
+                  skippedDuplicates,
+                  skippedBlocked,
+                  skippedLowScore,
+                })
+                .where(eq(discoveryRuns.id, runId));
+              return profilesCreated - before;
+            }
+          : undefined,
+      rememberedHashtagPosts:
+        strategy === "instagram_search" &&
+        seeds.some((seed) => seed.kind === "hashtag")
+          ? await db
+              .select()
+              .from(hashtagDiscoveryPosts)
+              .where(eq(hashtagDiscoveryPosts.campaignId, campaign.id))
+              .orderBy(asc(hashtagDiscoveryPosts.createdAt))
+          : [],
+      onHashtagLinks: async (hashtag, posts) => {
+        for (const post of posts)
+          await db
+            .insert(hashtagDiscoveryPosts)
+            .values({
+              campaignId: campaign.id,
+              hashtag: normalizeHashtag(hashtag),
+              ...post,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            })
+            .onConflictDoNothing();
+      },
+      onHashtagPost: async (hashtag, postKey, instagramUsername) => {
+        await db
+          .update(hashtagDiscoveryPosts)
+          .set({
+            instagramUsername,
+            status: instagramUsername ? "resolved" : "unavailable",
+            revisitAfter: instagramUsername
+              ? null
+              : new Date(Date.now() + 7 * 86400_000).toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+          .where(
+            and(
+              eq(hashtagDiscoveryPosts.campaignId, campaign.id),
+              eq(hashtagDiscoveryPosts.hashtag, normalizeHashtag(hashtag)),
+              eq(hashtagDiscoveryPosts.postKey, postKey),
+            ),
+          );
+      },
+      onHashtagProfileUnavailable: async (hashtag, instagramUsername) => {
+        const inspectedAt = new Date().toISOString();
+        const state = {
+          lastQueryKind: "hashtag",
+          lastQuery: normalizeHashtag(hashtag),
+          lastOutcome: "unavailable",
+          lastInspectedAt: inspectedAt,
+          revisitAfter: new Date(Date.now() + 7 * 86400_000).toISOString(),
+          updatedAt: inspectedAt,
+        };
+        await db
+          .insert(discoveryCandidates)
+          .values({
+            id: crypto.randomUUID(),
+            campaignId: campaign.id,
+            instagramUsername,
+            ...state,
+            createdAt: inspectedAt,
+          })
+          .onConflictDoUpdate({
+            target: [
+              discoveryCandidates.campaignId,
+              discoveryCandidates.instagramUsername,
+            ],
+            set: {
+              ...state,
+              inspectionCount: sql`${discoveryCandidates.inspectionCount} + 1`,
+            },
+          });
+      },
       maximumNewResults: remaining,
       pendingLocalBusinessUrls: queued
         .filter((row) => row.status === "pending")
@@ -763,7 +945,13 @@ export async function executeCampaignDiscovery(
           status: "completed",
           queriesScanned: browserResult.queriesScanned,
           profilesInspected: browserResult.profilesInspected,
-          stopReason: browserResult.localProgress?.stopReason || null,
+          stopReason:
+            browserResult.followerProgress?.stopReason ||
+            browserResult.localProgress?.stopReason ||
+            null,
+          followerSearchProgress: browserResult.followerProgress
+            ? JSON.stringify(browserResult.followerProgress)
+            : null,
           localSearchProgress: browserResult.localProgress
             ? JSON.stringify(browserResult.localProgress)
             : null,
@@ -858,6 +1046,12 @@ export async function executeCampaignDiscovery(
       .update(discoveryRuns)
       .set({
         status: "failed",
+        ...(error instanceof FollowersDiscoveryError
+          ? {
+              stopReason: error.progress.stopReason,
+              followerSearchProgress: JSON.stringify(error.progress),
+            }
+          : {}),
         error: error instanceof Error ? error.message : "Falha desconhecida",
         finishedAt: new Date().toISOString(),
       })

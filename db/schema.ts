@@ -410,6 +410,7 @@ export const discoveryRuns = sqliteTable(
     error: text("error"),
     stopReason: text("stop_reason"),
     localSearchProgress: text("local_search_progress"),
+    followerSearchProgress: text("follower_search_progress"),
     startedAt: text("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     finishedAt: text("finished_at"),
   },
@@ -493,6 +494,34 @@ export const discoveryCandidates = sqliteTable(
     ),
   ],
 );
+
+export const hashtagDiscoveryPosts = sqliteTable("hashtag_discovery_posts", {
+  campaignId: text("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
+  hashtag: text("hashtag").notNull(),
+  postKey: text("post_key").notNull(),
+  postUrl: text("post_url").notNull(),
+  instagramUsername: text("instagram_username"),
+  status: text("status").notNull().default("pending"),
+  revisitAfter: text("revisit_after"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("hashtag_discovery_posts_identity").on(table.campaignId, table.hashtag, table.postKey),
+  index("hashtag_discovery_posts_author").on(table.campaignId, table.instagramUsername),
+  index("hashtag_discovery_posts_pending").on(table.campaignId, table.hashtag, table.status),
+]);
+
+export const followerDiscoveryQueue = sqliteTable("follower_discovery_queue", {
+  campaignId: text("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
+  baseUsername: text("base_username").notNull(),
+  instagramUsername: text("instagram_username").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("follower_discovery_queue_identity").on(table.campaignId, table.baseUsername, table.instagramUsername),
+  index("follower_discovery_queue_pending").on(table.campaignId, table.baseUsername, table.status),
+]);
 
 export const discoveryQueryStats = sqliteTable(
   "discovery_query_stats",
