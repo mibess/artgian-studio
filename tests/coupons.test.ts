@@ -197,6 +197,14 @@ describe("game rewards API using a real migrated database", () => {
       1_800_000,
     );
     expect(body.expiresInSeconds).toBeGreaterThanOrEqual(1799);
+    const [storedCoupon] = await db.select().from(coupons);
+    expect(storedCoupon.minSubtotalCents).toBe(10_000);
+    await expect(quoteCoupon(db, body.code, 9_999)).rejects.toThrow(
+      /pelo menos R\$ 100,00/,
+    );
+    await expect(quoteCoupon(db, body.code, 10_000)).resolves.toMatchObject({
+      coupon: { code: body.code },
+    });
     const replay = await game(rewardRequest());
     expect(replay.status).toBe(200);
     expect((await replay.json()).code).toBe(body.code);
@@ -251,6 +259,7 @@ describe("discount rules and atomic reservations", () => {
       maxDiscountCents: null,
     };
     expect(calculateDiscount(base, 1999)).toBe(599);
+    expect(calculateDiscount(base, 50_000)).toBe(10_000);
     expect(calculateDiscount({ ...base, maxDiscountCents: 300 }, 1999)).toBe(
       300,
     );
@@ -263,6 +272,15 @@ describe("discount rules and atomic reservations", () => {
     expect(adminCouponSchema.safeParse({ code: "X", value: -1 }).success).toBe(
       false,
     );
+  });
+  it("enforces the game minimum for coupons created before the rule", async () => {
+    const coupon = await seed({ source: "game", minSubtotalCents: 0 });
+    await expect(quoteCoupon(db, coupon.code, 9_999)).rejects.toThrow(
+      /pelo menos R\$ 100,00/,
+    );
+    await expect(quoteCoupon(db, coupon.code, 10_000)).resolves.toMatchObject({
+      coupon: { id: coupon.id },
+    });
   });
   it("rejects future, expired, inactive and exhausted coupons", async () => {
     const coupon = await seed();
@@ -475,7 +493,7 @@ describe("checkout and payment lifecycle", () => {
     ).toBe(409);
     expect(await db.select().from(orders)).toHaveLength(1);
   });
-  it("supports 100% product discounts while charging shipping", async () => {
+  it("caps 100% coupons at R$ 100 while charging shipping", async () => {
     await seed({ value: 100 });
     expect(
       (
@@ -489,10 +507,21 @@ describe("checkout and payment lifecycle", () => {
         url.includes("checkout/preferences"),
       )![1].body,
     );
-    expect(payment.items).toHaveLength(1);
-    expect(payment.items[0].unit_price).toBe(15);
-    expect(payment.shipments.cost).toBe(0);
-    expect((await db.select().from(orders))[0].totalCents).toBe(1500);
+    const [order] = await db.select().from(orders);
+    expect(order).toMatchObject({
+      subtotalCents: 18_260,
+      discountCents: 10_000,
+      shippingCents: 1_500,
+      totalCents: 9_760,
+    });
+    expect(
+      payment.items.reduce(
+        (sum: number, item: { quantity: number; unit_price: number }) =>
+          sum + Math.round(item.unit_price * 100) * item.quantity,
+        0,
+      ) + Math.round(payment.shipments.cost * 100),
+    ).toBe(order.totalCents);
+    expect(payment.shipments.cost).toBe(15);
   });
   it("releases only definitive preference creation failures; network uncertainty keeps the reservation", async () => {
     await seed();

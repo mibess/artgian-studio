@@ -29,6 +29,8 @@ export class CouponError extends Error {
     super(message);
   }
 }
+const MAX_DISCOUNT_CENTS = 10_000;
+const GAME_MIN_SUBTOTAL_CENTS = 10_000;
 export const couponCodeSchema = z
   .string()
   .trim()
@@ -83,6 +85,7 @@ export function calculateDiscount(
   return Math.min(
     subtotalCents,
     amount,
+    MAX_DISCOUNT_CENTS,
     coupon.maxDiscountCents ?? subtotalCents,
   );
 }
@@ -112,7 +115,18 @@ export async function quoteCoupon(
       "Este cupom já foi usado ou está reservado em um pagamento.",
       409,
     );
-  const discountCents = calculateDiscount(coupon, subtotalCents);
+  const discountCents = calculateDiscount(
+    coupon.source === "game"
+      ? {
+          ...coupon,
+          minSubtotalCents: Math.max(
+            coupon.minSubtotalCents,
+            GAME_MIN_SUBTOTAL_CENTS,
+          ),
+        }
+      : coupon,
+    subtotalCents,
+  );
   if (discountCents <= 0)
     throw new CouponError("O cupom não gera desconto neste carrinho.");
   return { coupon, discountCents };
@@ -320,6 +334,7 @@ export async function generateGameCoupon(rawBody: unknown, rawKey: unknown) {
           kind: "percent",
           value: [5, 10, 20, 30][randomInt(4)],
           maxUses: 1,
+          minSubtotalCents: GAME_MIN_SUBTOTAL_CENTS,
           expiresAt: new Date(now.getTime() + 30 * 60_000).toISOString(),
           createdAt: now.toISOString(),
           updatedAt: now.toISOString(),

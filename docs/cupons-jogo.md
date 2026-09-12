@@ -95,8 +95,10 @@ sucesso e erros de domínio usam `Cache-Control: no-store`.
 - O cliente entra na loja, seleciona os produtos e aplica o código no checkout.
   A prévia usa os preços atuais do catálogo. A confirmação revalida tudo no servidor.
 - Um cupom por pedido, sem acumular códigos. O desconto incide somente nos produtos,
-  nunca no frete; percentuais arredondam para baixo em centavos. Desconto fixo ou
-  percentual fica limitado ao subtotal e ao teto opcional configurado no admin.
+  nunca no frete; percentuais arredondam para baixo em centavos. Cupons do jogo
+  exigem pelo menos R$ 100,00 em produtos. Todo desconto, fixo ou percentual, fica
+  limitado ao subtotal, ao teto global de R$ 100,00 e a qualquer teto menor
+  configurado no admin.
 - Ao criar o pedido, uma transação reserva o uso e grava os itens e o desconto.
   Duas compras simultâneas não conseguem reservar o último uso.
 - A reserva mantém o cupom indisponível durante o pagamento. Quando há uma data
