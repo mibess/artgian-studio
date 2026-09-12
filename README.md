@@ -278,6 +278,7 @@ banco isolado e respostas simuladas de frete/pagamento, sem criar cobranças rea
 ### Cupons de desconto
 
 O painel `/admin/descontos` gerencia cupons manuais; a API `/api/coupons/game`
-gera recompensas de 5%, 10%, 20% ou 30% válidas por 30 minutos. Consulte
+gera recompensas de 5%, 10%, 15% ou 30% válidas por 30 minutos, com chances
+decrescentes de 40%, 30%, 20% e 10%, respectivamente. Consulte
 [Cupons e integração do jogo](./docs/cupons-jogo.md) para configuração,
 migração, contrato HTTP, `curl`, regras de pagamento e prompt para o jogo.

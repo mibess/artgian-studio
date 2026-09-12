@@ -63,14 +63,15 @@ Resposta 201 (exemplo; o código e o percentual são sorteados):
 ```json
 {
   "code": "GAME-0123456789ABCDEF0123",
-  "discountPercent": 20,
+  "discountPercent": 15,
   "expiresAt": "2026-09-10T18:30:00.000Z",
   "expiresInSeconds": 1799,
   "reusable": false
 }
 ```
 
-Cada opção (5, 10, 20, 30) tem 25% de chance usando um gerador criptográfico.
+As opções usam um gerador criptográfico e têm raridade crescente: 5% de desconto
+tem 40% de chance, 10% tem 30%, 15% tem 20% e 30% tem 10% de chance.
 A validade começa na emissão e dura exatamente 30 minutos. Uma repetição
 válida retorna 200, com o mesmo código e expiração, sem novo sorteio ou consumo
 de limite. `expiresInSeconds` é o tempo restante no momento da resposta.

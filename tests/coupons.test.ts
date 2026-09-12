@@ -23,6 +23,7 @@ import {
   adminCouponSchema,
   calculateDiscount,
   cleanupExpiredGameCoupons,
+  drawGameDiscount,
   quoteCoupon,
   reserveCoupon,
 } from "../lib/coupons";
@@ -159,6 +160,19 @@ afterAll(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 
+describe("game reward rarity", () => {
+  it("maps the 100 equally likely buckets to descending discount rarity", () => {
+    const results = Array.from({ length: 100 }, (_, bucket) =>
+      drawGameDiscount(bucket),
+    );
+
+    expect(results.filter((discount) => discount === 5)).toHaveLength(40);
+    expect(results.filter((discount) => discount === 10)).toHaveLength(30);
+    expect(results.filter((discount) => discount === 15)).toHaveLength(20);
+    expect(results.filter((discount) => discount === 30)).toHaveLength(10);
+  });
+});
+
 describe("game rewards API using a real migrated database", () => {
   it("requires a secret, server-to-server calls and valid payload", async () => {
     expect((await game(request("/api/coupons/game", {}))).status).toBe(401);
@@ -190,7 +204,7 @@ describe("game rewards API using a real migrated database", () => {
     expect(response.status).toBe(201);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const body = await response.json();
-    expect([5, 10, 20, 30]).toContain(body.discountPercent);
+    expect([5, 10, 15, 30]).toContain(body.discountPercent);
     expect(body.code).toMatch(/^GAME-[A-F0-9]{20}$/);
     expect(body.reusable).toBe(false);
     expect(Date.parse(body.expiresAt) - before).toBeGreaterThanOrEqual(

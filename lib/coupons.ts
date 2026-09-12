@@ -31,6 +31,24 @@ export class CouponError extends Error {
 }
 const MAX_DISCOUNT_CENTS = 10_000;
 const GAME_MIN_SUBTOTAL_CENTS = 10_000;
+const GAME_DISCOUNT_BUCKETS = 100;
+
+export function drawGameDiscount(
+  randomBucket = randomInt(GAME_DISCOUNT_BUCKETS),
+) {
+  if (
+    !Number.isSafeInteger(randomBucket) ||
+    randomBucket < 0 ||
+    randomBucket >= GAME_DISCOUNT_BUCKETS
+  )
+    throw new RangeError("O sorteio do desconto deve estar entre 0 e 99.");
+
+  if (randomBucket < 40) return 5;
+  if (randomBucket < 70) return 10;
+  if (randomBucket < 90) return 15;
+  return 30;
+}
+
 export const couponCodeSchema = z
   .string()
   .trim()
@@ -332,7 +350,7 @@ export async function generateGameCoupon(rawBody: unknown, rawKey: unknown) {
           code: `GAME-${randomBytes(10).toString("hex").toUpperCase()}`,
           source: "game",
           kind: "percent",
-          value: [5, 10, 20, 30][randomInt(4)],
+          value: drawGameDiscount(),
           maxUses: 1,
           minSubtotalCents: GAME_MIN_SUBTOTAL_CENTS,
           expiresAt: new Date(now.getTime() + 30 * 60_000).toISOString(),
