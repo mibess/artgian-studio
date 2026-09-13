@@ -245,7 +245,7 @@ export default async function DiscountsPage({
             <div className="rounded-2xl border border-[#b88a3b]/25 bg-[#d8bc7b]/15 p-5">
               <h2 className="font-serif text-xl">Recompensas do jogo</h2>
               <p className="mt-2 text-xs leading-5">
-                5%, 10%, 15% ou 30%, com chances de 40%, 30%, 20% e 10%,
+                5%, 10%, 20% ou 30%, com chances de 40%, 30%, 20% e 10%,
                 respectivamente, validade de 30 minutos e um único pedido.
                 Reservamos o uso ao iniciar o pagamento e excluímos o cupom do
                 jogo quando o pagamento é aprovado. Expirados são removidos na

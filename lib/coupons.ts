@@ -45,7 +45,7 @@ export function drawGameDiscount(
 
   if (randomBucket < 40) return 5;
   if (randomBucket < 70) return 10;
-  if (randomBucket < 90) return 15;
+  if (randomBucket < 90) return 20;
   return 30;
 }
 

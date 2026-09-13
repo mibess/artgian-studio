@@ -168,7 +168,7 @@ describe("game reward rarity", () => {
 
     expect(results.filter((discount) => discount === 5)).toHaveLength(40);
     expect(results.filter((discount) => discount === 10)).toHaveLength(30);
-    expect(results.filter((discount) => discount === 15)).toHaveLength(20);
+    expect(results.filter((discount) => discount === 20)).toHaveLength(20);
     expect(results.filter((discount) => discount === 30)).toHaveLength(10);
   });
 });
@@ -204,7 +204,7 @@ describe("game rewards API using a real migrated database", () => {
     expect(response.status).toBe(201);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const body = await response.json();
-    expect([5, 10, 15, 30]).toContain(body.discountPercent);
+    expect([5, 10, 20, 30]).toContain(body.discountPercent);
     expect(body.code).toMatch(/^GAME-[A-F0-9]{20}$/);
     expect(body.reusable).toBe(false);
     expect(Date.parse(body.expiresAt) - before).toBeGreaterThanOrEqual(
