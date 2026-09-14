@@ -11,15 +11,15 @@ import {
   MercadoPagoRequestError,
 } from "../../../lib/mercado-pago";
 import {
-  ShippingConfigurationError,
-  ShippingProviderError,
-} from "../../../lib/melhor-envio";
-import {
   CouponError,
   reserveCoupon,
   releaseCouponAfterSetupFailure,
 } from "../../../lib/coupons";
-import { quoteCartShipping } from "../../../lib/shipping";
+import {
+  quoteCartShipping,
+  ShippingConfigurationError,
+  ShippingProviderError,
+} from "../../../lib/shipping";
 
 type CheckoutPayload = {
   items?: unknown;
@@ -195,7 +195,7 @@ export async function POST(request: Request) {
       discountCents,
       ...couponSnapshot,
       shippingCents: shippingOption.priceCents,
-      shippingProvider: "melhor_envio",
+      shippingProvider: shippingQuote.provider,
       shippingServiceId: shippingOption.serviceId,
       shippingServiceName: shippingOption.serviceName,
       shippingCompanyId: shippingOption.companyId,

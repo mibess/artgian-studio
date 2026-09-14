@@ -3,10 +3,11 @@ import { getDb } from "@/db";
 import { orderItems, orders } from "@/db/schema";
 import { isProductId, products } from "@/lib/catalog";
 import {
-  calculateCartShipping,
-  createAndPurchaseSandboxLabel,
-  generateAndPrintSandboxLabel,
-} from "@/lib/melhor-envio";
+  calculateProviderCartShipping,
+  createAndPurchaseShippingLabel,
+  generateAndPrintShippingLabel,
+  resolveShippingProvider,
+} from "@/lib/shipping";
 
 type LabelRouteContext = {
   params: Promise<{ id: string }>;
@@ -56,6 +57,7 @@ export async function POST(request: Request, context: LabelRouteContext) {
   }
 
   try {
+    const provider = resolveShippingProvider(order.shippingProvider);
     if (action === "create") {
       if (order.shippingLabelId) {
         return adminRedirect(
@@ -86,10 +88,10 @@ export async function POST(request: Request, context: LabelRouteContext) {
           unitPriceCents: item.unitPriceCents,
         };
       });
-      const options = await calculateCartShipping({
-        destinationPostalCode: order.postalCode,
-        items: lines,
-      });
+      const options = await calculateProviderCartShipping(
+        { destinationPostalCode: order.postalCode, items: lines },
+        provider,
+      );
       const selectedOption = options.find(
         (option) => option.serviceId === order.shippingServiceId,
       );
@@ -108,7 +110,7 @@ export async function POST(request: Request, context: LabelRouteContext) {
         );
       }
 
-      const labelId = await createAndPurchaseSandboxLabel({
+      const labelId = await createAndPurchaseShippingLabel(provider, {
         orderId: order.id,
         serviceId: selectedOption.serviceId,
         recipient: {
@@ -146,7 +148,7 @@ export async function POST(request: Request, context: LabelRouteContext) {
       return adminRedirect(
         request,
         "message",
-        "Etiqueta inserida e pagamento sandbox solicitado. Aguarde a liberação antes de gerar.",
+        "Etiqueta inserida e pagamento solicitado. Aguarde a liberação antes de gerar.",
       );
     }
 
@@ -158,7 +160,8 @@ export async function POST(request: Request, context: LabelRouteContext) {
           "A etiqueta ainda não foi criada.",
         );
       }
-      const labelUrl = await generateAndPrintSandboxLabel(
+      const labelUrl = await generateAndPrintShippingLabel(
+        provider,
         order.shippingLabelId,
       );
       await db
@@ -174,7 +177,7 @@ export async function POST(request: Request, context: LabelRouteContext) {
       return adminRedirect(
         request,
         "message",
-        "Etiqueta sandbox gerada com sucesso.",
+        "Etiqueta gerada com sucesso.",
       );
     }
 

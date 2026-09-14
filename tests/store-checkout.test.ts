@@ -99,9 +99,11 @@ describe("multi-item checkout", () => {
       customerEmail: "account@example.com",
       subtotalCents: 12770,
       totalCents: 14270,
+      shippingProvider: "melhor_envio",
     });
     expect(mock.values.mock.calls[1][0]).toHaveLength(2);
     const shipping = JSON.parse(mock.fetch.mock.calls[0][1].body);
+    expect(shipping.services).toBe("1,2,17");
     expect(
       shipping.products.map((item: { quantity: number }) => item.quantity),
     ).toEqual([2, 1]);

@@ -3,8 +3,8 @@ import {
   normalizePostalCode,
   ShippingConfigurationError,
   ShippingProviderError,
-} from "../../../../lib/melhor-envio";
-import { quoteCartShipping } from "../../../../lib/shipping";
+  quoteCartShipping,
+} from "../../../../lib/shipping";
 
 type QuotePayload = {
   items?: unknown;
@@ -37,6 +37,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         postalCode,
+        provider: quote.provider,
         options: quote.options,
         quotedAt: new Date().toISOString(),
       },

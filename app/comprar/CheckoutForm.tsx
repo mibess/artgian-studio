@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { cartSelections, type CartItem } from "../../lib/cart";
 import { formatCpf, formatPhone } from "../../lib/brazil";
 import { formatBrl } from "../../lib/catalog";
-import type { ShippingOption } from "../../lib/melhor-envio";
+import type { ShippingOption } from "../../lib/shipping";
 import ProductColorImage from "../components/ProductColorImage";
 
 type CheckoutFormProps = {

@@ -132,20 +132,47 @@ testar o checkout.
 Tokens e segredos são usados apenas no servidor e não devem receber o prefixo
 `NEXT_PUBLIC_`.
 
-## Frete com Melhor Envio
+## Frete com Melhor Envio ou SuperFrete
 
-O checkout consulta a API v2 do Melhor Envio no servidor. Configure em
-`.env.local`:
+O checkout consulta o provedor selecionado somente no servidor. Troque a
+integração com uma única variável:
+
+```text
+SHIPPING_PROVIDER=melhor_envio
+# ou
+SHIPPING_PROVIDER=super_frete
+```
+
+Para o Melhor Envio, configure em `.env.local`:
 
 ```text
 MELHOR_ENVIO_ENVIRONMENT=sandbox
 MELHOR_ENVIO_ACCESS_TOKEN=seu-token
+MELHOR_ENVIO_SERVICES=1,2,17
 MELHOR_ENVIO_ORIGIN_POSTAL_CODE=00000000
 MELHOR_ENVIO_USER_AGENT=Artgian Studio (email@dominio.com)
 ```
 
 Sandbox e produção usam contas e tokens diferentes. Mantenha `sandbox` durante
 os testes e troque para `production` somente depois de validar a integração.
+
+Para o SuperFrete, configure:
+
+```text
+SUPER_FRETE_ENVIRONMENT=sandbox
+SUPER_FRETE_API_KEY=seu-token
+SUPER_FRETE_SERVICES=1,2,17
+SUPER_FRETE_ORIGIN_POSTAL_CODE=00000000
+SUPER_FRETE_USER_AGENT=Artgian Studio (email@dominio.com)
+```
+
+`SUPER_FRETE_ENVIRONMENT=production` usa `https://api.superfrete.com`; o
+ambiente sandbox usa `https://sandbox.superfrete.com`. Por compatibilidade, o
+CEP de origem, o User-Agent e os dados `SUPER_FRETE_SENDER_*` usam os valores
+`MELHOR_ENVIO_*` correspondentes quando a variável específica estiver vazia.
+Cada pedido salva o provedor que produziu sua cotação, portanto uma troca de
+`SHIPPING_PROVIDER` não altera a emissão de etiquetas de pedidos anteriores.
+Os códigos `1,2,17` restringem a loja a PAC, SEDEX e Mini Envios dos Correios.
 
 Também é obrigatório preencher `shippingPackage` de cada produto em
 `lib/catalog.ts` com largura, altura e comprimento da embalagem em centímetros
@@ -166,20 +193,24 @@ por peso ou dimensões incorretos.
 Antes de testar pedidos, aplique também a migração mais recente da pasta
 `drizzle/` no banco Turso.
 
-### Etiquetas sandbox
+### Etiquetas
 
 A compra e a geração manual de etiquetas ficam em `/admin/pedidos`. Essa área
 usa autenticação HTTP Basic e exige `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
 
-Os dados privados do remetente são lidos das variáveis
-`MELHOR_ENVIO_SENDER_*` documentadas em `.env.example`. CPF e telefone devem
-conter apenas números. O checkout também solicita e valida o CPF do comprador,
-necessário para gerar a etiqueta.
+Os dados privados do remetente são lidos das variáveis `*_SENDER_*`
+documentadas em `.env.example`. CPF e telefone devem conter apenas números. O
+checkout também solicita e valida o CPF do comprador, necessário para gerar a
+etiqueta.
 
 Por segurança, `createAndPurchaseSandboxLabel` e
 `generateAndPrintSandboxLabel` recusam qualquer execução quando
 `MELHOR_ENVIO_ENVIRONMENT` não for exatamente `sandbox`. A futura ativação em
 produção deverá ser implementada separadamente, depois da regularização fiscal.
+No SuperFrete, a compra manual pelo painel administrativo usa `/api/v0/cart` e
+`/api/v0/checkout`, e a impressão usa `/api/v0/tag/print`. Em produção essa ação
+consome o saldo real da carteira SuperFrete, por isso continua dependendo do
+clique explícito do administrador.
 
 ## Deploy
 

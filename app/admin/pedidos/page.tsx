@@ -4,6 +4,12 @@ import { getDb } from "../../../db";
 import { orderItems, orders } from "../../../db/schema";
 import { maskCpf } from "../../../lib/brazil";
 import { formatBrl } from "../../../lib/catalog";
+import {
+  getConfiguredShippingProvider,
+  getShippingProviderEnvironment,
+  resolveShippingProvider,
+  shippingProviderName,
+} from "../../../lib/shipping";
 import { NativeSubmitButton } from "../../components/PendingButton";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +50,10 @@ export default async function AdminOrdersPage({
     order,
     items: items.filter((item) => item.orderId === order.id),
   }));
-  const isSandbox = process.env.MELHOR_ENVIO_ENVIRONMENT === "sandbox";
+  const configuredProvider = getConfiguredShippingProvider();
+  const configuredEnvironment =
+    getShippingProviderEnvironment(configuredProvider);
+  const isSandbox = configuredEnvironment === "sandbox";
 
   return (
     <main className="min-h-screen bg-[#f7f3ea] px-5 py-10 text-[#0b2447] sm:px-8">
@@ -66,7 +75,7 @@ export default async function AdminOrdersPage({
           <span
             className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${isSandbox ? "bg-amber-100 text-amber-900" : "bg-red-100 text-red-900"}`}
           >
-            Melhor Envio: {isSandbox ? "SANDBOX" : "PRODUÇÃO BLOQUEADA"}
+            {shippingProviderName(configuredProvider)}: {isSandbox ? "SANDBOX" : "PRODUÇÃO"}
           </span>
         </div>
 
@@ -88,6 +97,11 @@ export default async function AdminOrdersPage({
             </p>
           )}
           {rows.map(({ order, items }) => {
+            const orderProvider = resolveShippingProvider(
+              order.shippingProvider,
+            );
+            const orderProviderEnvironment =
+              getShippingProviderEnvironment(orderProvider);
             const canCreateLabel =
               order.status === "paid" &&
               Boolean(order.customerDocument) &&
@@ -135,7 +149,7 @@ export default async function AdminOrdersPage({
                       </span>
                     )}
                     <span className="mt-1 block text-xs text-[#647087]">
-                      {order.shippingCompanyName} · {order.shippingServiceName}{" "}
+                      {shippingProviderName(orderProvider)} · {order.shippingCompanyName} · {order.shippingServiceName}{" "}
                       · {formatBrl(order.shippingCents)}
                     </span>
                   </div>
@@ -163,7 +177,10 @@ export default async function AdminOrdersPage({
                           pendingLabel="Comprando…"
                           className="inline-flex items-center gap-2 rounded-full bg-[#0b2447] px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
                         >
-                          Comprar etiqueta sandbox
+                          Comprar etiqueta
+                          {orderProviderEnvironment === "sandbox"
+                            ? " sandbox"
+                            : ""}
                         </NativeSubmitButton>
                       </form>
                     )}
