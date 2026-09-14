@@ -4,6 +4,13 @@ export function digitsOnly(value: unknown, maxLength = 32) {
     : "";
 }
 
+export function hasFullName(value: unknown) {
+  return (
+    typeof value === "string" &&
+    value.trim().split(/\s+/).filter(Boolean).length >= 2
+  );
+}
+
 export function isValidCpf(value: unknown) {
   const cpf = digitsOnly(value, 11);
   if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;

@@ -129,6 +129,15 @@ describe("multi-item checkout", () => {
     ).toBe(409);
     expect(mock.batch).not.toHaveBeenCalled();
   });
+  it("rejects a recipient without a complete name", async () => {
+    const response = await POST(request({ ...payload, customerName: "Mibess" }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Preencha corretamente os dados pessoais e de entrega.",
+    });
+    expect(mock.batch).not.toHaveBeenCalled();
+    expect(mock.fetch).not.toHaveBeenCalled();
+  });
   it("rejects invalid carts and malformed JSON without external calls", async () => {
     expect(
       (

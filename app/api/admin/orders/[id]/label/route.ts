@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { orderItems, orders } from "@/db/schema";
+import { hasFullName } from "@/lib/brazil";
 import { isProductId, products } from "@/lib/catalog";
 import {
   calculateProviderCartShipping,
@@ -59,6 +60,17 @@ export async function POST(request: Request, context: LabelRouteContext) {
   try {
     const provider = resolveShippingProvider(order.shippingProvider);
     if (action === "create") {
+      const submittedRecipientName = String(form.get("recipientName") || "")
+        .trim()
+        .slice(0, 120);
+      const recipientName = submittedRecipientName || order.customerName;
+      if (!hasFullName(recipientName)) {
+        return adminRedirect(
+          request,
+          "error",
+          "Informe nome e sobrenome do destinatário para comprar a etiqueta.",
+        );
+      }
       if (order.shippingLabelId) {
         return adminRedirect(
           request,
@@ -110,11 +122,21 @@ export async function POST(request: Request, context: LabelRouteContext) {
         );
       }
 
+      if (recipientName !== order.customerName) {
+        await db
+          .update(orders)
+          .set({
+            customerName: recipientName,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(orders.id, order.id));
+      }
+
       const labelId = await createAndPurchaseShippingLabel(provider, {
         orderId: order.id,
         serviceId: selectedOption.serviceId,
         recipient: {
-          name: order.customerName,
+          name: recipientName,
           email: order.customerEmail,
           phone: order.customerPhone,
           document: order.customerDocument,

@@ -10,6 +10,7 @@ import {
   resolveShippingProvider,
   shippingProviderName,
 } from "../../../lib/shipping";
+import { hasFullName } from "../../../lib/brazil";
 import { NativeSubmitButton } from "../../components/PendingButton";
 
 export const dynamic = "force-dynamic";
@@ -170,9 +171,22 @@ export default async function AdminOrdersPage({
                     {canCreateLabel && (
                       <form
                         action={`/api/admin/orders/${order.id}/label`}
+                        className="flex max-w-64 flex-col gap-2"
                         method="post"
                       >
                         <input type="hidden" name="action" value="create" />
+                        {!hasFullName(order.customerName) && (
+                          <label className="text-[0.65rem] font-semibold text-[#647087]">
+                            Nome e sobrenome do destinatário
+                            <input
+                              className="mt-1 h-9 w-full rounded-lg border border-[#0b2447]/20 bg-white px-3 text-xs text-[#0b2447] outline-none focus:border-[#b88a3b]"
+                              defaultValue={order.customerName}
+                              name="recipientName"
+                              placeholder="Nome completo"
+                              required
+                            />
+                          </label>
+                        )}
                         <NativeSubmitButton
                           pendingLabel="Comprando…"
                           className="inline-flex items-center gap-2 rounded-full bg-[#0b2447] px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"

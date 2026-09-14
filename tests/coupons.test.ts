@@ -44,7 +44,7 @@ const items = [
 ];
 const checkoutBody = {
   items,
-  customerName: "Cliente",
+  customerName: "Cliente Teste",
   customerPhone: "11999999999",
   customerDocument: "52998224725",
   postalCode: "01001000",

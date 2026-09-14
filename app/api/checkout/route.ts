@@ -2,7 +2,7 @@ import { requestOrigin } from "../../../lib/request-origin";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { orderItems, orders } from "../../../db/schema";
-import { digitsOnly, isValidCpf } from "../../../lib/brazil";
+import { digitsOnly, hasFullName, isValidCpf } from "../../../lib/brazil";
 import { cartSelections, checkoutItems } from "../../../lib/cart";
 import { getCustomerSession } from "../../../lib/auth";
 import {
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
     const claimedShippingPriceCents = Number(payload.shippingPriceCents);
 
     if (
-      !customerName ||
+      !hasFullName(customerName) ||
       !customerEmail.includes("@") ||
       ![10, 11].includes(customerPhone.length) ||
       !isValidCpf(customerDocument) ||

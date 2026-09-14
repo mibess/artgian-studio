@@ -228,7 +228,7 @@ describe("SuperFrete", () => {
     expect(cart).toMatchObject({
       service: 1,
       platform: "Artgian Studio",
-      volumes: { height: 6, width: 16, length: 24, weight: 0.85 },
+      volumes: [{ height: 6, width: 16, length: 24, weight: 0.85 }],
       options: {
         insurance_value: 109.8,
         non_commercial: true,
@@ -241,5 +241,71 @@ describe("SuperFrete", () => {
     expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
       orders: ["label-1"],
     });
+  });
+
+  it("omits insurance from a low-value label purchase", async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url.endsWith("/api/v0/cart")
+        ? Response.json({ id: "label-low-value" })
+        : Response.json({ success: true }),
+    );
+
+    await createAndPurchaseShippingLabel("super_frete", {
+      orderId: "order-low-value",
+      serviceId: "1",
+      recipient: {
+        name: "Cliente Teste",
+        email: "cliente@example.com",
+        phone: "11999999999",
+        document: "52998224725",
+        address: "Praça da Sé",
+        complement: null,
+        number: "1",
+        district: "Sé",
+        city: "São Paulo",
+        state: "SP",
+        postalCode: "01001000",
+      },
+      products: [
+        { name: "Porta-Incenso Samurai", quantity: 1, unitPriceCents: 1790 },
+      ],
+      volumes: [{ height: 11, width: 24, length: 24, weight: 0.15 }],
+    });
+
+    const cart = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(cart.volumes).toEqual([
+      { height: 11, width: 24, length: 24, weight: 0.15 },
+    ]);
+    expect(cart.options).not.toHaveProperty("insurance_value");
+  });
+
+  it("surfaces detailed validation errors from the provider", async () => {
+    fetchMock.mockResolvedValue(
+      Response.json(
+        {
+          message: "Ocorreu um ou mais erros.",
+          errors: {
+            volumes: ["O campo volumes deve ser uma lista."],
+            "to.name": ["Informe nome e sobrenome do destinatário."],
+          },
+        },
+        { status: 422 },
+      ),
+    );
+
+    await expect(
+      quoteCartShipping(
+        [
+          {
+            productId: "organizador-arco",
+            color: "rosa-marfim",
+            quantity: 1,
+          },
+        ],
+        "15606170",
+      ),
+    ).rejects.toThrow(
+      "O campo volumes deve ser uma lista. Informe nome e sobrenome do destinatário.",
+    );
   });
 });

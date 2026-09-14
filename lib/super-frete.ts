@@ -214,6 +214,11 @@ export async function createAndPurchaseSuperFreteLabel(
       "Serviço, pacote ou CPF do destinatário inválido.",
     );
   }
+  const insuranceValue =
+    input.products.reduce(
+      (sum, item) => sum + item.unitPriceCents * item.quantity,
+      0,
+    ) / 100;
 
   const created = await superFreteRequest<{
     id?: string;
@@ -242,13 +247,11 @@ export async function createAndPurchaseSuperFreteLabel(
         quantity: item.quantity,
         unitary_value: item.unitPriceCents / 100,
       })),
-      volumes: input.volumes[0],
+      volumes: [input.volumes[0]],
       options: {
-        insurance_value:
-          input.products.reduce(
-            (sum, item) => sum + item.unitPriceCents * item.quantity,
-            0,
-          ) / 100,
+        ...(insuranceValue >= MINIMUM_INSURANCE_VALUE
+          ? { insurance_value: insuranceValue }
+          : {}),
         receipt: false,
         own_hand: false,
         non_commercial: true,

@@ -261,6 +261,9 @@ export default function CheckoutForm({
                 name="customerName"
                 defaultValue={customer.name}
                 autoComplete="name"
+                minLength={3}
+                pattern=".*\S\s+\S.*"
+                title="Informe nome e sobrenome."
                 required
               />
             </label>

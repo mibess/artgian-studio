@@ -177,17 +177,29 @@ export function providerErrorMessage(payload: unknown) {
     error?: unknown;
     errors?: Record<string, unknown>;
   };
+  if (candidate.errors) {
+    const messages = collectErrorMessages(candidate.errors);
+    if (messages.length) return [...new Set(messages)].join(" ");
+  }
   if (typeof candidate.message === "string" && candidate.message.trim()) {
     return candidate.message.trim();
   }
   if (typeof candidate.error === "string" && candidate.error.trim()) {
     return candidate.error.trim();
   }
-  if (candidate.errors) {
-    const firstError = Object.values(candidate.errors).flat().find(Boolean);
-    if (typeof firstError === "string") return firstError;
-  }
   return null;
+}
+
+function collectErrorMessages(value: unknown): string[] {
+  if (typeof value === "string") {
+    const message = value.trim();
+    return message ? [message] : [];
+  }
+  if (Array.isArray(value)) return value.flatMap(collectErrorMessages);
+  if (value && typeof value === "object") {
+    return Object.values(value).flatMap(collectErrorMessages);
+  }
+  return [];
 }
 
 export function validateShippingLines(items: ShippingLine[]) {
