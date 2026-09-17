@@ -9,6 +9,8 @@ import { orders, orderItems } from "../../db/schema";
 import { formatBrl } from "../../lib/catalog";
 import BrandHeader from "../components/BrandHeader";
 import SignOutButton from "./SignOutButton";
+import AddressBook from "./AddressBook";
+import { listAddresses } from "../../lib/addresses/repository";
 export const metadata: Metadata = {
   title: "Minha conta | Artgian Studio",
   robots: { index: false, follow: false },
@@ -61,6 +63,7 @@ export default async function AccountPage() {
           </div>
           <SignOutButton />
         </div>
+        <AddressBook initialAddresses={await listAddresses(session.user.id)} />
         <section className="mt-12">
           <h2 className="font-serif text-3xl">Seus pedidos</h2>
           <p className="mt-2 text-sm text-[#647087]">

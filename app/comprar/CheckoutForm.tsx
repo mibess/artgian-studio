@@ -9,8 +9,14 @@ import { formatBrl } from "../../lib/catalog";
 import type { ShippingOption } from "../../lib/shipping";
 import ProductColorImage from "../components/ProductColorImage";
 
+import AddressFields from "../components/AddressFields";
+import { emptyAddress, formatPostalCode, type AddressDraft, type SavedAddress } from "../../lib/addresses/schema";
+
+import { useProductCatalog } from "../../lib/products/context";
+
 type CheckoutFormProps = {
   customer: { name: string; email: string };
+  addresses: SavedAddress[];
   items: CartItem[];
   fromCart?: boolean;
 };
@@ -21,17 +27,23 @@ type QuoteResponse = {
   error?: string;
 };
 
+function couponExpired(expiresAt: string) {
+  return Date.parse(expiresAt) <= Date.now();
+}
+
 function onlyPostalCodeDigits(value: string) {
   return value.replace(/\D/g, "").slice(0, 8);
 }
 
 export default function CheckoutForm({
   customer,
+  addresses,
   items,
   fromCart = false,
 }: CheckoutFormProps) {
   const router = useRouter();
-  const selections = cartSelections(items);
+  const catalog = useProductCatalog();
+  const selections = cartSelections(items, catalog);
   const subtotalCents = selections.reduce(
     (sum, selection) => sum + selection.subtotalCents,
     0,
@@ -53,7 +65,11 @@ export default function CheckoutForm({
   const [shippingError, setShippingError] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerDocument, setCustomerDocument] = useState("");
-  const [postalCode, setPostalCode] = useState("");
+  const initialAddress = addresses.find(address => address.isDefault) ?? addresses[0];
+  const [selectedAddressId, setSelectedAddressId] = useState(initialAddress?.id ?? "");
+  const [address, setAddress] = useState<AddressDraft>(initialAddress ?? { ...emptyAddress });
+  const [saveNewAddress, setSaveNewAddress] = useState(addresses.length < 20);
+  const postalCode = address.postalCode;
   const [quotedPostalCode, setQuotedPostalCode] = useState("");
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState("");
@@ -97,13 +113,26 @@ export default function CheckoutForm({
   }
 
   function handlePostalCodeChange(value: string) {
-    setPostalCode(value);
+    setAddress(current => ({ ...current, postalCode: formatPostalCode(value) }));
     quoteVersion.current += 1;
     setQuoting(false);
     if (onlyPostalCodeDigits(value) !== quotedPostalCode) {
       setShippingOptions([]);
       setSelectedServiceId("");
     }
+  }
+
+  function selectAddress(id: string) {
+    const selected = addresses.find(address => address.id === id);
+    setSelectedAddressId(id);
+    setAddress(selected ?? { ...emptyAddress });
+    quoteVersion.current += 1;
+    setQuoting(false);
+    setShippingOptions([]);
+    setSelectedServiceId("");
+    setQuotedPostalCode("");
+    setShippingError("");
+    setError("");
   }
 
   async function calculateQuote() {
@@ -171,7 +200,7 @@ export default function CheckoutForm({
     }
     if (
       appliedCoupon?.expiresAt &&
-      Date.parse(appliedCoupon.expiresAt) <= Date.now()
+      couponExpired(appliedCoupon.expiresAt)
     ) {
       setCoupon(null);
       setCouponError(
@@ -188,7 +217,10 @@ export default function CheckoutForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          expectedSubtotalCents: subtotalCents,
           ...payload,
+          addressId: selectedAddressId || undefined,
+          saveAddress: !selectedAddressId && saveNewAddress,
           couponCode: appliedCoupon?.code,
           items,
           shippingServiceId: selectedShipping.serviceId,
@@ -207,6 +239,7 @@ export default function CheckoutForm({
         return;
       }
 
+      if (response.status === 409 || response.status === 404) router.refresh();
       if (!response.ok || !result.checkoutUrl) {
         throw new Error(
           result.error || "Não foi possível iniciar o pagamento.",
@@ -327,6 +360,14 @@ export default function CheckoutForm({
             </span>
             <h2 className="font-serif text-2xl font-normal">Entrega</h2>
           </div>
+          {addresses.length > 0 && <label className="mt-5 block">
+            <span className="mb-2 block text-xs font-semibold">Endereço de entrega</span>
+            <select aria-label="Endereço de entrega" className="h-12 w-full min-w-0 rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-3 text-sm" value={selectedAddressId} onChange={event => selectAddress(event.target.value)} disabled={submitting}>
+              {addresses.map(address => <option key={address.id} value={address.id}>{address.label || address.streetAddress}, {address.addressNumber} · {address.city}/{address.state}{address.isDefault ? " (Padrão)" : ""}</option>)}
+              <option value="">Usar outro endereço</option>
+            </select>
+          </label>}
+          {selectedAddressId && <p className="mt-3 text-xs text-[#647087]">Para atualizar seus endereços, acesse <Link className="underline" href="/conta">Minha conta</Link>.</p>}
           <div className="mt-5 grid gap-4 sm:grid-cols-6">
             <label className="sm:col-span-2">
               <span className="mb-2 block text-xs font-semibold">CEP</span>
@@ -336,7 +377,10 @@ export default function CheckoutForm({
                 autoComplete="postal-code"
                 inputMode="numeric"
                 placeholder="00000-000"
-                value={postalCode}
+                value={formatPostalCode(postalCode)}
+                maxLength={9}
+                pattern="[0-9]{5}-?[0-9]{3}"
+                readOnly={Boolean(selectedAddressId)}
                 onChange={(event) => handlePostalCodeChange(event.target.value)}
                 required
               />
@@ -410,60 +454,11 @@ export default function CheckoutForm({
               </fieldset>
             )}
 
-            <label className="sm:col-span-5">
-              <span className="mb-2 block text-xs font-semibold">Endereço</span>
-              <input
-                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
-                name="streetAddress"
-                autoComplete="address-line1"
-                required
-              />
-            </label>
-            <label>
-              <span className="mb-2 block text-xs font-semibold">Número</span>
-              <input
-                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
-                name="addressNumber"
-                required
-              />
-            </label>
-            <label className="sm:col-span-3">
-              <span className="mb-2 block text-xs font-semibold">
-                Complemento
-              </span>
-              <input
-                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
-                name="addressComplement"
-                autoComplete="address-line2"
-              />
-            </label>
-            <label className="sm:col-span-3">
-              <span className="mb-2 block text-xs font-semibold">Bairro</span>
-              <input
-                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
-                name="neighborhood"
-                required
-              />
-            </label>
-            <label className="sm:col-span-5">
-              <span className="mb-2 block text-xs font-semibold">Cidade</span>
-              <input
-                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
-                name="city"
-                autoComplete="address-level2"
-                required
-              />
-            </label>
-            <label>
-              <span className="mb-2 block text-xs font-semibold">UF</span>
-              <input
-                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 uppercase outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
-                name="state"
-                autoComplete="address-level1"
-                maxLength={2}
-                required
-              />
-            </label>
+            <AddressFields value={address} onChange={setAddress} readOnly={Boolean(selectedAddressId)} includePostalCode={false} includeLabel={!selectedAddressId && saveNewAddress} />
+            {!selectedAddressId && <label className="sm:col-span-6 flex items-start gap-3 text-sm">
+              <input type="checkbox" className="mt-1 accent-[#0b2447]" checked={saveNewAddress} disabled={addresses.length >= 20} onChange={event => setSaveNewAddress(event.target.checked)} />
+              <span>Salvar este endereço na minha conta.{!addresses.length && <span className="mt-1 block text-xs text-[#647087]">Seu primeiro endereço salvo será o padrão.</span>}{addresses.length >= 20 && <span className="mt-1 block text-xs text-[#647087]">Você já tem 20 endereços salvos. Este será usado apenas neste pedido.</span>}</span>
+            </label>}
           </div>
         </section>
 

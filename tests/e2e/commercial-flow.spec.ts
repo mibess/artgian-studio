@@ -1,7 +1,9 @@
+import { loginAdmin } from "./admin-login";
 import { expect, test } from "@playwright/test";
 
 test("dashboard, leads e inbound dry-run funcionam", async ({ page }) => {
-  await page.goto("/comercial");
+  await loginAdmin(page);
+  await page.goto("/admin");
   await expect(page.getByRole("heading", { name: /Olá, Angélica/i })).toBeVisible();
   await expect(page.getByText("Radar de oportunidades")).toBeVisible();
 
@@ -20,7 +22,8 @@ test("dashboard, leads e inbound dry-run funcionam", async ({ page }) => {
 
 test("prospecção prepara e revisa rascunho sem enviar mensagem", async ({ page }) => {
   const suffix = Date.now();
-  await page.goto("/comercial/campanhas");
+  await loginAdmin(page);
+  await page.goto("/admin/campanhas");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(page.getByRole("heading", { name: "Campanhas e prospecção" })).toBeVisible();
   await expect(page.getByPlaceholder("Parcerias locais")).toHaveCount(0);

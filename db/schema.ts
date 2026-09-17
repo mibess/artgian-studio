@@ -9,6 +9,27 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
+export const customerAddresses = sqliteTable("customer_addresses", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  label: text("label").notNull().default(""),
+  postalCode: text("postal_code").notNull(),
+  streetAddress: text("street_address").notNull(),
+  addressNumber: text("address_number").notNull(),
+  addressComplement: text("address_complement").notNull().default(""),
+  neighborhood: text("neighborhood").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  fingerprint: text("fingerprint").notNull(),
+  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("customer_addresses_user_idx").on(table.userId),
+  uniqueIndex("customer_addresses_identity_unique").on(table.userId, table.fingerprint),
+  uniqueIndex("customer_addresses_default_unique").on(table.userId).where(sql`${table.isDefault} = 1`),
+]);
+
 export const orders = sqliteTable(
   "orders",
   {
@@ -112,6 +133,7 @@ export const orderItems = sqliteTable(
     personalization: text("personalization"),
     quantity: integer("quantity").notNull(),
     unitPriceCents: integer("unit_price_cents").notNull(),
+    shippingPackageSnapshot: text("shipping_package_snapshot"),
   },
   (table) => [index("order_items_order_id_idx").on(table.orderId)],
 );
@@ -266,6 +288,10 @@ export const catalogProducts = sqliteTable(
   "catalog_products",
   {
     id: text("id").primaryKey(),
+    storeId: text("store_id"),
+    storefront: text("storefront"),
+    aliases: text("aliases").notNull().default("[]"),
+    version: integer("version").notNull().default(0),
     name: text("name").notNull(),
     category: text("category"),
     description: text("description"),
@@ -286,7 +312,7 @@ export const catalogProducts = sqliteTable(
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [uniqueIndex("catalog_products_name_unique").on(table.name)],
+  (table) => [uniqueIndex("catalog_products_name_unique").on(table.name), uniqueIndex("catalog_products_store_id_unique").on(table.storeId)],
 );
 
 export const quoteRequests = sqliteTable(

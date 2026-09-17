@@ -1,3 +1,4 @@
+import { getProductCatalog } from "../../../../lib/products/repository";
 import { requestOrigin } from "../../../../lib/request-origin";
 import { getDb } from "../../../../db";
 import { getCustomerSession } from "../../../../lib/auth";
@@ -19,9 +20,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     if (!body || typeof body !== "object")
       throw new CouponError("Carrinho inválido.");
-    const items = checkoutItems(body);
+    const catalog = await getProductCatalog();
+    const items = checkoutItems(body, catalog);
     if (!items?.length) throw new CouponError("Carrinho inválido.");
-    const subtotalCents = cartSelections(items).reduce(
+    const subtotalCents = cartSelections(items, catalog).reduce(
       (sum, item) => sum + item.subtotalCents,
       0,
     );

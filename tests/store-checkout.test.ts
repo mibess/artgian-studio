@@ -1,3 +1,4 @@
+vi.mock("../lib/products/repository", async (original) => { const actual=await original<typeof import("../lib/products/repository")>(); return {...actual,getProductCatalog: async () => (await import("./fixtures/catalog")).catalog}; });
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({
   batch: vi.fn(),
@@ -5,6 +6,13 @@ const mock = vi.hoisted(() => ({
   update: vi.fn(),
   session: vi.fn(),
   fetch: vi.fn(),
+  saveAddress: vi.fn(),
+  getAddress: vi.fn(),
+}));
+vi.mock("../lib/addresses/repository", async (original) => ({
+  ...await original<typeof import("../lib/addresses/repository")>(),
+  saveAddress: mock.saveAddress,
+  getAddress: mock.getAddress,
 }));
 vi.mock("../db", () => ({
   getDb: async () => ({
@@ -83,6 +91,42 @@ beforeEach(() => {
   vi.stubGlobal("fetch", mock.fetch);
 });
 describe("multi-item checkout", () => {
+  it("saves a new address for the session owner by default", async () => {
+    expect((await POST(request({ ...payload, userId: "forged" }))).status).toBe(201);
+    expect(mock.saveAddress).toHaveBeenCalledWith("customer-session-id", expect.objectContaining({ postalCode: "01001000", streetAddress: "Praça da Sé" }));
+  });
+  it("allows a one-time address without saving it", async () => {
+    expect((await POST(request({ ...payload, saveAddress: false }))).status).toBe(201);
+    expect(mock.saveAddress).not.toHaveBeenCalled();
+  });
+  it("uses an owned saved address without creating a duplicate", async () => {
+    mock.getAddress.mockResolvedValue({ ...payload, id: "saved", label: "Casa", isDefault: true });
+    expect((await POST(request({ ...payload, addressId: "saved" }))).status).toBe(201);
+    expect(mock.getAddress).toHaveBeenCalledWith("customer-session-id", "saved");
+    expect(mock.saveAddress).not.toHaveBeenCalled();
+  });
+  it("requires review if the saved destination changed after rendering", async () => {
+    mock.getAddress.mockResolvedValue({ ...payload, addressNumber: "2" });
+    expect((await POST(request({ ...payload, addressId: "saved" }))).status).toBe(409);
+    expect(mock.fetch).not.toHaveBeenCalled();
+  });
+  it("rejects another customer's address before shipping or payment", async () => {
+    const { AddressError } = await import("../lib/addresses/repository");
+    mock.getAddress.mockRejectedValue(new AddressError("Endereço não encontrado.", 404));
+    expect((await POST(request({ ...payload, addressId: "foreign" }))).status).toBe(404);
+    expect(mock.fetch).not.toHaveBeenCalled();
+  });
+  it("rejects an invalid state or excess postal code digits", async () => {
+    expect((await POST(request({ ...payload, state: "ZZ" }))).status).toBe(400);
+    expect((await POST(request({ ...payload, postalCode: "010010009" }))).status).toBe(400);
+    expect(mock.saveAddress).not.toHaveBeenCalled();
+  });
+  it("requires review when the displayed product price has changed", async () => {
+    const response = await POST(request({ ...payload, expectedSubtotalCents: 1 }));
+    expect(response.status).toBe(409);
+    expect(mock.fetch).not.toHaveBeenCalled();
+    expect(mock.values).not.toHaveBeenCalled();
+  });
   it("quotes all packages, persists all items and charges server catalog prices", async () => {
     const response = await POST(
       request({
@@ -102,6 +146,7 @@ describe("multi-item checkout", () => {
       shippingProvider: "melhor_envio",
     });
     expect(mock.values.mock.calls[1][0]).toHaveLength(2);
+    expect(JSON.parse(mock.values.mock.calls[1][0][0].shippingPackageSnapshot)).toMatchObject({ weightKg: 0.35, widthCm: 15 });
     const shipping = JSON.parse(mock.fetch.mock.calls[0][1].body);
     expect(shipping.services).toBe("1,2,17");
     expect(

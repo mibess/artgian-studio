@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
+import { getPublicProductCatalog } from "../lib/products/repository";
 import Link from "next/link";
 import BrandHeader from "./components/BrandHeader";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 const sectionLabel =
   "flex items-center gap-3 text-[0.68rem] font-bold uppercase tracking-[0.2em]";
@@ -15,37 +21,8 @@ const steps = [
   ["04", "Entregamos memórias", "Peças únicas, feitas para durar."],
 ];
 
-const projects = [
-  {
-    number: "01",
-    category: "Casa",
-    title: "Bandeja Aurora. Organização em forma de escultura.",
-    alt: "Bandeja Aurora impressa em 3D",
-    position: "object-center",
-    image: "/bandeja-aurora-capa.png",
-    href: "/bandeja-aurora",
-  },
-  {
-    number: "02",
-    category: "Organização",
-    title: "Organizador Arco. Ordem com personalidade.",
-    alt: "Organizador Arco rosa com gavetas",
-    position: "object-center",
-    image: "/organizador-arco-capa.png",
-    href: "/organizador-arco",
-  },
-  {
-    number: "03",
-    category: "Música",
-    title: "Porta-Palhetas Solo. Seu nome entra no ritmo.",
-    alt: "Porta-Palhetas Solo personalizado com o texto Seu Nome",
-    position: "object-center",
-    image: "/porta-palhetas-solo-capa.png",
-    href: "/porta-palhetas-solo",
-  },
-];
-
-export default function Home() {
+export default async function Home() {
+  const projects=Object.values(await getPublicProductCatalog()).filter(p=>p.featured&&p.listed).map((p,i)=>({...p,number:String(i+1).padStart(2,"0"),title:p.name,position:"object-center"}));
   return (
     <main className="min-h-screen overflow-hidden bg-[#f7f3ea] text-[#0b2447]">
       <BrandHeader fixed />

@@ -2,7 +2,10 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { orderItems, orders } from "@/db/schema";
 import { hasFullName } from "@/lib/brazil";
-import { isProductId, products } from "@/lib/catalog";
+import { hasAdminAccess } from "@/lib/admin-access";
+import { requestOrigin as getRequestOrigin } from "@/lib/request-origin";
+import { getProductCatalog } from "@/lib/products/repository";
+import type { ShippingPackage } from "@/lib/catalog";
 import {
   calculateProviderCartShipping,
   createAndPurchaseShippingLabel,
@@ -25,11 +28,10 @@ function adminRedirect(
 }
 
 export async function POST(request: Request, context: LabelRouteContext) {
-  const requestOrigin = request.headers.get("origin");
-  if (
-    requestOrigin &&
-    new URL(requestOrigin).host !== new URL(request.url).host
-  ) {
+  if (!hasAdminAccess(request.headers)) {
+    return Response.json({ error: "Autenticação necessária." }, { status: 401 });
+  }
+  if (request.headers.get("origin") !== getRequestOrigin(request)) {
     return new Response("Origem inválida.", { status: 403 });
   }
 
@@ -85,16 +87,16 @@ export async function POST(request: Request, context: LabelRouteContext) {
           "O pedido não possui CPF do destinatário.",
         );
       }
+      const products = await getProductCatalog();
       const lines = items.map((item) => {
-        if (!isProductId(item.productId))
-          throw new Error("Produto do pedido não está mais no catálogo.");
         const product = products[item.productId];
-        if (!product.shippingPackage)
+        const shippingPackage: ShippingPackage | null = item.shippingPackageSnapshot ? JSON.parse(item.shippingPackageSnapshot) : product?.shippingPackage || null;
+        if (!shippingPackage)
           throw new Error(
             `Peso e medidas de ${item.productName} não estão configurados.`,
           );
         return {
-          package: product.shippingPackage,
+          package: shippingPackage,
           productId: item.productId,
           quantity: item.quantity,
           unitPriceCents: item.unitPriceCents,

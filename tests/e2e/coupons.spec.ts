@@ -1,3 +1,4 @@
+import { loginAdmin } from "./admin-login";
 import { createClient } from "@libsql/client";
 import { expect, test } from "@playwright/test";
 
@@ -5,6 +6,7 @@ test("admin creates, edits, searches and deletes a coupon", async ({
   page,
 }) => {
   const code = `E2E-${Date.now()}`;
+  await loginAdmin(page);
   await page.goto("/admin/descontos");
   const create = page
     .locator("section")
@@ -53,6 +55,7 @@ test("admin creates, edits, searches and deletes a coupon", async ({
 test("authenticated customer applies and removes a real coupon in checkout", async ({
   page,
 }) => {
+  await loginAdmin(page);
   const origin = "http://127.0.0.1:3108";
   const stamp = Date.now();
   const email = `coupon-${stamp}@example.com`;

@@ -1,3 +1,4 @@
+import { loginAdmin } from "./admin-login";
 import { expect, test } from "@playwright/test";
 import { executeLocalBusinessDiscoveryOnPage } from "../../src/integrations/browser/instagram-discovery";
 
@@ -11,7 +12,8 @@ test("campanha mostra motivo de encerramento e continuidade no histórico", asyn
     TURSO_AUTH_TOKEN: "",
     COMMERCIAL_DEMO_MODE: "true",
   });
-  await page.goto("/comercial/campanhas");
+  await loginAdmin(page);
+  await page.goto("/admin/campanhas");
   const { getCommercialDb } = await import("../../src/db/commercial");
   const schema = await import("../../db/schema");
   const db = await getCommercialDb();
@@ -43,7 +45,7 @@ test("campanha mostra motivo de encerramento e continuidade no histórico", asyn
         pendingBusinesses: 3,
       }),
     });
-  await page.goto(`/comercial/campanhas?id=${campaignId}&aba=historico`);
+  await page.goto(`/admin/campanhas?id=${campaignId}&aba=historico`);
   await expect(
     page.getByText("Meta de novos resultados atingida", { exact: true }),
   ).toBeVisible();
@@ -54,7 +56,7 @@ test("campanha mostra motivo de encerramento e continuidade no histórico", asyn
     path: "test-results/maps-search-history.png",
     fullPage: true,
   });
-  await page.goto(`/comercial/campanhas?id=${campaignId}`);
+  await page.goto(`/admin/campanhas?id=${campaignId}`);
   await expect(
     page.getByText("Meta de novos resultados atingida", { exact: true }),
   ).toBeVisible();

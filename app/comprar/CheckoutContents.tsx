@@ -4,17 +4,20 @@ import { useCart } from "../../lib/cart-store";
 import type { CartItem } from "../../lib/cart";
 import { EmptyCart } from "../carrinho/Cart";
 import CheckoutForm from "./CheckoutForm";
+import type { SavedAddress } from "../../lib/addresses/schema";
 export default function CheckoutContents({
   customer,
+  addresses,
   initialItem,
   invalidSelection,
 }: {
   customer: { name: string; email: string };
+  addresses: SavedAddress[];
   initialItem: CartItem | null;
   invalidSelection: boolean;
 }) {
   const cart = useCart();
-  if (invalidSelection)
+  if (invalidSelection || (!initialItem && cart.invalidItems.length > 0))
     return (
       <div className="rounded-3xl bg-white/70 p-8">
         <p>
@@ -34,8 +37,9 @@ export default function CheckoutContents({
   if (!items.length) return <EmptyCart />;
   return (
     <CheckoutForm
-      key={JSON.stringify(items)}
+      key={JSON.stringify([items, addresses])}
       customer={customer}
+      addresses={addresses}
       items={items}
       fromCart={!initialItem}
     />

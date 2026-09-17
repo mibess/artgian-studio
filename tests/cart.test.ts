@@ -5,7 +5,7 @@ import {
   cartSelections,
   checkoutItems,
   parseCart,
-} from "../lib/cart";
+} from "./fixtures/catalog";
 import { safeReturnTo } from "../lib/auth-redirect";
 const item = {
   productId: "organizador-arco",

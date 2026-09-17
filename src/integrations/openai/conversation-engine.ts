@@ -1,3 +1,4 @@
+import { getProductRecords, productConversationContext } from "../../../lib/products/repository";
 import OpenAI from "openai";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -167,6 +168,7 @@ export async function generateCommercialDecision(
 
   try {
     const business = await getBusinessConfig();
+    const availableProducts = (await getProductRecords()).filter(p => p.active).map(productConversationContext);
     const client = new OpenAI({ apiKey, timeout: 12_000, maxRetries: 1 });
     const completion = await client.chat.completions.create({
       model,
@@ -195,7 +197,7 @@ export async function generateCommercialDecision(
       messages: [
         {
           role: "system",
-          content: `${NATURAL_CONVERSATION_GUIDELINES} Tom da marca: ${business.brand.voice}. Use estes itens somente como fatos, sem copiar a linguagem institucional: ${business.verifiedClaims.join(" | ")}. Descubra a intenção por trás do produto. Nunca invente preço, prazo, frete, material, viabilidade, desconto ou garantia. Na dúvida, escale para uma pessoa.`,
+          content: `${NATURAL_CONVERSATION_GUIDELINES} Tom da marca: ${business.brand.voice}. Use estes itens somente como fatos, sem copiar a linguagem institucional: ${business.verifiedClaims.join(" | ")}. Descubra a intenção por trás do produto. O campo catalog contém produtos reais disponíveis para apresentar e comparar; o campo product contém os detalhes comerciais do produto identificado na conversa. Consulte a pessoa quando houver mais de uma opção possível. Nunca invente preço, prazo, frete, material, viabilidade, desconto ou garantia. Na dúvida, escale para uma pessoa.`,
         },
         {
           role: "user",
@@ -206,6 +208,7 @@ export async function generateCommercialDecision(
               body: message.body.slice(0, 1_000),
             })),
             product: context.product || null,
+            catalog: availableProducts.slice(0, 30).map(p => ({ id: p.id, name: p.name, description: p.description, url: p.url })),
           }),
         },
       ],

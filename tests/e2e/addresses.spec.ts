@@ -1,0 +1,140 @@
+import { readFile } from "node:fs/promises";
+import { expect, test, type Page } from "@playwright/test";
+
+async function login(page: Page) {
+  await page.route("**/api/addresses/lookup?*", route => route.fulfill({ status: 503, json: { error: "Consulta de CEP indisponível. Preencha o endereço manualmente." } }));
+  const email = `address-e2e-${Date.now()}@example.com`;
+  const credentials = { email, password: "AddressTest!12345", name: "Cliente Endereços" };
+  const signup = await page.request.post("/api/auth/sign-up/email", { data: credentials });
+  expect(signup.ok()).toBe(true);
+  let url = "";
+  await expect.poll(async () => {
+    const lines = await readFile("data/e2e-auth-emails.jsonl", "utf8").catch(() => "");
+    url = lines.trim().split("\n").filter(Boolean).map(line => JSON.parse(line)).findLast(mail => mail.to === email && mail.kind === "verification")?.url || "";
+    return Boolean(url);
+  }).toBe(true);
+  await page.request.get(url);
+  await page.goto("/login");
+  await page.getByLabel("E-mail", { exact: true }).fill(email);
+  await page.getByLabel("Senha", { exact: true }).fill(credentials.password);
+  await page.getByRole("button", { name: "Entrar na minha conta", exact: true }).click();
+  await expect(page).toHaveURL(/\/conta$/);
+}
+test("CEP fills account and checkout addresses, keeps manual edits and handles errors", async ({ page }) => {
+  await login(page);
+  await page.unroute("**/api/addresses/lookup?*");
+  let releaseLookup!: () => void;
+  const delayedLookup = new Promise<void>(resolve => { releaseLookup = resolve; });
+  await page.route("**/api/addresses/lookup?*", async route => {
+    const cep = new URL(route.request().url()).searchParams.get("cep");
+    if (cep === "99999999") return route.fulfill({ status: 404, json: { error: "CEP não encontrado. Preencha o endereço manualmente." } });
+    if (cep === "88888888") return route.fulfill({ status: 503, json: { error: "Consulta de CEP indisponível. Preencha o endereço manualmente." } });
+    if (cep === "01310100") await delayedLookup;
+    await route.fulfill({ json: { address: { streetAddress: "Praça da Sé", neighborhood: "Sé", city: "São Paulo", state: "SP" } } });
+  });
+  await page.getByRole("button", { name: "Cadastrar endereço" }).click();
+  await page.getByLabel("Número", { exact: true }).fill("42");
+  await page.getByLabel("Complemento", { exact: true }).fill("Apto 5");
+  await page.getByLabel("CEP", { exact: true }).fill("01001000");
+  await expect(page.getByLabel("Endereço", { exact: true })).toHaveValue("Praça da Sé");
+  await expect(page.getByLabel("Bairro", { exact: true })).toHaveValue("Sé");
+  await expect(page.getByLabel("Cidade", { exact: true })).toHaveValue("São Paulo");
+  await expect(page.getByLabel("UF", { exact: true })).toHaveValue("SP");
+  await expect(page.getByLabel("Número", { exact: true })).toHaveValue("42");
+  await expect(page.getByLabel("Complemento", { exact: true })).toHaveValue("Apto 5");
+  await page.getByLabel("CEP", { exact: true }).fill("01310100");
+  await expect(page.getByRole("status")).toContainText("Buscando endereço");
+  await page.getByLabel("Endereço", { exact: true }).fill("Endereço corrigido");
+  releaseLookup();
+  await expect(page.getByRole("status")).toContainText("Endereço localizado");
+  await expect(page.getByLabel("Endereço", { exact: true })).toHaveValue("Endereço corrigido");
+  await page.getByLabel("CEP", { exact: true }).fill("99999999");
+  await expect(page.getByRole("status")).toContainText("CEP não encontrado");
+  await expect(page.getByLabel("Endereço", { exact: true })).toHaveValue("Endereço corrigido");
+  await page.getByLabel("CEP", { exact: true }).fill("88888888");
+  await expect(page.getByRole("status")).toContainText("indisponível");
+  await page.goto("/comprar?produto=organizador-arco&cor=rosa-marfim&quantidade=1");
+  await page.getByLabel("CEP", { exact: true }).fill("01001000");
+  await expect(page.getByLabel("Endereço", { exact: true })).toHaveValue("Praça da Sé");
+  await expect(page.getByLabel("Cidade", { exact: true })).toHaveValue("São Paulo");
+  await expect(page.getByLabel("Número", { exact: true })).toHaveValue("");
+});
+async function fillAddress(page: Page, label: string, number: string, postalCode = "01001000") {
+  await page.getByLabel("Identificação (opcional)").fill(label);
+  await page.getByLabel("CEP", { exact: true }).fill(postalCode);
+  await page.getByLabel("Endereço", { exact: true }).fill("Praça da Sé");
+  await page.getByLabel("Número", { exact: true }).fill(number);
+  await page.getByLabel("Complemento", { exact: true }).fill("Apto 12");
+  await page.getByLabel("Bairro", { exact: true }).fill("Sé");
+  await page.getByLabel("Cidade", { exact: true }).fill("São Paulo");
+  await page.getByLabel("UF", { exact: true }).selectOption("SP");
+}
+
+test("manage multiple addresses and use them in checkout on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await login(page);
+  await page.goto("/conta");
+  const book = page.getByRole("region", { name: "Seus endereços" });
+  await expect(book.getByText("Você ainda não tem endereços salvos.", { exact: false })).toBeVisible();
+  await book.getByRole("button", { name: "Cadastrar endereço" }).click();
+  await fillAddress(page, "Casa", "1");
+  await page.getByRole("button", { name: "Salvar endereço", exact: true }).click();
+  const casa = book.getByRole("article").filter({ has: page.getByRole("heading", { name: "Casa", exact: true }) });
+  await expect(casa.getByText("Padrão", { exact: true })).toBeVisible();
+  await book.getByRole("button", { name: "Cadastrar endereço" }).click();
+  await fillAddress(page, "Trabalho", "2", "01310100");
+  await page.getByRole("button", { name: "Salvar endereço", exact: true }).click();
+  const work = book.getByRole("article").filter({ has: page.getByRole("heading", { name: "Trabalho", exact: true }) });
+  await expect(work.getByRole("button", { name: "Tornar padrão" })).toBeVisible();
+  await work.getByRole("button", { name: "Tornar padrão" }).click();
+  await expect(work.getByText("Padrão", { exact: true })).toBeVisible();
+  await work.getByRole("button", { name: "Editar", exact: true }).click();
+  await page.getByLabel("Número", { exact: true }).fill("22");
+  await page.getByRole("button", { name: "Salvar endereço", exact: true }).click();
+  await expect(work).toContainText("Praça da Sé, 22");
+  await page.reload();
+  await expect(work.getByText("Padrão", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: "screenshots/addresses-account-mobile.png", fullPage: true });
+
+  await page.route("**/api/shipping/quote", async route => {
+    const body = route.request().postDataJSON();
+    await route.fulfill({ json: { postalCode: body.postalCode, options: [{ serviceId: "1", serviceName: "PAC", companyId: "1", companyName: "Correios", priceCents: 1500, deliveryTimeDays: 5 }] } });
+  });
+  await page.goto("/comprar?produto=organizador-arco&cor=rosa-marfim&quantidade=1");
+  await expect(page.getByLabel("Endereço de entrega", { exact: true })).toContainText("Trabalho, 22");
+  await expect(page.getByLabel("Número", { exact: true })).toHaveValue("22");
+  await expect(page.getByLabel("CEP", { exact: true })).toHaveValue("01310-100");
+  await page.getByRole("button", { name: "Calcular entrega", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pagar com Mercado Pago" })).toBeEnabled();
+  const saved = await (await page.request.get("/api/addresses")).json();
+  const casaId = saved.addresses.find((address: { label: string }) => address.label === "Casa").id;
+  await page.getByLabel("Endereço de entrega", { exact: true }).selectOption(casaId);
+  await expect(page.getByLabel("CEP", { exact: true })).toHaveValue("01001-000");
+  await expect(page.getByRole("button", { name: "Calcule a entrega para continuar" })).toBeDisabled();
+  await page.getByLabel("Endereço de entrega", { exact: true }).selectOption("");
+  await expect(page.getByLabel("Endereço", { exact: true })).toHaveValue("");
+  await fillAddress(page, "Família", "3");
+  await expect(page.getByRole("checkbox", { name: /Salvar este endereço/ })).toBeChecked();
+  await page.getByLabel("Telefone", { exact: true }).fill("11999999999");
+  await page.getByLabel("CPF para emissão da etiqueta").fill("52998224725");
+  await page.getByRole("checkbox", { name: "Confirmo que os dados pessoais e de entrega estão corretos." }).check();
+  await page.getByRole("button", { name: "Calcular entrega", exact: true }).click();
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/api/checkout", async route => {
+    submitted = route.request().postDataJSON();
+    await route.fulfill({ status: 503, json: { error: "Pagamento simulado para teste." } });
+  });
+  await page.getByRole("button", { name: "Pagar com Mercado Pago" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Pagamento simulado" })).toBeVisible();
+  expect(submitted).toMatchObject({ saveAddress: true, streetAddress: "Praça da Sé", addressNumber: "3", label: "Família" });
+  expect(submitted).not.toHaveProperty("addressId");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: "screenshots/addresses-checkout-mobile.png", fullPage: true });
+
+  await page.goto("/conta");
+  await work.getByRole("button", { name: "Excluir", exact: true }).click();
+  await work.getByRole("button", { name: "Confirmar exclusão" }).click();
+  await expect(work).toHaveCount(0);
+  await expect(casa.getByText("Padrão", { exact: true })).toBeVisible();
+});

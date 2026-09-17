@@ -1,82 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getPublicProductCatalog } from "../../lib/products/repository";
+import { formatBrl } from "../../lib/catalog";
 import BrandHeader from "../components/BrandHeader";
 
 export const metadata: Metadata = {
   title: "Produtos | Artgian Studio",
+  alternates: { canonical: "/produtos" },
   description:
     "Conheça as criações em destaque da Artgian Studio, produzidas sob encomenda em impressão 3D.",
 };
 
-const products = [
-  {
-    number: "01",
-    category: "Casa",
-    name: "Bandeja Aurora",
-    description:
-      "Uma pequena escultura útil para organizar e compor aparadores, mesas e penteadeiras.",
-    price: "R$ 29,90",
-    image: "/bandeja-aurora-capa.png",
-    alt: "Bandeja Aurora em tom areia",
-    href: "/bandeja-aurora",
-    accent: "#b66f56",
-    feature: "4 cores",
-  },
-  {
-    number: "02",
-    category: "Organização",
-    name: "Organizador Arco",
-    description:
-      "Quatro gavetas, dois nichos e uma silhueta delicada para deixar tudo em seu lugar.",
-    price: "R$ 54,90",
-    image: "/organizador-arco-capa.png",
-    alt: "Organizador Arco rosa com gavetas em marfim",
-    href: "/organizador-arco",
-    accent: "#c55270",
-    feature: "3 combinações",
-  },
-  {
-    number: "03",
-    category: "Música",
-    name: "Porta-Palhetas Solo",
-    description:
-      "Sua seleção de palhetas organizada em uma peça escultural que leva seu nome.",
-    price: "R$ 29,90",
-    image: "/porta-palhetas-solo-capa.png",
-    alt: "Porta-Palhetas Solo personalizado com o texto Seu Nome",
-    href: "/porta-palhetas-solo",
-    accent: "#c96f47",
-    feature: "Personalizável",
-  },
-  {
-    number: "04",
-    category: "Bem-estar",
-    name: "Porta-Incenso Samurai",
-    description:
-      "Um samurai em posição de combate sustenta o incenso enquanto a bandeja recolhe as cinzas.",
-    price: "R$ 17,90",
-    image: "/porta-incenso-samurai-capa.png",
-    alt: "Porta-Incenso Samurai preto com bandeja coletora",
-    href: "/porta-incenso-samurai",
-    accent: "#9a653f",
-    feature: "Peça escultural",
-  },
-  {
-    number: "05",
-    category: "Mobilidade",
-    name: "Suporte Pocket",
-    description:
-      "Um apoio articulado que abre para o uso e fecha para acompanhar você sem ocupar espaço.",
-    price: "R$ 5,99",
-    image: "/suporte-pocket-capa.png",
-    alt: "Suporte Pocket preto nas posições aberta e fechada",
-    href: "/suporte-pocket",
-    accent: "#a87927",
-    feature: "3 cores",
-  },
-];
-
-export default function ProductsPage() {
+export default async function ProductsPage() {
+  const products = Object.values(await getPublicProductCatalog()).filter(p => p.listed).map((p,i) => ({...p,number:String(i+1).padStart(2,"0"),accent:p.presentation.accent,feature:p.customizable?"Personalizável":`${p.variants.length} opções`,price:p.pricingType==="quote"?"Sob orçamento":`${p.pricingType==="from"?"A partir de ":""}${formatBrl(p.pricingType==="from"?p.priceFromCents||0:p.basePriceCents||0)}`}));
   return (
     <main className="min-h-screen overflow-hidden bg-[#f7f3ea] text-[#0b2447]">
       <section className="relative overflow-hidden bg-[#0b2447] pb-28 text-[#f7f3ea]">

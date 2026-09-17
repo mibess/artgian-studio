@@ -1,3 +1,4 @@
+import { getProductCatalog } from "../../../../lib/products/repository";
 import { checkoutItems } from "../../../../lib/cart";
 import {
   normalizePostalCode,
@@ -29,10 +30,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const items = checkoutItems(payload);
+    const catalog = await getProductCatalog();
+    const items = checkoutItems(payload, catalog);
     if (!items?.length)
       return Response.json({ error: "Carrinho inválido." }, { status: 400 });
-    const quote = await quoteCartShipping(items, postalCode);
+    const quote = await quoteCartShipping(items, postalCode, catalog);
 
     return Response.json(
       {

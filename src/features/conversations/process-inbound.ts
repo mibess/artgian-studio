@@ -1,8 +1,8 @@
+import { findConversationProduct, productConversationContext } from "../../../lib/products/repository";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   auditLogs,
   briefings,
-  catalogProducts,
   commercialOrders,
   conversations,
   exceptions,
@@ -36,7 +36,10 @@ export type InboundMessage = {
   forceHumanReview?: boolean;
 };
 
-function stageForIntent(intent: ReturnType<typeof classifyIntent>, leadType?: string) {
+function stageForIntent(
+  intent: ReturnType<typeof classifyIntent>,
+  leadType?: string,
+) {
   if (intent === "opt_out" || intent === "not_interested") return "closed";
   if (leadType === "partner") {
     if (intent === "partnership_interest" || intent === "wants_whatsapp") {
@@ -48,7 +51,17 @@ function stageForIntent(intent: ReturnType<typeof classifyIntent>, leadType?: st
   if (intent === "ready_to_order") return "order_pending";
   if (intent === "wants_whatsapp") return "requirements_collection";
   if (intent === "wants_quote") return "quote_requested";
-  if (["asked_price", "asked_customization", "asked_product", "sent_reference", "asked_deadline", "asked_shipping"].includes(intent)) return "requirements_collection";
+  if (
+    [
+      "asked_price",
+      "asked_customization",
+      "asked_product",
+      "sent_reference",
+      "asked_deadline",
+      "asked_shipping",
+    ].includes(intent)
+  )
+    return "requirements_collection";
   return "replied";
 }
 
@@ -93,13 +106,12 @@ export async function processInboundMessage(input: InboundMessage) {
     .from(commercialOrders)
     .where(eq(commercialOrders.source, source));
   const intent = classifyIntent(input.text);
-  const catalog = await db.select().from(catalogProducts).where(eq(catalogProducts.active, true));
-  const normalizedMessage = input.text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
-  const matchedProduct = catalog.find((product) => normalizedMessage.includes(product.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR")));
-  const catalogTruth = evaluateCatalogTruth(matchedProduct || null);
+  const matchedProduct = await findConversationProduct(input.text);
+  const catalogTruth = evaluateCatalogTruth(matchedProduct ? productConversationContext(matchedProduct) : null);
   let decision = decideNextAction(intent);
   if (intent === "asked_price" && matchedProduct && !catalogTruth.needsQuote) {
-    const priceCents = matchedProduct.basePriceCents ?? matchedProduct.priceFromCents;
+    const priceCents =
+      matchedProduct.basePriceCents ?? matchedProduct.priceFromCents;
     const prefix = matchedProduct.basePriceCents == null ? "a partir de " : "";
     decision = {
       intent,
@@ -129,8 +141,13 @@ export async function processInboundMessage(input: InboundMessage) {
   const pipelineStage = doNotContact
     ? "closed"
     : stageForIntent(intent, knownLead?.leadType);
-  const requiresHuman = Boolean(input.forceHumanReview) || decision.requiresHuman || intent === "business_opportunity" || intent === "partnership_interest";
-  const draftMessageId = !doNotContact && intent !== "not_interested" ? crypto.randomUUID() : null;
+  const requiresHuman =
+    Boolean(input.forceHumanReview) ||
+    decision.requiresHuman ||
+    intent === "business_opportunity" ||
+    intent === "partnership_interest";
+  const draftMessageId =
+    !doNotContact && intent !== "not_interested" ? crypto.randomUUID() : null;
 
   const response = await db.transaction(async (tx) => {
     await tx
@@ -139,7 +156,10 @@ export async function processInboundMessage(input: InboundMessage) {
         id: leadId,
         instagramUsername: username,
         name: input.name,
-        leadType: intent === "business_opportunity" || intent === "partnership_interest" ? "business" : "consumer",
+        leadType:
+          intent === "business_opportunity" || intent === "partnership_interest"
+            ? "business"
+            : "consumer",
         source,
         productInterest: matchedProduct?.name,
         score: score.total,
@@ -149,7 +169,11 @@ export async function processInboundMessage(input: InboundMessage) {
         commercialPotentialScore: score.commercialPotentialScore,
         urgencyScore: score.urgencyScore,
         pipelineStage,
-        channelState: doNotContact ? "do_not_contact" : requiresHuman ? "human_review_required" : "api_active",
+        channelState: doNotContact
+          ? "do_not_contact"
+          : requiresHuman
+            ? "human_review_required"
+            : "api_active",
         doNotContact,
         lastContactAt: now,
         createdAt: now,
@@ -167,7 +191,11 @@ export async function processInboundMessage(input: InboundMessage) {
           commercialPotentialScore: score.commercialPotentialScore,
           urgencyScore: score.urgencyScore,
           pipelineStage,
-          channelState: doNotContact ? "do_not_contact" : requiresHuman ? "human_review_required" : "api_active",
+          channelState: doNotContact
+            ? "do_not_contact"
+            : requiresHuman
+              ? "human_review_required"
+              : "api_active",
           doNotContact,
           lastContactAt: now,
           updatedAt: now,
@@ -193,7 +221,8 @@ export async function processInboundMessage(input: InboundMessage) {
       )
       .limit(1);
     let conversation = existingConversations[0];
-    const isDirectMessage = !input.externalConversationId?.startsWith("comment:");
+    const isDirectMessage =
+      !input.externalConversationId?.startsWith("comment:");
     let browserHandoff = false;
     if (!conversation && isDirectMessage) {
       const [browserConversation] = await tx
@@ -362,7 +391,10 @@ export async function processInboundMessage(input: InboundMessage) {
       });
     }
 
-    if (Object.keys(extracted).length > 0 || ["asked_price", "wants_quote", "sent_reference"].includes(intent)) {
+    if (
+      Object.keys(extracted).length > 0 ||
+      ["asked_price", "wants_quote", "sent_reference"].includes(intent)
+    ) {
       await tx
         .insert(briefings)
         .values({
@@ -397,22 +429,39 @@ export async function processInboundMessage(input: InboundMessage) {
         type: "inbound_message",
         title: `Mensagem classificada como ${intent}`,
         description: decision.reason,
-        metadata: JSON.stringify({ action: decision.action, score: score.total, catalogProductId: matchedProduct?.id || null }),
+        metadata: JSON.stringify({
+          action: decision.action,
+          score: score.total,
+          catalogProductId: matchedProduct?.id || null,
+        }),
         createdAt: now,
       },
       ...(browserHandoff
-        ? [{
-            id: crypto.randomUUID(),
-            leadId: lead.id,
-            type: "channel_handoff",
-            title: "Conversa assumida pela API oficial",
-            description: "A resposta ao primeiro contato foi recebida pelo webhook; o navegador não responde mais este fio.",
-            metadata: JSON.stringify({ from: "browser", to: "api" }),
-            createdAt: now,
-          }]
+        ? [
+            {
+              id: crypto.randomUUID(),
+              leadId: lead.id,
+              type: "channel_handoff",
+              title: "Conversa assumida pela API oficial",
+              description:
+                "A resposta ao primeiro contato foi recebida pelo webhook; o navegador não responde mais este fio.",
+              metadata: JSON.stringify({ from: "browser", to: "api" }),
+              createdAt: now,
+            },
+          ]
         : []),
       ...(doNotContact
-        ? [{ id: crypto.randomUUID(), leadId: lead.id, type: "opt_out", title: "Contato bloqueado permanentemente", description: "Pedido de opt-out reconhecido na mensagem.", metadata: "{}", createdAt: now }]
+        ? [
+            {
+              id: crypto.randomUUID(),
+              leadId: lead.id,
+              type: "opt_out",
+              title: "Contato bloqueado permanentemente",
+              description: "Pedido de opt-out reconhecido na mensagem.",
+              metadata: "{}",
+              createdAt: now,
+            },
+          ]
         : []),
     ]);
 
@@ -432,8 +481,16 @@ export async function processInboundMessage(input: InboundMessage) {
     if (!doNotContact && intent !== "not_interested") {
       await tx.insert(jobs).values({
         id: crypto.randomUUID(),
-        type: decision.action === "prepare_briefing" ? "prepare_briefing" : "generate_reply",
-        payload: JSON.stringify({ leadId: lead.id, conversationId: activeConversationId, suggestedMessage: decision.message, draftMessageId }),
+        type:
+          decision.action === "prepare_briefing"
+            ? "prepare_briefing"
+            : "generate_reply",
+        payload: JSON.stringify({
+          leadId: lead.id,
+          conversationId: activeConversationId,
+          suggestedMessage: decision.message,
+          draftMessageId,
+        }),
         status: "waiting_review",
         maxAttempts: 3,
         scheduledAt: now,
@@ -455,7 +512,14 @@ export async function processInboundMessage(input: InboundMessage) {
       doNotContact,
       requiresHuman,
     };
-    await tx.insert(idempotencyKeys).values({ key: idempotencyKey, scope: "instagram_inbound", response: JSON.stringify(result), createdAt: now });
+    await tx
+      .insert(idempotencyKeys)
+      .values({
+        key: idempotencyKey,
+        scope: "instagram_inbound",
+        response: JSON.stringify(result),
+        createdAt: now,
+      });
     return result;
   });
 

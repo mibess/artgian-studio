@@ -113,6 +113,20 @@
       "when": 1789072995027,
       "tag": "0015_gray_manta",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1789442040067,
+      "tag": "0016_volatile_namor",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1789657476311,
+      "tag": "0017_gorgeous_talon",
+      "breakpoints": true
     }
   ]
 }

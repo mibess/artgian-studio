@@ -35,9 +35,10 @@ export default function Cart() {
         Carregando seu carrinho…
       </p>
     );
-  if (!cart.items.length) return <EmptyCart />;
+  if (!cart.items.length && !cart.invalidItems.length) return <EmptyCart />;
   return (
     <>
+      {cart.invalidItems.length > 0 && <div role="alert" className="mt-6 rounded-2xl bg-amber-50 p-5 text-sm text-amber-900"><p>Algumas opções mudaram ou estão indisponíveis. Remova-as e escolha novamente antes de comprar.</p>{cart.invalidItems.map(item => <div className="mt-3 flex items-center justify-between gap-4" key={cartItemKey(item)}><span>{item.productId} · {item.color}</span><button className="underline" onClick={() => cart.remove(cartItemKey(item))}>Remover opção indisponível</button></div>)}</div>}
       {!cart.storageAvailable && (
         <p role="alert" className="mt-5 text-sm">
           Seu navegador não permite salvar o carrinho. Mantenha esta aba aberta

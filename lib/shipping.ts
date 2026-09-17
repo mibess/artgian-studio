@@ -1,5 +1,6 @@
+import { getProductCatalog } from "./products/repository";
 import { cartSelections, type CartItem } from "./cart";
-import { getProductSelection } from "./catalog";
+import { getProductSelection, type ProductCatalog } from "./catalog";
 import {
   calculateCartShipping as calculateMelhorEnvioCartShipping,
   createAndPurchaseSandboxLabel,
@@ -98,7 +99,7 @@ export async function quoteProductShipping(input: {
   personalization?: string;
   destinationPostalCode: string;
 }) {
-  const selection = getProductSelection(input);
+  const selection = getProductSelection(input, await getProductCatalog());
   if (!selection) return null;
 
   if (!selection.product.shippingPackage) {
@@ -129,8 +130,10 @@ export async function quoteProductShipping(input: {
 export async function quoteCartShipping(
   items: CartItem[],
   destinationPostalCode: string,
+  catalog?: ProductCatalog,
 ) {
-  const selections = cartSelections(items);
+  const selections = cartSelections(items, catalog ?? await getProductCatalog());
+  if (selections.some(item => !item)) throw new ShippingConfigurationError("Há produtos indisponíveis no carrinho.");
   const lines = selections.map((selection) => {
     if (!selection.product.shippingPackage)
       throw new ShippingConfigurationError(

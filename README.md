@@ -3,9 +3,14 @@
 Loja da Artgian Studio desenvolvida com Next.js (App Router), React e
 TypeScript.
 
-O projeto também inclui o **Artgian Comercial**, um assistente local em
-`/comercial` para leads, conversas inbound, briefings, orçamentos, catálogo,
-jobs e métricas. Consulte [SETUP.md](./SETUP.md) para a operação completa.
+O projeto também inclui o **Admin Artgian** em `/admin`, com o dashboard
+comercial, leads, conversas inbound, briefings, orçamentos, catálogo, jobs,
+métricas, pedidos e etiquetas da loja e descontos no mesmo menu.
+Entre por `/admin/login` com `ADMIN_USERNAME` e `ADMIN_PASSWORD` do ambiente.
+A sessão dura 12 horas e pode ser encerrada em **Sair do admin**. Alterar as
+credenciais invalida as sessões existentes. Os antigos links `/comercial`
+redirecionam para o admin; pedidos comerciais ficam em `/admin/pedidos-comerciais`.
+Consulte [SETUP.md](./SETUP.md) para a operação completa.
 
 ## Requisitos
 
@@ -196,7 +201,7 @@ Antes de testar pedidos, aplique também a migração mais recente da pasta
 ### Etiquetas
 
 A compra e a geração manual de etiquetas ficam em `/admin/pedidos`. Essa área
-usa autenticação HTTP Basic e exige `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
+usa a mesma sessão iniciada em `/admin/login` com `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
 
 Os dados privados do remetente são lidos das variáveis `*_SENDER_*`
 documentadas em `.env.example`. CPF e telefone devem conter apenas números. O
@@ -216,6 +221,22 @@ clique explícito do administrador.
 
 O projeto pode ser publicado como uma aplicação Next.js na Vercel. O arquivo
 `vercel.json` mantém a detecção explícita do framework.
+
+### Indexação no Google
+
+O domínio público usado nos metadados é `https://www.artgian.com.br`, definido
+em `lib/site-url.ts`. `/robots.txt` permite o rastreamento da loja e aponta para
+`/sitemap.xml`. O sitemap consulta o catálogo a cada requisição e inclui a página
+inicial, `/produtos` e os produtos ativos e listados, sem páginas de conta ou
+checkout. Login, conta, carrinho e checkout possuem `noindex`; as áreas
+administrativas mantêm sua autenticação e ficam fora do rastreamento.
+
+No Google Search Console, verifique a propriedade usando a conta Google
+responsável pelo site e envie `https://www.artgian.com.br/sitemap.xml`. A
+inspeção de URL permite solicitar a indexação da página inicial. O envio não
+garante inclusão imediata nas buscas; acompanhe o relatório de indexação.
+Mantenha `verification.google` em `app/layout.tsx`: essa metatag pública
+comprova a propriedade no Search Console e deve permanecer após a verificação.
 
 ## Carrinho e contas de clientes
 
@@ -238,8 +259,33 @@ A autenticação usa Better Auth, com cadastro por e-mail e senha, sessões em
 cookies HttpOnly e limite de tentativas persistido no banco. As senhas são
 armazenadas em hash. `/conta` exige sessão validada no servidor e mostra apenas
 pedidos associados ao ID do cliente durante o checkout. Pedidos como visitante
-não são vinculados por coincidência de e-mail. É possível comprar sem login.
+não são vinculados por coincidência de e-mail. O checkout exige login.
 O acesso administrativo continua usando sua autenticação separada.
+
+### Endereços do cliente
+
+`/conta` permite cadastrar até 20 endereços, editar, excluir e escolher o padrão.
+O primeiro endereço salvo é o padrão inicial; excluir o padrão promove o mais
+antigo restante. Cada operação é restrita ao usuário autenticado. A tabela tem
+índices únicos para impedir duplicatas e mais de um padrão por conta, com
+transações para alterações e repetição limitada em caso de disputa de escrita.
+
+O checkout preenche o endereço padrão e permite selecionar outro ou usar um
+novo. A opção de salvar um novo endereço vem marcada e pode ser desmarcada para
+uma entrega avulsa. O endereço é salvo após validar os dados e confirmar o frete,
+antes de iniciar o pagamento; tentativas repetidas reutilizam o cadastro.
+Trocar o endereço invalida a cotação. Alterações em outra aba exigem nova revisão.
+Pedidos guardam sua própria cópia do endereço e não mudam quando o cadastro é
+editado ou excluído. Endereços de pedidos antigos não são importados automaticamente.
+
+Antes de publicar esse recurso, aplique a migração aditiva
+`drizzle/0017_gorgeous_talon.sql` no banco de produção. Ela cria apenas a tabela
+`customer_addresses` e seus índices. O script `scripts/migrate-customer-addresses.mjs`
+verifica a migração anterior e o hash, e aceita `--env=/caminho/seguro.env` para
+verificação ou o argumento adicional `--apply` para executar. Em um build de
+produção, `--runtime-env` usa as credenciais já configuradas na plataforma, sem
+exportá-las para a máquina local. A migração verifica o hash anterior e preserva
+as contagens de clientes e pedidos dentro da mesma transação.
 
 ### Ativar a autenticação
 
@@ -313,3 +359,52 @@ gera recompensas de 5%, 10%, 20% ou 30% válidas por 30 minutos, com chances
 decrescentes de 40%, 30%, 20% e 10%, respectivamente. Consulte
 [Cupons e integração do jogo](./docs/cupons-jogo.md) para configuração,
 migração, contrato HTTP, `curl`, regras de pagamento e prompt para o jogo.
+
+## Preenchimento por CEP
+
+Ao digitar os 8 dígitos de um novo CEP no checkout ou no cadastro de endereços,
+o formulário consulta o ViaCEP gratuitamente, sem credenciais, e preenche rua,
+bairro, cidade e UF. Número, complemento e identificação não são alterados.
+Os campos continuam editáveis; CEPs gerais podem exigir rua e bairro manuais.
+Falhas e CEPs inexistentes mostram um aviso sem impedir o preenchimento manual.
+A rota `/api/addresses/lookup?cep=01001000` valida a entrada, limita a espera
+ao provedor a 5 segundos e reutiliza consultas em cache. Respostas de CEPs
+anteriores são descartadas. Campos editados durante a busca são preservados.
+
+## Cadastro único de produtos
+
+`/admin/produtos` mantém a fonte comum de dados da vitrine, páginas de produto,
+carrinho, checkout, frete, etiquetas e atendimento. O cadastro é persistido em
+`catalog_products`; `lib/products/repository.ts` entrega os dados públicos e o
+contexto comercial, sem depender de uma lista fixa no código.
+
+- **Dados e venda:** preço fixo, inicial ou sob orçamento, disponibilidade,
+  presença na vitrine/home, limites de quantidade e embalagem de envio.
+- **Variantes:** cores/combinações, imagens, preços por opção e regras de texto
+  personalizado. As opções são validadas também no servidor.
+- **Página e imagens:** modelo visual, cores, galeria, textos, benefícios,
+  especificações, seções adicionais, SEO e link de orçamento. Imagens aceitam
+  caminhos existentes da loja ou URLs HTTPS; preços desenhados dentro de uma
+  imagem precisam ser atualizados na própria arte.
+- **Atendimento:** nomes alternativos, materiais e características verificadas.
+  A IA consulta a mesma base, respeita produtos arquivados e pede esclarecimento
+  quando a mensagem pode corresponder a mais de um produto.
+
+Os seis endereços originais continuam funcionando com seus modelos visuais.
+Novos produtos recebem `/produtos/<endereço>`, sem criar arquivos de página e
+sem novo deploy. IDs e endereços publicados permanecem estáveis. O arquivamento
+preserva pedidos, nomes/preços contratados e o conteúdo de carrinhos existentes;
+opções indisponíveis precisam ser removidas antes de concluir uma compra.
+
+A migração `0016_volatile_namor.sql` adiciona os campos, consolida os seis produtos
+originais e registra a embalagem conhecida nos pedidos antigos. Novos pedidos
+salvam sua própria embalagem, além do nome, preço e personalização já existentes.
+O checkout recalcula o valor no servidor e pede revisão se o subtotal exibido
+mudou antes do pagamento. Não há sincronização periódica entre dois catálogos.
+A cópia inicial em `tests/fixtures/initial-products.json` é apenas uma fixture de
+testes; não é carregada pela aplicação.
+
+Antes de publicar esta versão, aplique a migração aditiva ao mesmo banco Turso
+usado pela loja e mantenha backup de `catalog_products`. O worker deve executar a
+versão atual do código e acessar esse mesmo banco para aproveitar o contexto
+completo de produtos. Não é necessário reiniciar o worker a cada edição de produto.

@@ -23,7 +23,7 @@ import {
   systemSettings,
   timelineEvents,
 } from "../../db/schema";
-import { products as storeProducts } from "../../lib/catalog";
+import { getProductRecords } from "../../lib/products/repository";
 
 const DEMO_IDS = {
   mariana: "demo-lead-mariana",
@@ -46,41 +46,6 @@ const DEFAULT_SYSTEM_SETTINGS = [
   { key: "outbound_paused", value: "true" },
   { key: "followups_paused", value: "true" },
   { key: "auto_replies_paused", value: "true" },
-] as const;
-
-const STORE_CATALOG = [
-  {
-    id: "store-bandeja-aurora",
-    product: storeProducts["bandeja-aurora"],
-    category: "Casa e decoração",
-    description: "Bandeja decorativa para organizar e compor aparadores, mesas e penteadeiras.",
-    colors: ["Areia", "Preto", "Branco", "Rosa"],
-    customization: [] as string[],
-  },
-  {
-    id: "store-organizador-arco",
-    product: storeProducts["organizador-arco"],
-    category: "Organização",
-    description: "Organizador com quatro gavetas, dois nichos e combinações de cores disponíveis.",
-    colors: ["Rosa & Marfim", "Marrom & Branco", "Areia & Branco"],
-    customization: [] as string[],
-  },
-  {
-    id: "store-porta-palhetas-solo",
-    product: storeProducts["porta-palhetas-solo"],
-    category: "Música",
-    description: "Porta-palhetas personalizável com nome de até 18 caracteres.",
-    colors: ["Terracota", "Preto", "Branco"],
-    customization: ["Nome de até 18 caracteres"],
-  },
-  {
-    id: "store-suporte-pocket",
-    product: storeProducts["suporte-pocket"],
-    category: "Mobilidade",
-    description: "Suporte articulado compacto, disponível nas cores cadastradas na loja.",
-    colors: ["Preto", "Branco", "Rosa"],
-    customization: [] as string[],
-  },
 ] as const;
 
 async function getCommercialDatabaseConnection() {
@@ -142,7 +107,7 @@ async function seedDemoData() {
       { id: "cat-bandeja", name: "Bandeja Aurora", category: "Decoração", description: "Bandeja decorativa para organização de pequenos objetos.", basePriceCents: 8900, pricingType: "fixed", availableColors: JSON.stringify(["Branco", "Preto", "Rosa"]), active: true },
       { id: "cat-display", name: "Display para pequenos negócios", category: "Negócios", description: "Displays e peças de comunicação visual desenvolvidos sob demanda.", pricingType: "quote", customizationOptions: JSON.stringify(["modelo", "texto ou nome", "cores", "quantidade"]), active: true },
       { id: "cat-ideia", name: "Sua ideia em 3D", category: "Sob demanda", description: "Entrada para solicitações que ainda não possuem um produto cadastrado.", pricingType: "quote", active: true, notes: "Nunca confirmar viabilidade, preço ou prazo sem análise humana." },
-    ]);
+    ]).onConflictDoNothing();
 
     await tx.insert(quoteRequests).values([
       { id: "demo-quote-mariana", leadId: DEMO_IDS.mariana, briefingId: "demo-brief-mariana", status: "requested", notes: "Analisar referência e modelagem.", createdAt: isoOffset(0.2), updatedAt: isoOffset(0.2) },
@@ -204,42 +169,10 @@ async function ensureSystemSettings() {
     .onConflictDoNothing();
 }
 
-async function ensureStoreCatalog() {
-  if (process.env.NODE_ENV === "test") return;
-  const db = await getCommercialDatabaseConnection();
-  const now = new Date().toISOString();
-  await db
-    .insert(catalogProducts)
-    .values(
-      STORE_CATALOG.map((item) => ({
-        id: item.id,
-        name: item.product.name,
-        category: item.category,
-        description: item.description,
-        images: JSON.stringify([item.product.image]),
-        basePriceCents: item.product.unitPriceCents,
-        pricingType: "fixed",
-        availableColors: JSON.stringify(item.colors),
-        customizationOptions: JSON.stringify(item.customization),
-        productionTime: null,
-        active: true,
-        notes: "Sincronizado do catálogo público da loja. Prazo exige confirmação humana.",
-        verifiedClaims: JSON.stringify([
-          `Preço unitário publicado: ${item.product.unitPriceCents} centavos`,
-          item.description,
-        ]),
-        createdAt: now,
-        updatedAt: now,
-      })),
-    )
-    .onConflictDoNothing();
-}
-
 export async function getCommercialDb() {
   seedPromise ??= (async () => {
     await seedDemoData();
     await ensureSystemSettings();
-    await ensureStoreCatalog();
   })();
   await seedPromise;
   return getCommercialDatabaseConnection();
@@ -287,8 +220,7 @@ export async function getLeadDetail(id: string) {
 }
 
 export async function getCatalog() {
-  const db = await getCommercialDb();
-  return db.select().from(catalogProducts).orderBy(asc(catalogProducts.name));
+  return getProductRecords();
 }
 
 export async function getConversationsOverview() {

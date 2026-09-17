@@ -19,7 +19,7 @@ pnpm db:setup
 pnpm dev:all
 ```
 
-Acesse `http://localhost:3000/comercial`. A área administrativa usa o usuário e a senha definidos em `ADMIN_USERNAME` e `ADMIN_PASSWORD`.
+Acesse `http://localhost:3000/admin/login`. A área administrativa usa o usuário e a senha definidos em `ADMIN_USERNAME` e `ADMIN_PASSWORD`. O dashboard, comercial, pedidos e descontos compartilham o menu e a sessão de 12 horas; use **Sair do admin** para encerrar o acesso. Links antigos de `/comercial` redirecionam para `/admin`.
 
 O modo inicial inclui dados marcados como demonstração. Para começar vazio, defina `COMMERCIAL_DEMO_MODE=false` antes da primeira execução e use um banco novo.
 
@@ -195,7 +195,7 @@ O POST exige `X-Hub-Signature-256`. Eventos repetidos usam o ID externo como cha
   do `INSTAGRAM_APP_SECRET` ou, quando definida, de
   `INSTAGRAM_TOKEN_ENCRYPTION_KEY`.
 - A renovação é tentada quando a validade é desconhecida ou faltam 14 dias para
-  o vencimento. O painel em `/comercial/configuracoes` mostra o último estado,
+  o vencimento. O painel em `/admin/configuracoes` mostra o último estado,
   sincronização e erro sem revelar credenciais.
 - No plano Hobby, mantenha o cron em uma execução por dia. O webhook cobre o
   tempo real e o cron funciona como reconciliação de segurança.

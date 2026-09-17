@@ -63,7 +63,7 @@ describe("processamento inbound persistente", () => {
       import("../src/features/conversations/process-inbound"),
     ]);
     const db = await getCommercialDb();
-    await db.insert(catalogProducts).values({ id: "catalog-test-price", name: "Bandeja Aurora", category: "Decoração", basePriceCents: 8900, pricingType: "fixed", active: true });
+    await db.insert(catalogProducts).values({ id: "catalog-test-price", name: "Bandeja Aurora", category: "Decoração", basePriceCents: 8900, pricingType: "fixed", active: true }).onConflictDoUpdate({ target: catalogProducts.name, set: { basePriceCents: 8900 } });
     const result = await processInboundMessage({ externalMessageId: "external-price-verified", instagramUsername: "cliente.catalogo", text: "Quanto custa a Bandeja Aurora?" });
     expect(result.action).toBe("show_product");
     expect(result.suggestedMessage).toContain("R$ 89,00");

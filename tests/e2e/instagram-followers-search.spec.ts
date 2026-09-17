@@ -1,3 +1,4 @@
+import { loginAdmin } from "./admin-login";
 import { expect, test, type BrowserContext } from "@playwright/test";
 import { executeInstagramFollowersDiscoveryOnPage } from "../../src/integrations/browser/instagram-discovery";
 
@@ -99,7 +100,8 @@ test("histórico informa lista parcial sem confundi-la com todos os seguidores",
     TURSO_AUTH_TOKEN: "",
     COMMERCIAL_DEMO_MODE: "true",
   });
-  await page.goto("/comercial/campanhas");
+  await loginAdmin(page);
+  await page.goto("/admin/campanhas");
   const { getCommercialDb } = await import("../../src/db/commercial");
   const s = await import("../../db/schema");
   const db = await getCommercialDb();
@@ -138,7 +140,7 @@ test("histórico informa lista parcial sem confundi-la com todos os seguidores",
       reason: "Pontuação 10 abaixo do mínimo 30.",
     }),
   });
-  await page.goto(`/comercial/campanhas?id=${id}&aba=historico`);
+  await page.goto(`/admin/campanhas?id=${id}&aba=historico`);
   await page.getByText("Ver motivos e falhas de leitura").click();
   await expect(
     page.getByText(

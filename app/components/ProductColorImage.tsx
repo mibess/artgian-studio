@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+
+import { useProductCatalog } from "../../lib/products/context";
 
 type ProductColorImageProps = {
   product: string;
@@ -8,30 +10,6 @@ type ProductColorImageProps = {
   alt: string;
   initialColor: string;
   className?: string;
-};
-
-const imageSources: Record<string, Record<string, string>> = {
-  "bandeja-aurora": {
-    areia: "/bandeja-aurora-capa.png",
-    preto: "/bandeja-aurora-preto.png",
-    branco: "/bandeja-aurora-branco.png",
-    rosa: "/bandeja-aurora-rosa.png",
-  },
-  "organizador-arco": {
-    "rosa-marfim": "/organizador-arco-capa.png",
-    "marrom-branco": "/organizador-arco-marrom-branco.png",
-    "areia-branco": "/organizador-arco-areia-branco.png",
-  },
-  "porta-palhetas-solo": {
-    terracota: "/porta-palhetas-solo-capa.png",
-    preto: "/porta-palhetas-solo-preto.png",
-    branco: "/porta-palhetas-solo-branco.png",
-  },
-  "suporte-pocket": {
-    preto: "/suporte-pocket-capa.png",
-    branco: "/suporte-pocket-branco.png",
-    rosa: "/suporte-pocket-rosa.png",
-  },
 };
 
 const PRODUCT_COLOR_CHANGE_EVENT = "artgian:product-color-change";
@@ -51,13 +29,26 @@ export default function ProductColorImage({
   initialColor,
   className = "",
 }: ProductColorImageProps) {
+  const catalog = useProductCatalog();
+  const imageSources = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.values(catalog).map((p) => [
+          p.id,
+          Object.fromEntries(p.variants.map((v) => [v.key, v.image])),
+        ]),
+      ),
+    [catalog],
+  );
   const [color, setColor] = useState(initialColor);
 
   useEffect(() => {
-    Object.values(imageSources[product] ?? {}).forEach((source) => {
-      const image = new Image();
-      image.src = source;
-    });
+    Object.values(imageSources[product] ?? {})
+      .filter(Boolean)
+      .forEach((source) => {
+        const image = new Image();
+        image.src = source;
+      });
 
     function handleColorChange(event: Event) {
       const detail = (event as CustomEvent<{ product: string; color: string }>)
@@ -69,12 +60,12 @@ export default function ProductColorImage({
     window.addEventListener(PRODUCT_COLOR_CHANGE_EVENT, handleColorChange);
     return () =>
       window.removeEventListener(PRODUCT_COLOR_CHANGE_EVENT, handleColorChange);
-  }, [product]);
+  }, [product, imageSources]);
 
   return (
     <img
       className={className}
-      src={imageSources[product]?.[color] ?? src}
+      src={imageSources[product]?.[color] || src || undefined}
       alt={alt}
       data-product-color={color}
     />

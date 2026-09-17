@@ -1,3 +1,6 @@
+import { AddressError, getAddress, saveAddress } from "../../../lib/addresses/repository";
+import { addressSchema } from "../../../lib/addresses/schema";
+import { getProductCatalog } from "../../../lib/products/repository";
 import { requestOrigin } from "../../../lib/request-origin";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
@@ -22,6 +25,9 @@ import {
 } from "../../../lib/shipping";
 
 type CheckoutPayload = {
+  addressId?: unknown;
+  saveAddress?: unknown;
+  label?: string;
   items?: unknown;
   couponCode?: unknown;
   productId?: string;
@@ -41,6 +47,7 @@ type CheckoutPayload = {
   state?: string;
   shippingServiceId?: string;
   shippingPriceCents?: number;
+  expectedSubtotalCents?: number;
 };
 
 function clean(value: unknown, maxLength: number) {
@@ -80,29 +87,44 @@ export async function POST(request: Request) {
     const payload = (await request.json()) as CheckoutPayload;
     if (!payload || typeof payload !== "object")
       return Response.json({ error: "Pedido inválido." }, { status: 400 });
-    const items = checkoutItems(payload);
+    const catalog = await getProductCatalog();
+    const items = checkoutItems(payload, catalog);
     if (!items?.length) {
       return Response.json(
         { error: "Carrinho inválido. Confira os produtos e as quantidades." },
         { status: 400 },
       );
     }
-    const selections = cartSelections(items);
+    const selections = cartSelections(items, catalog);
     const subtotalCents = selections.reduce(
       (sum, selection) => sum + selection.subtotalCents,
       0,
     );
+
+    if (payload.expectedSubtotalCents !== undefined && payload.expectedSubtotalCents !== subtotalCents) {
+      return Response.json({ error: "O preço dos produtos mudou. Revise o total atualizado antes de pagar." }, { status: 409 });
+    }
     const customerName = clean(payload.customerName, 120);
     const customerEmail = session.user.email.trim().toLowerCase();
     const customerPhone = digitsOnly(payload.customerPhone, 11);
     const customerDocument = digitsOnly(payload.customerDocument, 11);
-    const postalCode = digitsOnly(payload.postalCode, 8);
-    const streetAddress = clean(payload.streetAddress, 180);
-    const addressNumber = clean(payload.addressNumber, 20);
-    const addressComplement = clean(payload.addressComplement, 80);
-    const neighborhood = clean(payload.neighborhood, 80);
-    const city = clean(payload.city, 80);
-    const state = clean(payload.state, 2).toUpperCase();
+    if ((payload.addressId !== undefined && (typeof payload.addressId !== "string" || !payload.addressId)) ||
+        (payload.saveAddress !== undefined && typeof payload.saveAddress !== "boolean")) {
+      return Response.json({ error: "Dados de endereço inválidos." }, { status: 400 });
+    }
+    const savedAddress = typeof payload.addressId === "string"
+      ? await getAddress(session.user.id, payload.addressId) : null;
+    const parsedAddress = addressSchema.safeParse(savedAddress ?? payload);
+    if (!parsedAddress.success) {
+      return Response.json({ error: parsedAddress.error.issues[0].message }, { status: 400 });
+    }
+    const { postalCode, streetAddress, addressNumber, addressComplement, neighborhood, city, state } = parsedAddress.data;
+    // Compare the displayed snapshot so another tab cannot silently change the delivery destination.
+    const displayedAddress = addressSchema.safeParse(payload);
+    if (savedAddress && (!displayedAddress.success ||
+      Object.entries(parsedAddress.data).some(([key, value]) => key !== "label" && displayedAddress.data[key as keyof typeof displayedAddress.data] !== value))) {
+      return Response.json({ error: "O endereço salvo mudou. Revise os dados atualizados e recalcule a entrega." }, { status: 409 });
+    }
     const shippingServiceId = clean(payload.shippingServiceId, 40);
     const claimedShippingPriceCents = Number(payload.shippingPriceCents);
 
@@ -135,7 +157,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const shippingQuote = await quoteCartShipping(items, postalCode);
+    const shippingQuote = await quoteCartShipping(items, postalCode, catalog);
     const shippingOption = shippingQuote?.options.find(
       (option) => option.serviceId === shippingServiceId,
     );
@@ -161,6 +183,9 @@ export async function POST(request: Request) {
     const appUrl = await resolveAppUrl(request);
     if (!(await getEnvironmentVariable("MERCADO_PAGO_ACCESS_TOKEN")))
       throw new Error("Pagamento não configurado.");
+    if (!savedAddress && payload.saveAddress !== false) {
+      await saveAddress(session.user.id, parsedAddress.data);
+    }
     orderId = crypto.randomUUID();
     const db = await getDb();
     let discountCents = 0;
@@ -208,6 +233,7 @@ export async function POST(request: Request) {
       orderId: orderId!,
       productId: selection.productId,
       productName: selection.product.name,
+      shippingPackageSnapshot: JSON.stringify(selection.product.shippingPackage),
       color: selection.color,
       personalization: selection.personalization,
       quantity: selection.quantity,
@@ -250,6 +276,7 @@ export async function POST(request: Request) {
       items: selections.map((selection) => ({
         productId: selection.productId,
         productName: selection.product.name,
+      shippingPackageSnapshot: JSON.stringify(selection.product.shippingPackage),
         color: selection.color,
         personalization: selection.personalization,
         quantity: selection.quantity,
@@ -276,6 +303,8 @@ export async function POST(request: Request) {
 
     return Response.json({ checkoutUrl, orderId }, { status: 201 });
   } catch (error) {
+    if (error instanceof AddressError)
+      return Response.json({ error: error.message }, { status: error.status });
     if (error instanceof CouponError)
       return Response.json({ error: error.message }, { status: error.status });
     if (error instanceof SyntaxError)

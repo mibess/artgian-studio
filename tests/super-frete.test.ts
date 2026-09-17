@@ -1,3 +1,4 @@
+vi.mock("../lib/products/repository", async (original) => { const actual=await original<typeof import("../lib/products/repository")>(); return {...actual,getProductCatalog: async () => (await import("./fixtures/catalog")).catalog}; });
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createAndPurchaseShippingLabel,

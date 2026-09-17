@@ -1,0 +1,105 @@
+{
+  "version": 0,
+  "name": "Kit Natalino Tricô - 6 Peças",
+  "category": "Natal",
+  "description": "O encanto do Natal em uma composição cheia de detalhes. Cinco figuras com textura de tricô e uma bandeja formam um kit de seis peças para decorar e presentear.",
+  "active": true,
+  "pricingType": "fixed",
+  "basePriceCents": 5500,
+  "priceFromCents": null,
+  "productionTime": "",
+  "minimumQuantity": 1,
+  "maximumQuantity": 9,
+  "availableColors": ["Combinação natalina"],
+  "availableSizes": ["Bandeja: 18 × 18 × 2 cm"],
+  "customizationOptions": [],
+  "aliases": ["kit natalino tricô", "kit natalino trico", "kit natalino", "kit de Natal", "kit natal 6 peças"],
+  "materials": [],
+  "verifiedClaims": [
+    "Kit com 6 peças: árvore de Natal, Papai Noel, pinguim, rena, urso e bandeja.",
+    "Bandeja de 18 × 18 × 2 cm.",
+    "Embalagem de 20 × 20 × 8 cm.",
+    "Peso informado: 270 g.",
+    "Preço do kit completo: R$ 55,00."
+  ],
+  "notes": "Dados fornecidos pelo responsável em 17/09/2026. Material e prazo de produção não informados. A referência visual apresenta uma figura semelhante a um boneco de neve; o conteúdo foi cadastrado como pinguim conforme a lista fornecida. Confirmar essa nomenclatura. O peso informado de 270 g foi usado no pacote de envio; confirmar se inclui a embalagem.",
+  "storefront": {
+    "slug": "kit-natalino-trico",
+    "listed": true,
+    "featured": false,
+    "purchasable": true,
+    "variants": [
+      {
+        "key": "natalina",
+        "name": "Combinação natalina",
+        "swatches": ["#bd2635", "#36533d"],
+        "image": "/kit-natalino-trico-capa.png",
+        "priceCents": null
+      }
+    ],
+    "shippingPackage": {
+      "widthCm": 20,
+      "heightCm": 8,
+      "lengthCm": 20,
+      "weightKg": 0.27
+    },
+    "personalization": {
+      "enabled": false,
+      "required": false,
+      "maxLength": 18,
+      "label": "Nome na peça"
+    },
+    "presentation": {
+      "template": "bandeja-aurora",
+      "accent": "#36533d",
+      "background": "#eadbca",
+      "copy": {
+        "text001": {"label": "Coleção", "value": "Coleção Natal · 6 peças"},
+        "text002": {"label": "Título principal", "value": "Kit Natalino"},
+        "text003": {"label": "Título em destaque", "value": "Tricô."},
+        "text004": {"label": "Legenda do preço", "value": "Kit completo"},
+        "text005": {"label": "Destaque da compra", "value": "6 peças"},
+        "text006": {"label": "Símbolo", "value": "✦"},
+        "text007": {"label": "Selo · linha 1", "value": "Natal"},
+        "text008": {"label": "Selo · linha 2", "value": "em detalhes"},
+        "text009": {"label": "Introdução dos benefícios", "value": "Uma composição para celebrar"},
+        "text010": {"label": "Título dos benefícios", "value": "Pequenos detalhes."},
+        "text011": {"label": "Benefícios em destaque", "value": "Muito encanto."},
+        "text012": {"label": "Introdução da galeria", "value": "Tudo em um só kit"},
+        "text013": {"label": "Título da galeria", "value": "Cinco personagens."},
+        "text014": {"label": "Galeria em destaque", "value": "Um Natal inteiro."},
+        "text015": {"label": "Conteúdo do kit", "value": "Árvore de Natal, Papai Noel, pinguim, rena e urso acompanham uma bandeja de 18 × 18 × 2 cm. Uma composição para levar o clima natalino à mesa, ao aparador ou à estante."},
+        "text016": {"label": "Chamada para compra", "value": "Escolher meu kit"},
+        "text017": {"label": "Ícone da chamada", "value": "↑"},
+        "text018": {"label": "Rodapé", "value": "Artgian Studio · Elegância impressa em cada detalhe."},
+        "text019": {"label": "Link do rodapé", "value": "Conheça o estúdio →"}
+      },
+      "media": [
+        {"src": "/kit-natalino-trico-capa.png", "alt": "Kit Natalino Tricô com cinco figuras natalinas e bandeja branca em cenário creme e verde"},
+        {"src": "/kit-natalino-trico-referencia.png", "alt": "Referência do Kit Natalino Tricô com árvore de Natal, Papai Noel, rena, urso e figura branca de gorro vermelho sobre bandeja"}
+      ],
+      "features": [
+        ["01", "Seis peças em harmonia", "Cinco figuras natalinas e uma bandeja para compor a decoração."],
+        ["02", "Textura que encanta", "O visual de tricô aparece nos detalhes dos personagens e da árvore."],
+        ["03", "Decore ou presenteie", "Um conjunto temático para celebrar o Natal em pequenos espaços."]
+      ],
+      "specifications": [
+        ["Peças", "6"],
+        ["Conteúdo", "Árvore de Natal, Papai Noel, pinguim, rena, urso e bandeja"],
+        ["Bandeja", "18 × 18 × 2 cm"],
+        ["Embalagem", "20 × 20 × 8 cm"],
+        ["Peso informado", "270 g"]
+      ],
+      "contactUrl": "",
+      "sections": [
+        {
+          "title": "Cada peça faz parte da celebração.",
+          "text": "O kit acompanha:\n• Árvore de Natal\n• Papai Noel\n• Pinguim\n• Rena\n• Urso\n• Bandeja de 18 × 18 × 2 cm\n\nEmbalagem: 20 × 20 × 8 cm.\nPeso informado: 270 g.",
+          "image": ""
+        }
+      ]
+    },
+    "seoTitle": "Kit Natalino Tricô - 6 Peças | Artgian Studio",
+    "seoDescription": "Kit Natalino Tricô com árvore de Natal, Papai Noel, pinguim, rena, urso e bandeja de 18 × 18 × 2 cm. Kit completo por R$ 55,00."
+  }
+}

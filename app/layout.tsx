@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { headers } from "next/headers";
+import { SITE_URL } from "../lib/site-url";
 import "./globals.css";
+import { getPublicProductCatalog } from "../lib/products/repository";
+import { ProductCatalogProvider } from "../lib/products/context";
+
+export const dynamic = "force-dynamic";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,21 +18,17 @@ const geistMono = Geist_Mono({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host =
-    requestHeaders.get("x-forwarded-host")?.split(",")[0].trim() ||
-    requestHeaders.get("host") ||
-    "localhost:3000";
-  const protocol =
-    requestHeaders.get("x-forwarded-proto")?.split(",")[0].trim() ||
-    (host.includes("localhost") ? "http" : "https");
-  const origin = `${protocol}://${host}`;
+  const origin = SITE_URL;
   const title = "Artgian Studio | Soluções criativas em impressão 3D";
   const description =
     "Peças personalizadas, presentes, decoração e projetos sob medida produzidos em impressão 3D.";
   const socialImage = new URL("/og.png", origin).toString();
 
   return {
+    metadataBase: new URL(origin),
+    verification: {
+      google: "vqqFd7QDvBus-3BukNxWI38DBMEI6T-64HF3wQTlcE8",
+    },
     title,
     description,
     icons: {
@@ -62,7 +62,7 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -72,7 +72,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} bg-[#f7f3ea] font-sans antialiased`}
       >
-        {children}
+        <ProductCatalogProvider catalog={await getPublicProductCatalog()}>{children}</ProductCatalogProvider>
       </body>
     </html>
   );

@@ -1,147 +1,139 @@
-export const colorNames: Record<string, string> = {
-  areia: "Areia",
-  preto: "Preto",
-  branco: "Branco",
-  rosa: "Rosa",
-  terracota: "Terracota",
-  "rosa-marfim": "Rosa & Marfim",
-  "marrom-branco": "Marrom & Branco",
-  "areia-branco": "Areia & Branco",
-};
-
 export type ShippingPackage = {
   widthCm: number;
   heightCm: number;
   lengthCm: number;
   weightKg: number;
 };
-
-export const products = {
-  "kit-dia-dos-pais": {
-    name: "Kit Especial Dia dos Pais",
-    href: "/dia-dos-pais",
-    image: "/dia-dos-pais-capa-uhd.jpg",
-    alt: "Kit de Dia dos Pais com suporte para lata, chaveiro, cartão e caixa presente",
-    unitPriceCents: 3_990,
-    shippingPackage: null as ShippingPackage | null,
-    defaultColor: "Preto",
-    customizable: false,
-  },
-  "bandeja-aurora": {
-    name: "Bandeja Aurora",
-    href: "/bandeja-aurora",
-    image: "/bandeja-aurora-capa.png",
-    alt: "Bandeja Aurora na cor areia",
-    unitPriceCents: 2_990,
-    shippingPackage: null as ShippingPackage | null,
-    defaultColor: "Areia",
-    customizable: false,
-  },
-  "organizador-arco": {
-    name: "Organizador Arco",
-    href: "/organizador-arco",
-    image: "/organizador-arco-capa.png",
-    alt: "Organizador Arco rosa com gavetas em marfim",
-    unitPriceCents: 5_490,
-    shippingPackage: {
-      widthCm: 15,
-      heightCm: 10,
-      lengthCm: 20,
-      weightKg: 0.35,
-    } satisfies ShippingPackage,
-    defaultColor: "Rosa & Marfim",
-    customizable: false,
-  },
-  "porta-palhetas-solo": {
-    name: "Porta-Palhetas Solo",
-    href: "/porta-palhetas-solo",
-    image: "/porta-palhetas-solo-capa.png",
-    alt: "Porta-Palhetas Solo terracota personalizado com o texto Seu Nome",
-    unitPriceCents: 2_990,
-    shippingPackage: null as ShippingPackage | null,
-    defaultColor: "Terracota",
-    customizable: true,
-  },
-  "porta-incenso-samurai": {
-    name: "Porta-Incenso Samurai",
-    href: "/porta-incenso-samurai",
-    image: "/porta-incenso-samurai-capa.png",
-    alt: "Porta-Incenso Samurai preto com bandeja coletora",
-    unitPriceCents: 1_790,
-    shippingPackage: {
-      widthCm: 24,
-      heightCm: 11,
-      lengthCm: 15,
-      weightKg: 0.15,
-    } satisfies ShippingPackage,
-    defaultColor: "Preto",
-    customizable: false,
-  },
-  "suporte-pocket": {
-    name: "Suporte Pocket",
-    href: "/suporte-pocket",
-    image: "/suporte-pocket-capa.png",
-    alt: "Suporte Pocket preto nas posições aberta e fechada",
-    unitPriceCents: 599,
-    shippingPackage: null as ShippingPackage | null,
-    defaultColor: "Preto",
-    customizable: false,
-  },
-} as const;
-
-export type ProductId = keyof typeof products;
-
-export function isProductId(value: string): value is ProductId {
-  return Object.hasOwn(products, value);
-}
-
-export const productColors: Record<ProductId, readonly string[]> = {
-  "kit-dia-dos-pais": ["preto"],
-  "bandeja-aurora": ["areia", "preto", "branco", "rosa"],
-  "organizador-arco": ["rosa-marfim", "marrom-branco", "areia-branco"],
-  "porta-palhetas-solo": ["terracota", "preto", "branco"],
-  "porta-incenso-samurai": ["preto"],
-  "suporte-pocket": ["preto", "branco", "rosa"],
+export type ProductVariant = {
+  key: string;
+  name: string;
+  swatches: string[];
+  image: string;
+  priceCents: number | null;
 };
-
-export function getProductSelection(input: {
-  productId?: string;
-  color?: string;
-  quantity?: number | string;
-  personalization?: string;
-}) {
-  if (!input.productId || !isProductId(input.productId)) {
+export type ProductPresentation = {
+  template:
+    | "standard"
+    | "kit-dia-dos-pais"
+    | "bandeja-aurora"
+    | "organizador-arco"
+    | "porta-palhetas-solo"
+    | "porta-incenso-samurai"
+    | "suporte-pocket";
+  accent: string;
+  background: string;
+  copy: Record<string, { label: string; value: string }>;
+  media: { src: string; alt: string }[];
+  features: string[][];
+  specifications: string[][];
+  contactUrl: string;
+  sections: { title: string; text: string; image: string }[];
+};
+export type Storefront = {
+  slug: string;
+  listed: boolean;
+  featured: boolean;
+  purchasable: boolean;
+  variants: ProductVariant[];
+  shippingPackage: ShippingPackage | null;
+  personalization: {
+    enabled: boolean;
+    required: boolean;
+    maxLength: number;
+    label: string;
+  };
+  presentation: ProductPresentation;
+  seoTitle: string;
+  seoDescription: string;
+};
+export type Product = {
+  id: string;
+  recordId: string;
+  name: string;
+  category: string;
+  description: string;
+  href: string;
+  image: string;
+  alt: string;
+  unitPriceCents: number;
+  basePriceCents: number | null;
+  priceFromCents: number | null;
+  pricingType: string;
+  active: boolean;
+  productionTime: string | null;
+  variants: ProductVariant[];
+  shippingPackage: ShippingPackage | null;
+  customizable: boolean;
+  personalization: Storefront["personalization"];
+  listed: boolean;
+  featured: boolean;
+  purchasable: boolean;
+  presentation: ProductPresentation;
+  seoTitle: string;
+  seoDescription: string;
+  minimumQuantity: number;
+  maximumQuantity: number;
+};
+export type ProductCatalog = Record<string, Product>;
+export type ProductId = string;
+export function isProductId(value: string, catalog: ProductCatalog): boolean {
+  return Object.hasOwn(catalog, value);
+}
+export function getProductSelection(
+  input: {
+    productId?: string;
+    color?: string;
+    quantity?: number | string;
+    personalization?: string;
+  },
+  catalog: ProductCatalog,
+) {
+  const product =
+    input.productId && Object.hasOwn(catalog, input.productId)
+      ? catalog[input.productId]
+      : null;
+  if (
+    !product ||
+    !product.active ||
+    !product.purchasable ||
+    product.pricingType !== "fixed" ||
+    product.basePriceCents === null
+  )
     return null;
-  }
-
-  const product = products[input.productId];
-  const parsedQuantity = Number(input.quantity);
-  const quantity = Math.min(
-    9,
-    Math.max(
-      1,
-      Number.isFinite(parsedQuantity) ? Math.trunc(parsedQuantity) : 1,
-    ),
+  const parsedQuantity = Number(input.quantity ?? product.minimumQuantity);
+  if (
+    !Number.isInteger(parsedQuantity) ||
+    parsedQuantity < product.minimumQuantity ||
+    parsedQuantity > product.maximumQuantity
+  )
+    return null;
+  const variant = product.variants.find(
+    (v) => v.key === (input.color?.trim() || product.variants[0]?.key),
   );
-  const colorKey = input.color?.trim() || productColors[input.productId][0];
-  if (!productColors[input.productId].includes(colorKey)) return null;
-  const color = colorNames[colorKey] ?? product.defaultColor;
-  const personalization = product.customizable
-    ? input.personalization?.trim().slice(0, 18) || "Seu Nome"
-    : null;
-  const subtotalCents = product.unitPriceCents * quantity;
-
+  if (!variant) return null;
+  if (!product.customizable && input.personalization?.trim()) return null;
+  const text = product.customizable ? input.personalization?.trim() || "" : "";
+  if (
+    product.customizable &&
+    ((product.personalization.required && !text) ||
+      text.length > product.personalization.maxLength)
+  )
+    return null;
+  const unitPriceCents = variant.priceCents ?? product.basePriceCents;
   return {
-    productId: input.productId,
-    product,
-    quantity,
-    color,
-    colorKey,
-    personalization,
-    subtotalCents,
+    productId: product.id,
+    product: {
+      ...product,
+      unitPriceCents,
+      image: variant.image || product.image,
+    },
+    quantity: parsedQuantity,
+    color: variant.name,
+    colorKey: variant.key,
+    personalization: text || null,
+    subtotalCents: unitPriceCents * parsedQuantity,
   };
 }
-
 export function formatBrl(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", {
     style: "currency",

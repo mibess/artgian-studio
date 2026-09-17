@@ -9,6 +9,9 @@ import {
   type CartItem,
 } from "./cart";
 
+import { useProductCatalog } from "./products/context";
+import { getProductSelection } from "./catalog";
+
 export const CART_STORAGE_KEY = "artgian:cart:v1";
 const CHANGE_EVENT = "artgian:cart-change";
 let memory = "[]";
@@ -53,11 +56,27 @@ function writeCart(items: CartItem[]) {
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 export function useCart() {
+  const catalog = useProductCatalog();
   const raw = useSyncExternalStore(subscribe, getSnapshot, () => null);
-  const items = useMemo(() => (raw === null ? [] : readCart(raw)), [raw]);
-  const selections = useMemo(() => cartSelections(items), [items]);
+  const storedItems = useMemo(() => (raw === null ? [] : readCart(raw)), [raw]);
+  const items = useMemo(
+    () =>
+      storedItems.filter((item) =>
+        getProductSelection(
+          { ...item, personalization: item.personalization ?? undefined },
+          catalog,
+        ),
+      ),
+    [storedItems, catalog],
+  );
+  const invalidItems = storedItems.filter((item) => !items.includes(item));
+  const selections = useMemo(
+    () => cartSelections(items, catalog),
+    [items, catalog],
+  );
   return {
     items,
+    invalidItems,
     selections,
     ready: raw !== null,
     storageAvailable,
@@ -67,7 +86,7 @@ export function useCart() {
       0,
     ),
     add: (item: CartItem) =>
-      writeCart(addCartItem(readCart(getSnapshot()), item)),
+      writeCart(addCartItem(readCart(getSnapshot()), item, catalog)),
     remove: (key: string) =>
       writeCart(
         readCart(getSnapshot()).filter((item) => cartItemKey(item) !== key),
@@ -77,6 +96,7 @@ export function useCart() {
         readCart(getSnapshot()).map((item) =>
           cartItemKey(item) === key ? { ...item, quantity } : item,
         ),
+        catalog,
       );
       if (next) writeCart(next);
     },

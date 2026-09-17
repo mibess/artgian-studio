@@ -154,46 +154,257 @@ export function classifyIntent(message: string): Intent {
       "remover meu contato",
       "nao tenho interesse e nao",
     ])
-  ) return "opt_out";
-  if (includesAny(body, ["quero fechar", "pode fechar", "fechar o pedido", "pode fazer o pedido", "vou comprar", "fechado"])) return "ready_to_order";
-  if (includesAny(body, ["whatsapp", "zap", "numero de voces"])) return "wants_whatsapp";
-  if (includesAny(body, ["orcamento", "faz uma cotacao", "me passa o valor certinho"])) return "wants_quote";
-  if (includesAny(body, ["quanto custa", "qual o valor", "qual valor", "preco", "preço"])) return "asked_price";
-  if (includesAny(body, ["posso mandar uma foto", "mandei a foto", "segue referencia", "segue a foto"])) return "sent_reference";
-  if (includesAny(body, ["personalizado", "personalizar", "colocar nome", "com o nome"])) return "asked_customization";
-  if (includesAny(body, ["quanto tempo", "qual o prazo", "fica pronto", "preciso para", "ate dia"])) return "asked_deadline";
-  if (includesAny(body, ["entrega onde", "voces entregam", "frete", "envia para"])) return "asked_shipping";
-  if (includesAny(body, ["empresa", "brindes", "fornecedor", "recorrente", "atacado"])) return "business_opportunity";
-  if (includesAny(body, ["parceria", "colaboracao", "indicacao", "afiliado"])) return "partnership_interest";
-  if (includesAny(body, ["nao tenho interesse", "agora nao", "obrigado, nao"])) return "not_interested";
-  if (includesAny(body, ["muito caro", "achei caro", "nao cabe no orcamento"])) return "objection";
-  if (includesAny(body, ["voces fazem", "consegue fazer", "tem como fazer", "tenho uma ideia"])) return "asked_product";
-  if (includesAny(body, ["oi", "ola", "bom dia", "boa tarde", "boa noite"]) && body.length < 30) return "greeting";
+  )
+    return "opt_out";
+  if (
+    includesAny(body, [
+      "quero fechar",
+      "pode fechar",
+      "fechar o pedido",
+      "pode fazer o pedido",
+      "vou comprar",
+      "fechado",
+    ])
+  )
+    return "ready_to_order";
+  if (includesAny(body, ["whatsapp", "zap", "numero de voces"]))
+    return "wants_whatsapp";
+  if (
+    includesAny(body, [
+      "orcamento",
+      "faz uma cotacao",
+      "me passa o valor certinho",
+    ])
+  )
+    return "wants_quote";
+  if (
+    includesAny(body, [
+      "quanto custa",
+      "qual o valor",
+      "qual valor",
+      "preco",
+      "preço",
+    ])
+  )
+    return "asked_price";
+  if (
+    includesAny(body, [
+      "posso mandar uma foto",
+      "mandei a foto",
+      "segue referencia",
+      "segue a foto",
+    ])
+  )
+    return "sent_reference";
+  if (
+    includesAny(body, [
+      "personalizado",
+      "personalizar",
+      "colocar nome",
+      "com o nome",
+    ])
+  )
+    return "asked_customization";
+  if (
+    includesAny(body, [
+      "quanto tempo",
+      "qual o prazo",
+      "fica pronto",
+      "preciso para",
+      "ate dia",
+    ])
+  )
+    return "asked_deadline";
+  if (
+    includesAny(body, ["entrega onde", "voces entregam", "frete", "envia para"])
+  )
+    return "asked_shipping";
+  if (
+    includesAny(body, [
+      "empresa",
+      "brindes",
+      "fornecedor",
+      "recorrente",
+      "atacado",
+    ])
+  )
+    return "business_opportunity";
+  if (includesAny(body, ["parceria", "colaboracao", "indicacao", "afiliado"]))
+    return "partnership_interest";
+  if (includesAny(body, ["nao tenho interesse", "agora nao", "obrigado, nao"]))
+    return "not_interested";
+  if (includesAny(body, ["muito caro", "achei caro", "nao cabe no orcamento"]))
+    return "objection";
+  if (
+    includesAny(body, [
+      "voces fazem",
+      "consegue fazer",
+      "tem como fazer",
+      "tenho uma ideia",
+    ])
+  )
+    return "asked_product";
+  if (
+    includesAny(body, ["oi", "ola", "bom dia", "boa tarde", "boa noite"]) &&
+    body.length < 30
+  )
+    return "greeting";
   if (body.length < 4) return "ambiguous";
   return "general_question";
 }
 
 export function decideNextAction(intent: Intent): IntentDecision {
   const decisions: Record<Intent, IntentDecision> = {
-    greeting: { intent, action: "ask_question", reason: "Ainda não sabemos o que a pessoa procura", message: "Oi! Que bom te ver por aqui 😊 Me conta, o que você está pensando em fazer?", requiresHuman: false },
-    general_question: { intent, action: "reply", reason: "Pergunta geral sem intenção comercial clara", message: "Claro! Me conta um pouquinho mais do que você precisa pra eu entender direitinho.", requiresHuman: false },
-    interested: { intent, action: "collect_requirement", reason: "Há interesse, mas faltam detalhes", message: "Que legal! Me conta um pouquinho mais do que você imaginou.", requiresHuman: false },
-    asked_price: { intent, action: "collect_requirement", reason: "O preço depende do item e só pode vir do catálogo ou de orçamento", message: "Consigo te orientar sim 😊 O valor muda conforme o modelo e a personalização. Qual peça você imaginou e quantas unidades precisa?", requiresHuman: false },
-    asked_customization: { intent, action: "request_reference", reason: "Precisamos entender a personalização antes de confirmar viabilidade", message: "A gente trabalha com peças personalizadas. Me manda uma referência e me conta o que você gostaria de mudar?", requiresHuman: false },
-    asked_product: { intent, action: "request_reference", reason: "A viabilidade precisa ser analisada", message: "Posso dar uma olhada nessa ideia. Você tem uma foto ou alguma referência do que imaginou?", requiresHuman: false },
-    asked_shipping: { intent, action: "collect_requirement", reason: "A região atendida ainda depende de configuração", message: "Me passa sua cidade e seu estado? Aí eu confiro a entrega direitinho.", requiresHuman: false },
-    asked_deadline: { intent, action: "collect_requirement", reason: "Não há prazo confirmado sem consulta ao produto", message: "Pra quando você precisa? Aí eu verifico a produção antes de te confirmar.", requiresHuman: false },
-    sent_reference: { intent, action: "prepare_briefing", reason: "A referência permite avançar o briefing", message: "Vi a referência! O que você gostaria de personalizar nela?", requiresHuman: false },
-    wants_quote: { intent, action: "collect_requirement", reason: "Quantidade e personalização são necessárias para o orçamento", message: "Claro! Me conta quantas unidades você precisa e se pensou em alguma personalização.", requiresHuman: false },
-    wants_whatsapp: { intent, action: "send_whatsapp_handoff", reason: "A pessoa pediu o canal de fechamento", message: "Claro! Vou deixar o que a gente conversou organizadinho pra você não precisar explicar tudo de novo por lá.", requiresHuman: false },
-    ready_to_order: { intent, action: "escalate_to_human", reason: "Fechamento deve ser acompanhado pela responsável", message: "Perfeito! Vou organizar o que a gente conversou e chamar a responsável pra seguir com você.", requiresHuman: true },
-    business_opportunity: { intent, action: "escalate_to_human", reason: "Oportunidade recorrente precisa de avaliação comercial", message: "Obrigada por contar a ideia! Vou organizar os detalhes e conversar com a responsável por aqui.", requiresHuman: true },
-    partnership_interest: { intent, action: "escalate_to_human", reason: "Não há programa de parceria ativo", message: "Legal, obrigada por pensar na gente! Vou organizar sua ideia e conversar com a responsável por aqui.", requiresHuman: true },
-    objection: { intent, action: "escalate_to_human", reason: "Negociação não deve ser automatizada", message: "Entendi. Vou conversar com a responsável pra ver o que faz sentido nesse caso, sem te prometer algo antes de confirmar.", requiresHuman: true },
-    not_interested: { intent, action: "close", reason: "Recusa explícita encerra a abordagem", message: "Tudo bem 😊 Obrigada por me avisar!", requiresHuman: false },
-    opt_out: { intent, action: "close", reason: "Opt-out deve ser permanente e imediato", message: "Pode deixar. Não enviaremos mais mensagens por aqui.", requiresHuman: false },
-    ambiguous: { intent, action: "ask_question", reason: "A mensagem não tem contexto suficiente", message: "Não entendi muito bem 😅 Você consegue me contar um pouquinho mais?", requiresHuman: false },
-    needs_human: { intent, action: "escalate_to_human", reason: "A solicitação exige revisão humana", message: "Prefiro confirmar isso direitinho antes de te responder. Vou verificar com a responsável por aqui.", requiresHuman: true },
+    greeting: {
+      intent,
+      action: "ask_question",
+      reason: "Ainda não sabemos o que a pessoa procura",
+      message:
+        "Oi! Que bom te ver por aqui 😊 Me conta, o que você está pensando em fazer?",
+      requiresHuman: false,
+    },
+    general_question: {
+      intent,
+      action: "reply",
+      reason: "Pergunta geral sem intenção comercial clara",
+      message:
+        "Claro! Me conta um pouquinho mais do que você precisa pra eu entender direitinho.",
+      requiresHuman: false,
+    },
+    interested: {
+      intent,
+      action: "collect_requirement",
+      reason: "Há interesse, mas faltam detalhes",
+      message: "Que legal! Me conta um pouquinho mais do que você imaginou.",
+      requiresHuman: false,
+    },
+    asked_price: {
+      intent,
+      action: "collect_requirement",
+      reason:
+        "O preço depende do item e só pode vir do catálogo ou de orçamento",
+      message:
+        "Consigo te orientar sim 😊 O valor muda conforme o modelo e a personalização. Qual peça você imaginou e quantas unidades precisa?",
+      requiresHuman: false,
+    },
+    asked_customization: {
+      intent,
+      action: "request_reference",
+      reason:
+        "Precisamos entender a personalização antes de confirmar viabilidade",
+      message:
+        "A gente trabalha com peças personalizadas. Me manda uma referência e me conta o que você gostaria de mudar?",
+      requiresHuman: false,
+    },
+    asked_product: {
+      intent,
+      action: "request_reference",
+      reason: "A viabilidade precisa ser analisada",
+      message:
+        "Posso dar uma olhada nessa ideia. Você tem uma foto ou alguma referência do que imaginou?",
+      requiresHuman: false,
+    },
+    asked_shipping: {
+      intent,
+      action: "collect_requirement",
+      reason: "A região atendida ainda depende de configuração",
+      message:
+        "Me passa sua cidade e seu estado? Aí eu confiro a entrega direitinho.",
+      requiresHuman: false,
+    },
+    asked_deadline: {
+      intent,
+      action: "collect_requirement",
+      reason: "Não há prazo confirmado sem consulta ao produto",
+      message:
+        "Pra quando você precisa? Aí eu verifico a produção antes de te confirmar.",
+      requiresHuman: false,
+    },
+    sent_reference: {
+      intent,
+      action: "prepare_briefing",
+      reason: "A referência permite avançar o briefing",
+      message: "Vi a referência! O que você gostaria de personalizar nela?",
+      requiresHuman: false,
+    },
+    wants_quote: {
+      intent,
+      action: "collect_requirement",
+      reason: "Quantidade e personalização são necessárias para o orçamento",
+      message:
+        "Claro! Me conta quantas unidades você precisa e se pensou em alguma personalização.",
+      requiresHuman: false,
+    },
+    wants_whatsapp: {
+      intent,
+      action: "send_whatsapp_handoff",
+      reason: "A pessoa pediu o canal de fechamento",
+      message:
+        "Claro! Vou deixar o que a gente conversou organizadinho pra você não precisar explicar tudo de novo por lá.",
+      requiresHuman: false,
+    },
+    ready_to_order: {
+      intent,
+      action: "escalate_to_human",
+      reason: "Fechamento deve ser acompanhado pela responsável",
+      message:
+        "Perfeito! Vou organizar o que a gente conversou e chamar a responsável pra seguir com você.",
+      requiresHuman: true,
+    },
+    business_opportunity: {
+      intent,
+      action: "escalate_to_human",
+      reason: "Oportunidade recorrente precisa de avaliação comercial",
+      message:
+        "Obrigada por contar a ideia! Vou organizar os detalhes e conversar com a responsável por aqui.",
+      requiresHuman: true,
+    },
+    partnership_interest: {
+      intent,
+      action: "escalate_to_human",
+      reason: "Não há programa de parceria ativo",
+      message:
+        "Legal, obrigada por pensar na gente! Vou organizar sua ideia e conversar com a responsável por aqui.",
+      requiresHuman: true,
+    },
+    objection: {
+      intent,
+      action: "escalate_to_human",
+      reason: "Negociação não deve ser automatizada",
+      message:
+        "Entendi. Vou conversar com a responsável pra ver o que faz sentido nesse caso, sem te prometer algo antes de confirmar.",
+      requiresHuman: true,
+    },
+    not_interested: {
+      intent,
+      action: "close",
+      reason: "Recusa explícita encerra a abordagem",
+      message: "Tudo bem 😊 Obrigada por me avisar!",
+      requiresHuman: false,
+    },
+    opt_out: {
+      intent,
+      action: "close",
+      reason: "Opt-out deve ser permanente e imediato",
+      message: "Pode deixar. Não enviaremos mais mensagens por aqui.",
+      requiresHuman: false,
+    },
+    ambiguous: {
+      intent,
+      action: "ask_question",
+      reason: "A mensagem não tem contexto suficiente",
+      message:
+        "Não entendi muito bem 😅 Você consegue me contar um pouquinho mais?",
+      requiresHuman: false,
+    },
+    needs_human: {
+      intent,
+      action: "escalate_to_human",
+      reason: "A solicitação exige revisão humana",
+      message:
+        "Prefiro confirmar isso direitinho antes de te responder. Vou verificar com a responsável por aqui.",
+      requiresHuman: true,
+    },
   };
   return decisions[intent];
 }
@@ -221,22 +432,54 @@ export function calculateLeadScore(signals: ScoreSignals) {
     ready_to_order: 34,
     business_opportunity: 20,
   };
-  const intentScore = Math.min(35, intentWeights[signals.intent ?? "ambiguous"] ?? 6);
+  const intentScore = Math.min(
+    35,
+    intentWeights[signals.intent ?? "ambiguous"] ?? 6,
+  );
   const icpScore = Math.min(20, Math.max(0, signals.icpMatches ?? 0) * 7);
-  const engagementScore = Math.min(20, (signals.replied ? 8 : 0) + (signals.sentReference ? 12 : 0));
-  const commercialPotentialScore = Math.min(15, (signals.informedQuantity ? 5 : 0) + (signals.askedQuote ? 6 : 0) + (signals.businessPotential ? 8 : 0) + Math.max(0, signals.historicalConversionBoost || 0));
-  const urgencyScore = Math.min(10, (signals.informedDeadline ? 6 : 0) + (signals.askedWhatsapp ? 4 : 0));
+  const engagementScore = Math.min(
+    20,
+    (signals.replied ? 8 : 0) + (signals.sentReference ? 12 : 0),
+  );
+  const commercialPotentialScore = Math.min(
+    15,
+    (signals.informedQuantity ? 5 : 0) +
+      (signals.askedQuote ? 6 : 0) +
+      (signals.businessPotential ? 8 : 0) +
+      Math.max(0, signals.historicalConversionBoost || 0),
+  );
+  const urgencyScore = Math.min(
+    10,
+    (signals.informedDeadline ? 6 : 0) + (signals.askedWhatsapp ? 4 : 0),
+  );
   return {
     intentScore,
     icpScore,
     engagementScore,
     commercialPotentialScore,
     urgencyScore,
-    total: intentScore + icpScore + engagementScore + commercialPotentialScore + urgencyScore,
+    total:
+      intentScore +
+      icpScore +
+      engagementScore +
+      commercialPotentialScore +
+      urgencyScore,
   };
 }
 
 export type CatalogTruth = {
+  id?: string;
+  description?: string | null;
+  pricingType?: string;
+  materials?: string[];
+  availableColors?: string[];
+  customizationOptions?: string[];
+  verifiedClaims?: string[];
+  specifications?: string[][];
+  variants?: { name: string; priceCents: number | null }[];
+  url?: string | null;
+  minimumQuantity?: number | null;
+  maximumQuantity?: number | null;
   name: string;
   basePriceCents?: number | null;
   priceFromCents?: number | null;
@@ -246,10 +489,16 @@ export type CatalogTruth = {
 
 export function evaluateCatalogTruth(product: CatalogTruth | null) {
   if (!product || product.active === false) {
-    return { needsQuote: true, needsProductionReview: true, canShowProduct: false };
+    return {
+      needsQuote: true,
+      needsProductionReview: true,
+      canShowProduct: false,
+    };
   }
   return {
-    needsQuote: product.basePriceCents == null && product.priceFromCents == null,
+    needsQuote:
+      product.pricingType === "quote" ||
+      (product.basePriceCents == null && product.priceFromCents == null),
     needsProductionReview: !product.productionTime,
     canShowProduct: true,
   };
@@ -270,10 +519,16 @@ export type BriefingData = {
 
 export function extractBriefingFields(message: string): Partial<BriefingData> {
   const result: Partial<BriefingData> = {};
-  const quantity = message.match(/\b(\d{1,4})\s*(?:unidades?|pecas?|peças?|itens?)\b/i);
+  const quantity = message.match(
+    /\b(\d{1,4})\s*(?:unidades?|pecas?|peças?|itens?)\b/i,
+  );
   const deadline = message.match(/\b(\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\b/);
-  const name = message.match(/(?:nome|escrito|com)\s+["“']?([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}]{1,24})["”']?/u);
-  const cityState = message.match(/(?:em|para)\s+([\p{L}\s]{2,40})\s*[-/]\s*([A-Z]{2})\b/u);
+  const name = message.match(
+    /(?:nome|escrito|com)\s+["“']?([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}]{1,24})["”']?/u,
+  );
+  const cityState = message.match(
+    /(?:em|para)\s+([\p{L}\s]{2,40})\s*[-/]\s*([A-Z]{2})\b/u,
+  );
   if (quantity) result.quantity = Number(quantity[1]);
   if (deadline) result.desiredDeadline = deadline[1];
   if (name) result.customizationText = name[1];
@@ -284,18 +539,33 @@ export function extractBriefingFields(message: string): Partial<BriefingData> {
   return result;
 }
 
-export function buildBriefingSummary(
-  username: string,
-  briefing: BriefingData,
-) {
+export function buildBriefingSummary(username: string, briefing: BriefingData) {
   const lines = [`Cliente: @${username.replace(/^@/, "")}`, ""];
-  if (briefing.productInterest) lines.push("Interesse:", `${briefing.productInterest}.`, "");
-  if (briefing.referenceDescription) lines.push("Ideia:", `${briefing.referenceDescription}.`, "");
-  if (briefing.customizationText) lines.push("Personalização:", briefing.customizationText, "");
-  if (briefing.quantity) lines.push("Quantidade:", `${briefing.quantity} ${briefing.quantity === 1 ? "unidade" : "unidades"}.`, "");
-  if (briefing.desiredDeadline) lines.push("Prazo desejado:", `${briefing.desiredDeadline}.`, "");
-  if (briefing.city || briefing.state) lines.push("Local:", `${briefing.city ?? "Cidade não informada"}${briefing.state ? `/${briefing.state}` : ""}.`, "");
-  lines.push("Pontos pendentes:", briefing.additionalNotes || "Validar viabilidade, prazo e calcular orçamento.");
+  if (briefing.productInterest)
+    lines.push("Interesse:", `${briefing.productInterest}.`, "");
+  if (briefing.referenceDescription)
+    lines.push("Ideia:", `${briefing.referenceDescription}.`, "");
+  if (briefing.customizationText)
+    lines.push("Personalização:", briefing.customizationText, "");
+  if (briefing.quantity)
+    lines.push(
+      "Quantidade:",
+      `${briefing.quantity} ${briefing.quantity === 1 ? "unidade" : "unidades"}.`,
+      "",
+    );
+  if (briefing.desiredDeadline)
+    lines.push("Prazo desejado:", `${briefing.desiredDeadline}.`, "");
+  if (briefing.city || briefing.state)
+    lines.push(
+      "Local:",
+      `${briefing.city ?? "Cidade não informada"}${briefing.state ? `/${briefing.state}` : ""}.`,
+      "",
+    );
+  lines.push(
+    "Pontos pendentes:",
+    briefing.additionalNotes ||
+      "Validar viabilidade, prazo e calcular orçamento.",
+  );
   return lines.join("\n");
 }
 
@@ -310,7 +580,12 @@ export function canScheduleFollowup(input: {
   maxFollowups: number;
   hasRepliedSinceLastContact: boolean;
 }) {
-  return !input.doNotContact && !input.explicitRefusal && !input.hasRepliedSinceLastContact && input.followupsSent < input.maxFollowups;
+  return (
+    !input.doNotContact &&
+    !input.explicitRefusal &&
+    !input.hasRepliedSinceLastContact &&
+    input.followupsSent < input.maxFollowups
+  );
 }
 
 export function isWithinAiBudget(spentUsd: number, monthlyBudgetUsd: number) {
@@ -320,7 +595,10 @@ export function isWithinAiBudget(spentUsd: number, monthlyBudgetUsd: number) {
 export class CircuitBreaker {
   private consecutiveFailures = 0;
   private openedAt: number | null = null;
-  constructor(private readonly threshold = 3, private readonly resetAfterMs = 60_000) {}
+  constructor(
+    private readonly threshold = 3,
+    private readonly resetAfterMs = 60_000,
+  ) {}
   canExecute(now = Date.now()) {
     if (this.openedAt === null) return true;
     if (now - this.openedAt >= this.resetAfterMs) {

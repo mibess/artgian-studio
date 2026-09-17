@@ -1,3 +1,4 @@
+import { loginAdmin } from "./admin-login";
 import { expect, test } from "@playwright/test";
 import { and, eq } from "drizzle-orm";
 
@@ -17,7 +18,8 @@ test("importa um Instagram da empresa pendente e mantém reprovações visíveis
     OUTBOUND_AUTOMATION_ENABLED: "false",
     BROWSER_SEND_ENABLED: "false",
   });
-  await page.goto("/comercial/campanhas");
+  await loginAdmin(page);
+  await page.goto("/admin/campanhas");
   const [
     { getCommercialDb },
     schema,
@@ -33,7 +35,7 @@ test("importa um Instagram da empresa pendente e mantém reprovações visíveis
   const suffix = Date.now();
   const campaignId = `e2e-import-${suffix}`;
   const username = `natalia.import.${suffix}`;
-  const campaignUrl = `/comercial/campanhas?id=${campaignId}&aba=publico&filtro=empresas`;
+  const campaignUrl = `/admin/campanhas?id=${campaignId}&aba=publico&filtro=empresas`;
   await db
     .insert(schema.campaigns)
     .values({

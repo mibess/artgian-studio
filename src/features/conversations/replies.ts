@@ -1,7 +1,10 @@
+import {
+  findConversationProduct,
+  productConversationContext,
+} from "../../../lib/products/repository";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import {
   auditLogs,
-  catalogProducts,
   conversations,
   exceptions,
   jobs,
@@ -82,22 +85,11 @@ export async function enhanceReplyDraftWithAi(
     .find((message) => message.direction === "inbound");
   if (!inbound) return { status: "not_found" as const };
 
-  const [product] = lead.productInterest
-    ? await db
-        .select()
-        .from(catalogProducts)
-        .where(eq(catalogProducts.name, lead.productInterest))
-        .limit(1)
-    : [];
-  const productTruth = product
-    ? {
-        name: product.name,
-        basePriceCents: product.basePriceCents,
-        priceFromCents: product.priceFromCents,
-        productionTime: product.productionTime,
-        active: product.active,
-      }
-    : null;
+  const product = await findConversationProduct(
+    inbound.body,
+    lead.productInterest,
+  );
+  const productTruth = product ? productConversationContext(product) : null;
 
   const generateDecision =
     dependencies.generateDecision || generateCommercialDecision;
@@ -148,7 +140,8 @@ export async function enhanceReplyDraftWithAi(
       leadId: lead.id,
       type: "ai_draft",
       title: "Rascunho aprimorado pela OpenAI",
-      description: "A resposta aguarda a política de envio automático ou revisão humana.",
+      description:
+        "A resposta aguarda a política de envio automático ou revisão humana.",
       metadata: JSON.stringify({ messageId: draft.id }),
       createdAt: now,
     });
@@ -158,7 +151,11 @@ export async function enhanceReplyDraftWithAi(
 
 export async function createReplyDraftForLead(leadId: string) {
   const db = await getCommercialDb();
-  const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+  const [lead] = await db
+    .select()
+    .from(leads)
+    .where(eq(leads.id, leadId))
+    .limit(1);
   if (!lead) return { status: "not_found" as const };
   if (lead.doNotContact) return { status: "blocked" as const };
 
@@ -180,7 +177,9 @@ export async function createReplyDraftForLead(leadId: string) {
     .find(
       (message) =>
         message.direction === "outbound" &&
-        ["draft", "failed", "sending", "send_uncertain"].includes(message.status),
+        ["draft", "failed", "sending", "send_uncertain"].includes(
+          message.status,
+        ),
     );
   if (existing) return { status: "exists" as const, messageId: existing.id };
 
@@ -198,7 +197,12 @@ export async function createReplyDraftForLead(leadId: string) {
     return { status: "already_replied" as const };
   }
 
+  const product = await findConversationProduct(
+    inbound.body,
+    lead.productInterest,
+  );
   const decision = await generateCommercialDecision({
+    product: product ? productConversationContext(product) : null,
     message: inbound.body,
     recentMessages: history.slice(-6).map((message) => ({
       direction: message.direction as "inbound" | "outbound",
@@ -235,21 +239,28 @@ export async function createReplyDraftForLead(leadId: string) {
   return { status: "created" as const, messageId };
 }
 
-export async function approveAndSendInstagramReply(input: {
-  leadId: string;
-  messageId: string;
-  body: string;
-}, dependencies: {
-  sendText?: typeof sendInstagramText;
-  actor?: "operator" | "assistant";
-  auditAction?: string;
-  timelineTitle?: string;
-} = {}) {
+export async function approveAndSendInstagramReply(
+  input: {
+    leadId: string;
+    messageId: string;
+    body: string;
+  },
+  dependencies: {
+    sendText?: typeof sendInstagramText;
+    actor?: "operator" | "assistant";
+    auditAction?: string;
+    timelineTitle?: string;
+  } = {},
+) {
   const body = input.body.trim();
   if (!body || body.length > 1_000) return { status: "invalid_text" as const };
 
   const db = await getCommercialDb();
-  const [lead] = await db.select().from(leads).where(eq(leads.id, input.leadId)).limit(1);
+  const [lead] = await db
+    .select()
+    .from(leads)
+    .where(eq(leads.id, input.leadId))
+    .limit(1);
   const [message] = await db
     .select()
     .from(messages)
@@ -311,16 +322,23 @@ export async function approveAndSendInstagramReply(input: {
   let sent: Awaited<ReturnType<typeof sendInstagramText>>;
   const actor = dependencies.actor || "operator";
   try {
-    sent = await (dependencies.sendText || sendInstagramText)({ recipientId, text: body });
+    sent = await (dependencies.sendText || sendInstagramText)({
+      recipientId,
+      text: body,
+    });
   } catch (error) {
     const instagramError =
       error instanceof InstagramSendError
         ? error
         : new InstagramSendError("Falha inesperada no envio.", "uncertain");
-    const status = instagramError.kind === "uncertain" ? "send_uncertain" : "failed";
+    const status =
+      instagramError.kind === "uncertain" ? "send_uncertain" : "failed";
     const now = new Date().toISOString();
     await db.transaction(async (tx) => {
-      await tx.update(messages).set({ status }).where(eq(messages.id, message.id));
+      await tx
+        .update(messages)
+        .set({ status })
+        .where(eq(messages.id, message.id));
       await tx.insert(auditLogs).values({
         id: crypto.randomUUID(),
         actor,
@@ -329,7 +347,10 @@ export async function approveAndSendInstagramReply(input: {
           : "instagram_reply_failed",
         entityType: "message",
         entityId: message.id,
-        metadata: JSON.stringify({ kind: instagramError.kind, status: instagramError.status }),
+        metadata: JSON.stringify({
+          kind: instagramError.kind,
+          status: instagramError.status,
+        }),
         createdAt: now,
       });
     });
@@ -341,20 +362,23 @@ export async function approveAndSendInstagramReply(input: {
     .select()
     .from(jobs)
     .where(eq(jobs.status, "waiting_review"));
-  const relatedJobs = reviewJobs
-    .filter((job) => {
-      try {
-        return JSON.parse(job.payload).draftMessageId === message.id;
-      } catch {
-        return false;
-      }
-    });
+  const relatedJobs = reviewJobs.filter((job) => {
+    try {
+      return JSON.parse(job.payload).draftMessageId === message.id;
+    } catch {
+      return false;
+    }
+  });
   const relatedJobIds = relatedJobs.map((job) => job.id);
-  const followupJob = relatedJobs.find((job) => job.type === "execute_followup");
+  const followupJob = relatedJobs.find(
+    (job) => job.type === "execute_followup",
+  );
   let previousFollowupsSent = 0;
   if (followupJob) {
     try {
-      previousFollowupsSent = Number(JSON.parse(followupJob.payload).followupsSent || 0);
+      previousFollowupsSent = Number(
+        JSON.parse(followupJob.payload).followupsSent || 0,
+      );
     } catch {
       previousFollowupsSent = 0;
     }

@@ -8,10 +8,11 @@ process.env.E2E_DATABASE_URL = databaseUrl;
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
+  // Tests share a SQLite database, email outbox and auth rate-limit buckets.
+  workers: 1,
   retries: 0,
   use: {
     baseURL: "http://127.0.0.1:3108",
-    httpCredentials: { username: "artgian", password: "teste-local" },
     launchOptions: {
       executablePath:
         process.env.PLAYWRIGHT_CHROME_PATH ||
