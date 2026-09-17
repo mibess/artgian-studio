@@ -92,6 +92,28 @@ Agende esse comando diariamente no computador operacional e copie o arquivo
 `.sql.age` para um armazenamento externo com retenção. A chave privada de
 recuperação não deve permanecer na Vercel nem no mesmo diretório dos backups.
 
+Para atualizar especificamente um banco na versão `0014` até `0017`, há também
+um procedimento com snapshot completo AES-256-GCM e ensaio de restauração local:
+
+```bash
+node scripts/migrate-store-with-backup.mjs --env=.env.local
+node scripts/migrate-store-with-backup.mjs --env=.env.local --apply
+```
+
+O primeiro comando não altera o banco remoto. O segundo gera outro backup,
+ensaia a atualização e aplica as três migrações em uma única transação, comparando
+os registros anteriores e verificando a integridade antes de confirmar.
+Backups ficam em `backups/*.json.aes`; as chaves ficam separadamente em
+`$HOME/.codex/backup-keys/artgian-studio/`, com permissões restritas. Preserve
+ambos em locais seguros separados. Para verificar a restauração apenas em memória:
+
+```bash
+node scripts/restore-store-backup.mjs --backup=/caminho/backup.json.aes --key=/caminho/backup.key
+```
+
+Adicionar `--output=/caminho/novo-banco.db` cria um SQLite local com permissão
+`0600`, sem sobrescrever arquivos existentes nem alterar o banco remoto.
+
 Exemplo de exportação, em uma estação autenticada na Turso:
 
 ```bash

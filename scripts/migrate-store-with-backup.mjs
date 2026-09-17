@@ -1,0 +1,170 @@
+import { createClient } from "@libsql/client";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import path from "node:path";
+import { parseEnv } from "node:util";
+
+// Explicit opt-in: a backup and local restore rehearsal always precede remote writes.
+const envFile = process.argv.find(arg => arg.startsWith("--env="))?.slice(6);
+if (!envFile) throw new Error("Informe --env=/caminho/seguro.env.");
+const env = parseEnv(await readFile(envFile, "utf8"));
+if (!env.TURSO_DATABASE_URL || !env.TURSO_AUTH_TOKEN) throw new Error("Credenciais ausentes.");
+const journal = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8")).entries;
+const pendingTags = ["0015_gray_manta", "0016_volatile_namor", "0017_gorgeous_talon"];
+const migrations = await Promise.all(journal.map(async entry => {
+  const sql = await readFile(`drizzle/${entry.tag}.sql`, "utf8");
+  return { ...entry, sql, hash: createHash("sha256").update(sql).digest("hex") };
+}));
+const quote = name => `"${name.replaceAll('"', '""')}"`;
+const encode = value => {
+  if (typeof value === "bigint") return { type: "bigint", value: String(value) };
+  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value))
+    return { type: "blob", value: Buffer.from(value instanceof ArrayBuffer ? value : new Uint8Array(value.buffer, value.byteOffset, value.byteLength)).toString("base64") };
+  return value;
+};
+const decode = value => {
+  if (value?.type === "bigint") return BigInt(value.value);
+  if (value?.type === "blob") return Buffer.from(value.value, "base64");
+  return value;
+};
+const sortedRows = rows => rows.map(row => JSON.stringify(row)).sort();
+const client = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN, intMode: "bigint" });
+
+async function snapshot(connection) {
+  const schema = (await connection.execute("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name")).rows;
+  const tables = [];
+  const entries = schema.filter(row => row.type === "table");
+  const results = await connection.batch(entries.map(entry => `SELECT * FROM ${quote(entry.name)}`));
+  for (const [index, entry] of entries.entries()) {
+    const result = results[index];
+    tables.push({ name: entry.name, columns: result.columns, rows: result.rows.map(row => result.columns.map(column => encode(row[column]))) });
+  }
+  const sequenceExists = (await connection.execute("SELECT name FROM sqlite_master WHERE name='sqlite_sequence'")).rows.length;
+  if (sequenceExists) {
+    const result = await connection.execute("SELECT * FROM sqlite_sequence");
+    tables.push({ name: "sqlite_sequence", columns: result.columns, rows: result.rows.map(row => result.columns.map(column => encode(row[column]))) });
+  }
+  return { at: new Date().toISOString(), schema: schema.map(row => ({ type: row.type, name: row.name, sql: row.sql })), tables };
+}
+
+async function latestMigration(connection) {
+  const row = (await connection.execute("SELECT hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1")).rows[0];
+  const migration = migrations.find(entry => entry.when === Number(row?.created_at));
+  if (!migration || migration.hash !== row.hash) throw new Error("Migração remota ou hash inesperado. Nenhuma alteração autorizada.");
+  return migration;
+}
+
+async function validateNewSchema(connection) {
+  const products = (await connection.execute("SELECT store_id, storefront FROM catalog_products WHERE store_id IS NOT NULL")).rows;
+  if (products.length !== 6 || products.some(row => !JSON.parse(row.storefront).variants.length)) throw new Error("Catálogo unificado inválido.");
+  const indexes = (await connection.execute("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'customer_addresses_%'")).rows;
+  if (indexes.length !== 3) throw new Error("Índices de endereços inválidos.");
+  const violations = (await connection.execute("PRAGMA foreign_key_check")).rows;
+  if (violations.length) throw new Error("Integridade referencial inválida.");
+}
+
+async function applyPending(connection, latest) {
+  const pending = migrations.filter(entry => entry.idx > latest.idx);
+  if (JSON.stringify(pending.map(entry => entry.tag)) !== JSON.stringify(pendingTags)) throw new Error("Lista de migrações pendentes inesperada.");
+  for (const migration of pending) {
+    const statements = migration.sql.split("--> statement-breakpoint").map(sql => sql.trim()).filter(Boolean);
+    await connection.batch([...statements, { sql: "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)", args: [migration.hash, migration.when] }]);
+    console.log(`Validada: ${migration.tag}`);
+  }
+}
+
+let readTx;
+let writeTx;
+let rehearsal;
+let stage = "read remote snapshot";
+try {
+  readTx = await client.transaction("read");
+  const latest = await latestMigration(readTx);
+  if (latest.tag === pendingTags.at(-1)) {
+    await validateNewSchema(readTx);
+    await readTx.rollback();
+    console.log("As três migrações já foram aplicadas; nenhuma alteração.");
+    process.exitCode = 0;
+  } else {
+    if (latest.tag !== "0014_unusual_cassandra_nova") throw new Error("O banco não está na migração 0014 esperada.");
+    const source = await snapshot(readTx);
+    await readTx.rollback();
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    stage = "encrypt backup";
+    const backupDir = path.resolve("backups");
+    const keyDir = path.join(homedir(), ".codex", "backup-keys", "artgian-studio");
+    await mkdir(backupDir, { recursive: true, mode: 0o700 });
+    await mkdir(keyDir, { recursive: true, mode: 0o700 });
+    await chmod(keyDir, 0o700);
+    const backupPath = path.join(backupDir, `store-before-migrations-${stamp}.json.aes`);
+    const keyPath = path.join(keyDir, `store-before-migrations-${stamp}.key`);
+    const key = randomBytes(32);
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", key, iv);
+    const ciphertext = Buffer.concat([cipher.update(JSON.stringify(source), "utf8"), cipher.final()]);
+    await writeFile(keyPath, key, { mode: 0o600, flag: "wx" });
+    await writeFile(backupPath, Buffer.concat([Buffer.from("ARTGIAN1"), iv, cipher.getAuthTag(), ciphertext]), { mode: 0o600, flag: "wx" });
+    const saved = await readFile(backupPath);
+    if (saved.subarray(0, 8).toString() !== "ARTGIAN1") throw new Error("Formato do backup inválido.");
+    const decipher = createDecipheriv("aes-256-gcm", await readFile(keyPath), saved.subarray(8, 20));
+    decipher.setAuthTag(saved.subarray(20, 36));
+    const restored = JSON.parse(Buffer.concat([decipher.update(saved.subarray(36)), decipher.final()]).toString("utf8"));
+    stage = "restore local snapshot";
+    rehearsal = createClient({ url: "file::memory:", intMode: "bigint" });
+    // Restore related tables in schema order, then check all foreign keys.
+    await rehearsal.execute("PRAGMA foreign_keys = OFF");
+    for (const entry of restored.schema.filter(row => row.type === "table")) await rehearsal.execute(entry.sql);
+    for (const table of restored.tables) {
+      if (table.name === "sqlite_sequence") await rehearsal.execute("DELETE FROM sqlite_sequence");
+      for (const row of table.rows) await rehearsal.execute({ sql: `INSERT INTO ${quote(table.name)} (${table.columns.map(quote).join(",")}) VALUES (${row.map(() => "?").join(",")})`, args: row.map(decode) });
+    }
+    for (const entry of restored.schema.filter(row => row.type !== "table")) await rehearsal.execute(entry.sql);
+    await rehearsal.execute("PRAGMA foreign_keys = ON");
+    const verified = await snapshot(rehearsal);
+    for (const table of restored.tables) {
+      const actual = verified.tables.find(item => item.name === table.name);
+      if (!actual || JSON.stringify(sortedRows(actual.rows)) !== JSON.stringify(sortedRows(table.rows))) throw new Error(`Restauração falhou: ${table.name}`);
+    }
+    stage = "rehearse migrations locally";
+    await applyPending(rehearsal, latest);
+    await validateNewSchema(rehearsal);
+    console.log(`Backup criptografado e restauração local verificados: ${backupPath}`);
+    console.log(`Chave de recuperação (fora do repositório): ${keyPath}`);
+    console.log(`Snapshot: ${restored.tables.length} tabelas, ${restored.tables.reduce((count, table) => count + table.rows.length, 0)} registros.`);
+    if (!process.argv.includes("--apply")) {
+      console.log("Ensaio concluído. Use --apply para alterar o banco remoto.");
+    } else {
+      writeTx = await client.transaction("write");
+      stage = "apply remote migrations";
+      const current = await latestMigration(writeTx);
+      if (current.tag !== latest.tag) throw new Error("O banco mudou durante o backup.");
+      const before = await snapshot(writeTx);
+      await applyPending(writeTx, current);
+      await validateNewSchema(writeTx);
+      // Compare original columns, not newly added columns or catalog migration data.
+      const originalTables = before.tables.filter(row => !["__drizzle_migrations", "catalog_products", "sqlite_sequence"].includes(row.name));
+      const originalResults = await writeTx.batch(originalTables.map(table => `SELECT ${table.columns.map(quote).join(",")} FROM ${quote(table.name)}`));
+      for (const [index, table] of originalTables.entries()) {
+        const rows = originalResults[index].rows;
+        const after = rows.map(row => table.columns.map(column => encode(row[column])));
+        if (JSON.stringify(sortedRows(after)) !== JSON.stringify(sortedRows(table.rows))) throw new Error(`Registros alterados inesperadamente: ${table.name}`);
+      }
+      const result = (await writeTx.execute("PRAGMA integrity_check")).rows;
+      if (result.length !== 1 || result[0].integrity_check !== "ok") throw new Error("Falha na verificação de integridade.");
+      await writeTx.commit();
+      console.log("Migrações remotas aplicadas atomicamente. Dados anteriores e integridade preservados.");
+    }
+  }
+} catch (error) {
+  await writeTx?.rollback().catch(() => {});
+  await readTx?.rollback().catch(() => {});
+  // Do not emit URLs, credentials or database records in errors.
+  console.error(error instanceof Error && !error.code ? error.message : `Falha no backup/migração (${stage}, ${error.code || "unknown"}); nenhuma transação pendente foi confirmada.`);
+  process.exitCode = 1;
+} finally {
+  readTx?.close();
+  writeTx?.close();
+  rehearsal?.close();
+  client.close();
+}
