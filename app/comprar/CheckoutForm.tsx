@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MapPin, Plus } from "lucide-react";
@@ -85,6 +85,17 @@ export default function CheckoutForm({
     (appliedCoupon?.discountCents ?? 0) +
     (selectedShipping?.priceCents ?? 0);
 
+  const quoteItemsKey = JSON.stringify(items);
+  const quoteSavedAddress = useEffectEvent(() => { void calculateQuote(); });
+  useEffect(() => {
+    if (!selectedAddressId) return;
+    const timer = setTimeout(() => quoteSavedAddress(), 0);
+    return () => {
+      clearTimeout(timer);
+      quoteVersion.current += 1;
+    };
+  }, [selectedAddressId, postalCode, quoteItemsKey]);
+
   async function applyCoupon() {
     const version = ++couponVersion.current;
     setApplyingCoupon(true);
@@ -148,6 +159,8 @@ export default function CheckoutForm({
 
     const version = ++quoteVersion.current;
     setQuoting(true);
+    setShippingOptions([]);
+    setSelectedServiceId("");
     setShippingError("");
     setError("");
 
@@ -415,7 +428,7 @@ export default function CheckoutForm({
                 className="flex h-12 items-center gap-2 rounded-full border border-[#0b2447]/20 px-5 text-xs font-semibold transition hover:border-[#b88a3b] disabled:opacity-60"
                 type="button"
                 onClick={calculateQuote}
-                disabled={quoting}
+                disabled={quoting || submitting}
                 aria-busy={quoting}
               >
                 {quoting ? (
@@ -424,7 +437,7 @@ export default function CheckoutForm({
                     Calculando…
                   </>
                 ) : (
-                  "Calcular entrega"
+                  shippingError ? "Tentar calcular novamente" : selectedShipping ? "Recalcular entrega" : "Calcular entrega"
                 )}
               </button>
             </div>

@@ -97,8 +97,12 @@ test("manage multiple addresses and use them in checkout on mobile", async ({ pa
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: "screenshots/addresses-account-mobile.png", fullPage: true });
 
+  const quotedCeps: string[] = [];
+  let failQuote = false;
   await page.route("**/api/shipping/quote", async route => {
     const body = route.request().postDataJSON();
+    quotedCeps.push(body.postalCode);
+    if (failQuote) return route.fulfill({ status: 503, json: { error: "Frete temporariamente indisponível." } });
     await route.fulfill({ json: { postalCode: body.postalCode, options: [{ serviceId: "1", serviceName: "PAC", companyId: "1", companyName: "Correios", priceCents: 1500, deliveryTimeDays: 5 }] } });
   });
   await page.goto("/comprar?produto=organizador-arco&cor=rosa-marfim&quantidade=1");
@@ -112,8 +116,8 @@ test("manage multiple addresses and use them in checkout on mobile", async ({ pa
   await page.setViewportSize({ width: 1440, height: 1000 });
   await summary.screenshot({ path: "screenshots/checkout-saved-address-desktop.png" });
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.getByRole("button", { name: "Calcular entrega", exact: true }).click();
   await expect(page.getByRole("button", { name: "Pagar com Mercado Pago" })).toBeEnabled();
+  expect(quotedCeps).toEqual(["01310100"]);
   const saved = await (await page.request.get("/api/addresses")).json();
   await page.getByLabel("Telefone", { exact: true }).fill("11999999999");
   await page.getByLabel("CPF para emissão da etiqueta").fill("52998224725");
@@ -129,10 +133,17 @@ test("manage multiple addresses and use them in checkout on mobile", async ({ pa
   await page.getByRole("button", { name: "Alterar endereço", exact: true }).click();
   await page.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(page.getByRole("button", { name: "Pagar com Mercado Pago" })).toBeEnabled();
+  expect(quotedCeps).toEqual(["01310100"]);
+  failQuote = true;
   await page.getByRole("button", { name: "Alterar endereço", exact: true }).click();
   await page.getByRole("button", { name: /^Casa/ }).click();
   await expect(summary).toContainText("01001-000");
+  await expect(page.getByRole("alert").filter({ hasText: "Frete temporariamente indisponível" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Calcule a entrega para continuar" })).toBeDisabled();
+  expect(quotedCeps).toEqual(["01310100", "01001000"]);
+  failQuote = false;
+  await page.getByRole("button", { name: "Tentar calcular novamente", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pagar com Mercado Pago" })).toBeEnabled();
   await page.getByRole("button", { name: "Alterar endereço", exact: true }).click();
   await page.getByRole("button", { name: "Cadastrar novo endereço", exact: true }).click();
   await expect(summary).toHaveCount(0);
