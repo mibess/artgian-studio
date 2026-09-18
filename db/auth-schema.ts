@@ -14,6 +14,7 @@ export const user = sqliteTable("store_user", {
     .notNull()
     .default(false),
   image: text("image"),
+  phone: text("phone"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });

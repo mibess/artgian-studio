@@ -3,9 +3,9 @@
 import { FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapPin, Plus } from "lucide-react";
+import { MapPin, Plus, UserRound } from "lucide-react";
 import { cartSelections, type CartItem } from "../../lib/cart";
-import { formatCpf, formatPhone } from "../../lib/brazil";
+import { formatCpf, formatPhone, hasFullName } from "../../lib/brazil";
 import { formatBrl } from "../../lib/catalog";
 import type { ShippingOption } from "../../lib/shipping";
 import ProductColorImage from "../components/ProductColorImage";
@@ -16,7 +16,7 @@ import { emptyAddress, formatPostalCode, type AddressDraft, type SavedAddress } 
 import { useProductCatalog } from "../../lib/products/context";
 
 type CheckoutFormProps = {
-  customer: { name: string; email: string };
+  customer: { name: string; email: string; phone: string | null };
   addresses: SavedAddress[];
   items: CartItem[];
   fromCart?: boolean;
@@ -64,7 +64,12 @@ export default function CheckoutForm({
   const [applyingCoupon, setApplyingCoupon] = useState(false);
   const [error, setError] = useState("");
   const [shippingError, setShippingError] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerName, setCustomerName] = useState(customer.name);
+  const [customerPhone, setCustomerPhone] = useState(formatPhone(customer.phone || ""));
+  const [savedContact, setSavedContact] = useState(customer.phone && hasFullName(customer.name) ? { name: customer.name, phone: formatPhone(customer.phone) } : null);
+  const [editingContact, setEditingContact] = useState(!savedContact);
+  const [savingContact, setSavingContact] = useState(false);
+  const [contactError, setContactError] = useState("");
   const [customerDocument, setCustomerDocument] = useState("");
   const initialAddress = addresses.find(address => address.isDefault) ?? addresses[0];
   const [selectedAddressId, setSelectedAddressId] = useState(initialAddress?.id ?? "");
@@ -201,7 +206,9 @@ export default function CheckoutForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = new FormData(event.currentTarget);
     setError("");
+    if (editingContact && !(await saveContact())) return;
 
     if (
       !selectedShipping ||
@@ -226,7 +233,6 @@ export default function CheckoutForm({
       return;
     }
     setSubmitting(true);
-    const form = new FormData(event.currentTarget);
     const payload = Object.fromEntries(form.entries());
 
     try {
@@ -236,6 +242,8 @@ export default function CheckoutForm({
         body: JSON.stringify({
           expectedSubtotalCents: subtotalCents,
           ...payload,
+          customerName,
+          customerPhone,
           postalCode: address.postalCode,
           streetAddress: address.streetAddress,
           addressNumber: address.addressNumber,
@@ -292,6 +300,32 @@ export default function CheckoutForm({
     }
   }
 
+  async function saveContact() {
+    if (savingContact) return false;
+    setSavingContact(true);
+    setContactError("");
+    try {
+      const response = await fetch("/api/customer/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: customerName, phone: customerPhone }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Não foi possível salvar seus dados.");
+      const contact = { name: result.contact.name as string, phone: formatPhone(result.contact.phone) };
+      setSavedContact(contact);
+      setCustomerName(contact.name);
+      setCustomerPhone(contact.phone);
+      setEditingContact(false);
+      return true;
+    } catch (error) {
+      setContactError(error instanceof Error ? error.message : "Não foi possível salvar seus dados. Tente novamente.");
+      return false;
+    } finally {
+      setSavingContact(false);
+    }
+  }
+
   return (
     <div className="grid items-start gap-8 lg:grid-cols-[1.08fr_.72fr]">
       <form
@@ -310,14 +344,25 @@ export default function CheckoutForm({
             <h2 className="font-serif text-2xl font-normal">Seus dados</h2>
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="sm:col-span-2">
+            {!editingContact && <div role="group" aria-label="Dados de contato" className="flex items-start gap-3 rounded-2xl border border-[#b88a3b] bg-white/80 p-5 sm:col-span-2 sm:gap-4 sm:p-6">
+              <UserRound aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-[#b88a3b]" />
+              <div className="min-w-0">
+                <p className="break-words text-sm font-semibold leading-6 sm:text-base">{customerName}</p>
+                <p className="mt-1 break-all text-xs leading-5 text-[#647087]">{customer.email}</p>
+                <p className="text-xs leading-5 text-[#647087]">{customerPhone}</p>
+                <button type="button" className="mt-2 min-h-11 text-sm font-semibold text-[#0b2447] underline decoration-[#b88a3b]/60 underline-offset-4 hover:text-[#9a722e] disabled:opacity-50" disabled={submitting} onClick={() => setEditingContact(true)}>Alterar dados</button>
+              </div>
+            </div>}
+            {editingContact && <><label className="sm:col-span-2">
               <span className="mb-2 block text-xs font-semibold">
                 Nome completo
               </span>
               <input
                 className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
                 name="customerName"
-                defaultValue={customer.name}
+                value={customerName}
+                onChange={event => setCustomerName(event.target.value)}
+                disabled={savingContact || submitting}
                 autoComplete="name"
                 minLength={3}
                 pattern=".*\S\s+\S.*"
@@ -348,12 +393,20 @@ export default function CheckoutForm({
                 placeholder="(00) 00000-0000"
                 maxLength={15}
                 value={customerPhone}
+                disabled={savingContact || submitting}
                 onChange={(event) =>
                   setCustomerPhone(formatPhone(event.target.value))
                 }
                 required
               />
             </label>
+            <div className="flex flex-wrap items-center gap-4 sm:col-span-2">
+              <button type="button" className="min-h-11 rounded-full bg-[#0b2447] px-5 text-xs font-semibold text-white disabled:opacity-50" disabled={savingContact || submitting} onClick={() => void saveContact()}>{savingContact ? "Salvando…" : "Salvar dados"}</button>
+              {savedContact && <button type="button" className="min-h-11 text-xs font-semibold" disabled={savingContact || submitting} onClick={() => { setCustomerName(savedContact.name); setCustomerPhone(savedContact.phone); setContactError(""); setEditingContact(false); }}>Cancelar alteração</button>}
+            </div>
+            <p className="text-xs leading-5 text-[#647087] sm:col-span-2">Seu telefone será salvo na conta para facilitar as próximas compras.</p>
+            </>}
+            {contactError && <p role="alert" className="text-sm text-red-700 sm:col-span-2">{contactError}</p>}
             <label className="sm:col-span-2">
               <span className="mb-2 block text-xs font-semibold">
                 CPF para emissão da etiqueta
@@ -621,7 +674,7 @@ export default function CheckoutForm({
         <button
           className="flex h-14 w-full items-center justify-between rounded-full bg-[#0b2447] pr-2 pl-6 font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-[#173b68] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
           type="submit"
-          disabled={submitting || applyingCoupon || !selectedShipping}
+          disabled={submitting || savingContact || applyingCoupon || !selectedShipping}
           aria-busy={submitting}
         >
           {submitting ? (

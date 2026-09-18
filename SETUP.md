@@ -103,6 +103,9 @@ node scripts/migrate-store-with-backup.mjs --env=.env.local --apply
 O primeiro comando não altera o banco remoto. O segundo gera outro backup,
 ensaia a atualização e aplica as três migrações em uma única transação, comparando
 os registros anteriores e verificando a integridade antes de confirmar.
+Para atualizar da versão `0017` para `0018` (telefone do cliente), use
+`node scripts/migrate-store-with-backup.mjs --env=.env.local --contact` para ensaiar,
+acrescentando `--apply` para aplicar com backup e as mesmas verificações.
 Backups ficam em `backups/*.json.aes`; as chaves ficam separadamente em
 `$HOME/.codex/backup-keys/artgian-studio/`, com permissões restritas. Preserve
 ambos em locais seguros separados. Para verificar a restauração apenas em memória:

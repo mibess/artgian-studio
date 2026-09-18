@@ -1,7 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 
+let customerClient = 0;
 async function login(page: Page) {
+  // Each scenario represents a different customer, with its own auth rate limit.
+  await page.context().setExtraHTTPHeaders({ "x-forwarded-for": `198.18.0.${++customerClient}` });
   await page.route("**/api/addresses/lookup?*", route => route.fulfill({ status: 503, json: { error: "Consulta de CEP indisponível. Preencha o endereço manualmente." } }));
   const email = `address-e2e-${Date.now()}@example.com`;
   const credentials = { email, password: "AddressTest!12345", name: "Cliente Endereços" };
@@ -155,7 +158,7 @@ test("manage multiple addresses and use them in checkout on mobile", async ({ pa
   await expect(page.getByLabel("Endereço", { exact: true })).toHaveValue("");
   await fillAddress(page, "Família", "3");
   await expect(page.getByRole("checkbox", { name: /Salvar este endereço/ })).toBeChecked();
-  await page.getByLabel("Telefone", { exact: true }).fill("11999999999");
+  await expect(page.getByRole("group", { name: "Dados de contato" })).toContainText("(11) 99999-9999");
   await page.getByLabel("CPF para emissão da etiqueta").fill("52998224725");
   await page.getByRole("checkbox", { name: "Confirmo que os dados pessoais e de entrega estão corretos." }).check();
   await page.getByRole("button", { name: "Calcular entrega", exact: true }).click();
@@ -176,4 +179,46 @@ test("manage multiple addresses and use them in checkout on mobile", async ({ pa
   await work.getByRole("button", { name: "Confirmar exclusão" }).click();
   await expect(work).toHaveCount(0);
   await expect(casa.getByText("Padrão", { exact: true })).toBeVisible();
+});
+
+test("saves contact details, reuses the card and keeps CPF separate", async ({ page }) => {
+  await login(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  const checkout = "/comprar?produto=organizador-arco&cor=rosa-marfim&quantidade=1";
+  await page.goto(checkout);
+  const phone = page.getByLabel("Telefone", { exact: true });
+  const cpf = page.getByLabel("CPF para emissão da etiqueta");
+  const card = page.getByRole("group", { name: "Dados de contato" });
+  await expect(phone).toBeVisible();
+  await cpf.fill("52998224725");
+  await phone.fill("123");
+  await page.getByRole("button", { name: "Salvar dados", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "telefone válido" })).toBeVisible();
+  await phone.fill("11999999999");
+  await page.getByRole("button", { name: "Salvar dados", exact: true }).click();
+  await expect(card).toContainText("(11) 99999-9999");
+  await expect(phone).toHaveCount(0);
+  await expect(cpf).toHaveValue("529.982.247-25");
+  await card.screenshot({ path: "screenshots/checkout-contact-mobile.png" });
+  await page.getByRole("button", { name: "Alterar dados", exact: true }).click();
+  await phone.fill("1633334444");
+  await page.getByRole("button", { name: "Cancelar alteração", exact: true }).click();
+  await expect(card).toContainText("(11) 99999-9999");
+  await page.getByRole("button", { name: "Alterar dados", exact: true }).click();
+  await phone.fill("1633334444");
+  await page.route("**/api/customer/contact", route => route.fulfill({ status: 500, json: { error: "Não foi possível salvar seus dados. Tente novamente." } }));
+  await page.getByRole("button", { name: "Salvar dados", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Não foi possível salvar" })).toBeVisible();
+  await expect(phone).toHaveValue("(16) 3333-4444");
+  await page.unroute("**/api/customer/contact");
+  await page.getByRole("button", { name: "Salvar dados", exact: true }).click();
+  await expect(card).toContainText("(16) 3333-4444");
+  await page.reload();
+  await expect(card).toContainText("(16) 3333-4444");
+  await expect(phone).toHaveCount(0);
+  await expect(cpf).toBeVisible();
+  await expect(cpf).toHaveValue("");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await card.screenshot({ path: "screenshots/checkout-contact-desktop.png" });
 });

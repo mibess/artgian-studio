@@ -11,7 +11,7 @@ export default function CheckoutContents({
   initialItem,
   invalidSelection,
 }: {
-  customer: { name: string; email: string };
+  customer: { name: string; email: string; phone: string | null };
   addresses: SavedAddress[];
   initialItem: CartItem | null;
   invalidSelection: boolean;

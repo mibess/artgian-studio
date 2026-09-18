@@ -264,6 +264,14 @@ O acesso administrativo continua usando sua autenticação separada.
 
 ### Endereços do cliente
 
+No checkout, “Seus dados” mostra um cartão com nome, e-mail e telefone quando
+o cliente já tem telefone, com a ação “Alterar dados”. Sem telefone, o formulário
+permanece aberto. “Salvar dados” persiste nome e telefone na conta; iniciar o
+pagamento também salva os dados preenchidos. O CPF continua sendo informado
+separadamente em cada compra e não é salvo no perfil. O telefone do último
+pedido do próprio usuário é reutilizado quando ainda não há telefone no perfil.
+Esse recurso requer a migração aditiva `0018_sticky_phantom_reporter.sql`.
+
 `/conta` permite cadastrar até 20 endereços, editar, excluir e escolher o padrão.
 O primeiro endereço salvo é o padrão inicial; excluir o padrão promove o mais
 antigo restante. Cada operação é restrita ao usuário autenticado. A tabela tem

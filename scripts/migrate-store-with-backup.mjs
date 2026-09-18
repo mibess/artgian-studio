@@ -11,7 +11,9 @@ if (!envFile) throw new Error("Informe --env=/caminho/seguro.env.");
 const env = parseEnv(await readFile(envFile, "utf8"));
 if (!env.TURSO_DATABASE_URL || !env.TURSO_AUTH_TOKEN) throw new Error("Credenciais ausentes.");
 const journal = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8")).entries;
-const pendingTags = ["0015_gray_manta", "0016_volatile_namor", "0017_gorgeous_talon"];
+const contactOnly = process.argv.includes("--contact");
+const baselineTag = contactOnly ? "0017_gorgeous_talon" : "0014_unusual_cassandra_nova";
+const pendingTags = contactOnly ? ["0018_sticky_phantom_reporter"] : ["0015_gray_manta", "0016_volatile_namor", "0017_gorgeous_talon"];
 const migrations = await Promise.all(journal.map(async entry => {
   const sql = await readFile(`drizzle/${entry.tag}.sql`, "utf8");
   return { ...entry, sql, hash: createHash("sha256").update(sql).digest("hex") };
@@ -56,16 +58,22 @@ async function latestMigration(connection) {
 }
 
 async function validateNewSchema(connection) {
+  if (contactOnly) {
+    const columns = (await connection.execute("PRAGMA table_info(store_user)")).rows;
+    if (!columns.some(row => row.name === "phone" && row.type === "TEXT" && Number(row.notnull) === 0)) throw new Error("Coluna de telefone inválida.");
+  } else {
   const products = (await connection.execute("SELECT store_id, storefront FROM catalog_products WHERE store_id IS NOT NULL")).rows;
   if (products.length !== 6 || products.some(row => !JSON.parse(row.storefront).variants.length)) throw new Error("Catálogo unificado inválido.");
   const indexes = (await connection.execute("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'customer_addresses_%'")).rows;
   if (indexes.length !== 3) throw new Error("Índices de endereços inválidos.");
+  }
   const violations = (await connection.execute("PRAGMA foreign_key_check")).rows;
   if (violations.length) throw new Error("Integridade referencial inválida.");
 }
 
 async function applyPending(connection, latest) {
-  const pending = migrations.filter(entry => entry.idx > latest.idx);
+  const target = migrations.find(entry => entry.tag === pendingTags.at(-1));
+  const pending = migrations.filter(entry => entry.idx > latest.idx && entry.idx <= target.idx);
   if (JSON.stringify(pending.map(entry => entry.tag)) !== JSON.stringify(pendingTags)) throw new Error("Lista de migrações pendentes inesperada.");
   for (const migration of pending) {
     const statements = migration.sql.split("--> statement-breakpoint").map(sql => sql.trim()).filter(Boolean);
@@ -84,10 +92,10 @@ try {
   if (latest.tag === pendingTags.at(-1)) {
     await validateNewSchema(readTx);
     await readTx.rollback();
-    console.log("As três migrações já foram aplicadas; nenhuma alteração.");
+    console.log("Migrações solicitadas já aplicadas; nenhuma alteração.");
     process.exitCode = 0;
   } else {
-    if (latest.tag !== "0014_unusual_cassandra_nova") throw new Error("O banco não está na migração 0014 esperada.");
+    if (latest.tag !== baselineTag) throw new Error(`O banco não está na migração ${baselineTag} esperada.`);
     const source = await snapshot(readTx);
     await readTx.rollback();
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -143,7 +151,8 @@ try {
       await applyPending(writeTx, current);
       await validateNewSchema(writeTx);
       // Compare original columns, not newly added columns or catalog migration data.
-      const originalTables = before.tables.filter(row => !["__drizzle_migrations", "catalog_products", "sqlite_sequence"].includes(row.name));
+      const excluded = contactOnly ? ["__drizzle_migrations", "sqlite_sequence"] : ["__drizzle_migrations", "catalog_products", "sqlite_sequence"];
+      const originalTables = before.tables.filter(row => !excluded.includes(row.name));
       const originalResults = await writeTx.batch(originalTables.map(table => `SELECT ${table.columns.map(quote).join(",")} FROM ${quote(table.name)}`));
       for (const [index, table] of originalTables.entries()) {
         const rows = originalResults[index].rows;

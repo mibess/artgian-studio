@@ -1,0 +1,1 @@
+ALTER TABLE `store_user` ADD `phone` text;

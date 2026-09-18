@@ -8,6 +8,7 @@ import { getProductSelection } from "../../lib/catalog";
 import { getProductCatalog } from "../../lib/products/repository";
 import { getCustomerSession } from "../../lib/auth";
 import { listAddresses } from "../../lib/addresses/repository";
+import { getCustomerContact } from "../../lib/customer-contact";
 
 export const metadata: Metadata = {
   title: "Finalizar compra | Artgian Studio",
@@ -50,6 +51,7 @@ export default async function CheckoutPage({
     personalization: params.personalizacao,
   }, await getProductCatalog());
   const product = selection?.product ?? null;
+  const contact = await getCustomerContact(session.user.id);
 
   return (
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
@@ -75,7 +77,7 @@ export default async function CheckoutPage({
 
         <CheckoutContents
           addresses={await listAddresses(session.user.id)}
-          customer={{ name: session.user.name, email: session.user.email }}
+          customer={{ ...contact, email: session.user.email }}
           initialItem={
             selection
               ? {
