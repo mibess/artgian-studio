@@ -371,6 +371,108 @@ describe("discount rules and atomic reservations", () => {
   });
 });
 
+describe("checkout deduplication", () => {
+  const submit = (overrides: Record<string, unknown> = {}) => checkout(request("/api/checkout", { ...checkoutBody, saveAddress: false, ...overrides }));
+  const preferences = () => mock.fetch.mock.calls.filter(([url]) => url.includes("checkout/preferences"));
+
+  it("reuses an identical pending order and payment URL, even when cart order changes", async () => {
+    const first = await submit();
+    expect(first.status).toBe(201);
+    const result = await first.json();
+    const repeat = await submit({ items: [...items].reverse(), customerPhone: "(11) 99999-9999" });
+    expect(repeat.status).toBe(200);
+    expect(await repeat.json()).toEqual(result);
+    expect(await db.select().from(orders)).toHaveLength(1);
+    expect(preferences()).toHaveLength(1);
+  });
+
+  it("reuses the existing reservation for a single-use coupon", async () => {
+    await seed();
+    const first = await submit({ couponCode: "TEST10" });
+    expect(first.status).toBe(201);
+    const result = await first.json();
+    const repeat = await submit({ couponCode: "test10" });
+    expect(repeat.status).toBe(200);
+    expect(await repeat.json()).toEqual(result);
+    expect((await db.select().from(coupons))[0].allocatedUses).toBe(1);
+    expect(await db.select().from(orders)).toHaveLength(1);
+    expect(preferences()).toHaveLength(1);
+  });
+
+  it("does not reuse an expired coupon preference", async () => {
+    await seed();
+    expect((await submit({ couponCode: "TEST10" })).status).toBe(201);
+    await db.update(coupons).set({ expiresAt: "2020-01-01T00:00:00.000Z" });
+    expect((await submit({ couponCode: "TEST10" })).status).toBe(400);
+    expect(await db.select().from(orders)).toHaveLength(1);
+    expect(preferences()).toHaveLength(1);
+  });
+
+  it.each(["paid", "cancelled", "rejected", "refunded", "charged_back"])("allows a new purchase after an order is %s", async status => {
+    const original = await (await submit()).json();
+    await db.update(orders).set({ status }).where(eq(orders.id, original.orderId));
+    const next = await submit();
+    expect(next.status).toBe(201);
+    expect((await next.json()).orderId).not.toBe(original.orderId);
+    expect(await db.select().from(orders)).toHaveLength(2);
+  });
+
+  it.each([
+    { addressNumber: "99" },
+    { addressComplement: "Apto 20" },
+    { customerPhone: "11988887777" },
+    { customerName: "Outro Destinatário" },
+    { items: [{ ...items[0], quantity: 2 }, items[1]] },
+  ])("creates a separate order when purchase data changes: %j", async overrides => {
+    expect((await submit()).status).toBe(201);
+    expect((await submit(overrides)).status).toBe(201);
+    expect(await db.select().from(orders)).toHaveLength(2);
+  });
+
+  it("never returns another customer's order", async () => {
+    expect((await submit()).status).toBe(201);
+    await db.insert(user).values({ id: "customer-other", name: "Outro Cliente", email: "other@example.com", createdAt: new Date(), updatedAt: new Date() }).onConflictDoNothing();
+    mock.session.mockResolvedValue({ user: { id: "customer-other", email: "other@example.com" } });
+    expect((await submit()).status).toBe(201);
+    expect(await db.select().from(orders)).toHaveLength(2);
+  });
+
+  it.each([undefined, "TEST10"])("serializes simultaneous clicks and creates only one payment preference (coupon %s)", async couponCode => {
+    if (couponCode) await seed();
+    const results = await Promise.all([submit({ couponCode }), submit({ couponCode })]);
+    expect(results.map(result => result.status)).toContain(201);
+    expect(results.every(result => [200, 201, 409].includes(result.status))).toBe(true);
+    expect(await db.select().from(orders)).toHaveLength(1);
+    expect(preferences()).toHaveLength(1);
+    const repeat = await submit({ couponCode });
+    expect(repeat.status).toBe(200);
+    if (couponCode) expect((await db.select().from(coupons))[0].allocatedUses).toBe(1);
+  });
+
+  it("returns an in-progress response while the first payment request is unfinished", async () => {
+    const originalFetch = mock.fetch.getMockImplementation()!;
+    let release!: () => void;
+    let started!: () => void;
+    const processing = new Promise<void>(resolve => { started = resolve; });
+    const payment = new Promise<void>(resolve => { release = resolve; });
+    mock.fetch.mockImplementation(async (...args) => {
+      if (String(args[0]).includes("checkout/preferences")) { started(); await payment; }
+      return originalFetch(...args);
+    });
+    const first = submit();
+    await processing;
+    try {
+      const second = await submit();
+      expect(second.status).toBe(409);
+      expect(await second.json()).toMatchObject({ code: "CHECKOUT_IN_PROGRESS" });
+      expect(await db.select().from(orders)).toHaveLength(1);
+      expect(preferences()).toHaveLength(1);
+    } finally { release(); }
+    expect((await first).status).toBe(201);
+    expect((await submit()).status).toBe(200);
+  });
+});
+
 describe("checkout and payment lifecycle", () => {
   it("rejects forged production webhooks before fetching or deleting a reward", async () => {
     const coupon = await seed({ source: "game" });
@@ -428,14 +530,14 @@ describe("checkout and payment lifecycle", () => {
       expect(
         (
           await checkout(
-            request("/api/checkout", { ...checkoutBody, couponCode: "TEST10" }),
+            request("/api/checkout", { ...checkoutBody, addressNumber: String(attempt + 1), couponCode: "TEST10" }),
           )
         ).status,
       ).toBe(201);
     expect(
       (
         await checkout(
-          request("/api/checkout", { ...checkoutBody, couponCode: "TEST10" }),
+          request("/api/checkout", { ...checkoutBody, addressNumber: "3", couponCode: "TEST10" }),
         )
       ).status,
     ).toBe(409);
@@ -501,7 +603,7 @@ describe("checkout and payment lifecycle", () => {
     expect(
       (
         await checkout(
-          request("/api/checkout", { ...checkoutBody, couponCode: "test10" }),
+          request("/api/checkout", { ...checkoutBody, addressNumber: "2", couponCode: "test10" }),
         )
       ).status,
     ).toBe(409);

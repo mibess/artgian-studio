@@ -259,6 +259,22 @@ comprova a propriedade no Search Console e deve permanecer após a verificação
 
 ## Carrinho e contas de clientes
 
+O checkout reaproveita pedidos `pending` do mesmo cliente quando os dados
+pessoais, endereço, itens (incluindo variantes, personalização e preços), frete
+e cupom são equivalentes. A verificação e a inserção compartilham uma transação
+de escrita, evitando duplicação entre abas/instâncias concorrentes. Quando o
+link já existe, a API retorna o mesmo pedido e URL com HTTP 200, sem nova
+preferência nem nova reserva de cupom. Enquanto o primeiro pagamento está
+sendo preparado, retorna `CHECKOUT_IN_PROGRESS` (409), sem criar outro pedido.
+Pedidos pagos ou encerrados não são reaproveitados. O histórico existente não
+é apagado ou mesclado, e essa correção não exige migração de banco.
+
+Para comparar dois pedidos sem expor os dados pessoais, o script
+`scripts/audit-checkout-duplicates.mjs` aceita `ARTGIAN_AUDIT_ORDER_PREFIXES`
+com dois prefixos de oito caracteres separados por vírgula. Ele usa apenas as
+credenciais do ambiente, abre uma transação de leitura e informa os campos
+divergentes, igualdade dos itens e situação dos pagamentos; não altera pedidos.
+
 O cabeçalho oferece acesso a `/carrinho`, `/login` e `/conta`. Todas as páginas
 com compra permitem adicionar peças, mantendo cor, quantidade e personalização.
 O carrinho fica no navegador (`localStorage`), acompanha as abas da mesma origem

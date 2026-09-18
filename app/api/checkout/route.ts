@@ -4,7 +4,8 @@ import { getProductCatalog } from "../../../lib/products/repository";
 import { requestOrigin } from "../../../lib/request-origin";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { orderItems, orders } from "../../../db/schema";
+import { orders } from "../../../db/schema";
+import { createOrReuseCheckoutOrder, saveCheckoutPreference } from "../../../lib/checkout-orders";
 import { digitsOnly, hasFullName, isValidCpf } from "../../../lib/brazil";
 import { cartSelections, checkoutItems } from "../../../lib/cart";
 import { getCustomerSession } from "../../../lib/auth";
@@ -15,7 +16,6 @@ import {
 } from "../../../lib/mercado-pago";
 import {
   CouponError,
-  reserveCoupon,
   releaseCouponAfterSetupFailure,
 } from "../../../lib/coupons";
 import {
@@ -188,23 +188,12 @@ export async function POST(request: Request) {
     if (!savedAddress && payload.saveAddress !== false) {
       await saveAddress(session.user.id, parsedAddress.data);
     }
-    orderId = crypto.randomUUID();
+    const newOrderId = crypto.randomUUID();
     const db = await getDb();
-    let discountCents = 0;
-    let couponSnapshot:
-      | {
-          couponId: string;
-          couponCode: string;
-          couponKind: string;
-          couponValue: number;
-        }
-      | undefined;
-    let couponExpiresAt: string | null = null;
-    let totalCents = subtotalCents + shippingOption.priceCents;
     const shippingQuotedAt = new Date().toISOString();
 
-    const orderValues = () => ({
-      id: orderId!,
+    const orderValues = {
+      id: newOrderId,
       userId: session.user.id,
       status: "pending",
       customerName,
@@ -219,8 +208,6 @@ export async function POST(request: Request) {
       city,
       state,
       subtotalCents,
-      discountCents,
-      ...couponSnapshot,
       shippingCents: shippingOption.priceCents,
       shippingProvider: shippingQuote.provider,
       shippingServiceId: shippingOption.serviceId,
@@ -229,10 +216,10 @@ export async function POST(request: Request) {
       shippingCompanyName: shippingOption.companyName,
       shippingDeliveryTimeDays: shippingOption.deliveryTimeDays,
       shippingQuotedAt,
-      totalCents,
-    });
+      totalCents: subtotalCents + shippingOption.priceCents,
+    };
     const itemValues = selections.map((selection) => ({
-      orderId: orderId!,
+      orderId: newOrderId,
       productId: selection.productId,
       productName: selection.product.name,
       shippingPackageSnapshot: JSON.stringify(selection.product.shippingPackage),
@@ -241,40 +228,21 @@ export async function POST(request: Request) {
       quantity: selection.quantity,
       unitPriceCents: selection.product.unitPriceCents,
     }));
-    if (payload.couponCode !== undefined && payload.couponCode !== "") {
-      await db.transaction(
-        async (tx) => {
-          const result = await reserveCoupon(
-            tx,
-            payload.couponCode,
-            subtotalCents,
-          );
-          discountCents = result.discountCents;
-          couponExpiresAt = result.coupon.expiresAt;
-          couponSnapshot = {
-            couponId: result.coupon.id,
-            couponCode: result.coupon.code,
-            couponKind: result.coupon.kind,
-            couponValue: result.coupon.value,
-          };
-          totalCents -= discountCents;
-          await tx.insert(orders).values(orderValues());
-          await tx.insert(orderItems).values(itemValues);
-        },
-        { behavior: "immediate" },
-      );
-    } else {
-      await db.batch([
-        db.insert(orders).values(orderValues()),
-        db.insert(orderItems).values(itemValues),
-      ]);
+    const prepared = await createOrReuseCheckoutOrder(db, orderValues, itemValues, payload.couponCode);
+    if (prepared.kind === "reused") {
+      return Response.json({ checkoutUrl: prepared.checkoutUrl, orderId: prepared.orderId }, { status: 200 });
     }
+    if (prepared.kind === "processing") {
+      return Response.json({ error: "O pagamento deste pedido está sendo preparado. Aguarde alguns instantes e tente novamente.", code: "CHECKOUT_IN_PROGRESS" }, { status: 409, headers: { "Retry-After": "3" } });
+    }
+    // Only this request owns creation and may mark setup as failed.
+    orderId = prepared.orderId;
 
     const { preference, checkoutUrl } = await createCheckoutPreference({
       orderId,
-      discountCents,
-      couponCode: couponSnapshot?.couponCode,
-      expiresAt: couponExpiresAt,
+      discountCents: prepared.discountCents,
+      couponCode: prepared.couponCode,
+      expiresAt: prepared.expiresAt,
       items: selections.map((selection) => ({
         productId: selection.productId,
         productName: selection.product.name,
@@ -294,14 +262,7 @@ export async function POST(request: Request) {
       appUrl,
     });
 
-    await db
-      .update(orders)
-      .set({
-        mercadoPagoPreferenceId: preference.id,
-        checkoutUrl,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(orders.id, orderId));
+    await saveCheckoutPreference(db, orderId, preference.id, checkoutUrl);
 
     return Response.json({ checkoutUrl, orderId }, { status: 201 });
   } catch (error) {

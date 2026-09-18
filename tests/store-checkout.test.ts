@@ -14,13 +14,16 @@ vi.mock("../lib/addresses/repository", async (original) => ({
   saveAddress: mock.saveAddress,
   getAddress: mock.getAddress,
 }));
-vi.mock("../db", () => ({
-  getDb: async () => ({
+vi.mock("../db", () => {
+  const database = {
     insert: () => ({ values: mock.values }),
     batch: mock.batch,
     update: () => ({ set: () => ({ where: mock.update }) }),
-  }),
-}));
+    select: () => ({ from: () => ({ where: () => ({ orderBy: async () => [] }) }) }),
+    transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(database),
+  };
+  return { getDb: async () => database };
+});
 vi.mock("../lib/auth", () => ({ getCustomerSession: mock.session }));
 import { POST } from "../app/api/checkout/route";
 import { POST as quote } from "../app/api/shipping/quote/route";
