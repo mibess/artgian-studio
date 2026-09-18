@@ -3,6 +3,7 @@
 import { FormEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { MapPin, Plus } from "lucide-react";
 import { cartSelections, type CartItem } from "../../lib/cart";
 import { formatCpf, formatPhone } from "../../lib/brazil";
 import { formatBrl } from "../../lib/catalog";
@@ -67,6 +68,7 @@ export default function CheckoutForm({
   const [customerDocument, setCustomerDocument] = useState("");
   const initialAddress = addresses.find(address => address.isDefault) ?? addresses[0];
   const [selectedAddressId, setSelectedAddressId] = useState(initialAddress?.id ?? "");
+  const [choosingAddress, setChoosingAddress] = useState(false);
   const [address, setAddress] = useState<AddressDraft>(initialAddress ?? { ...emptyAddress });
   const [saveNewAddress, setSaveNewAddress] = useState(addresses.length < 20);
   const postalCode = address.postalCode;
@@ -123,6 +125,8 @@ export default function CheckoutForm({
   }
 
   function selectAddress(id: string) {
+    setChoosingAddress(false);
+    if (id === selectedAddressId) return;
     const selected = addresses.find(address => address.id === id);
     setSelectedAddressId(id);
     setAddress(selected ?? { ...emptyAddress });
@@ -219,6 +223,14 @@ export default function CheckoutForm({
         body: JSON.stringify({
           expectedSubtotalCents: subtotalCents,
           ...payload,
+          postalCode: address.postalCode,
+          streetAddress: address.streetAddress,
+          addressNumber: address.addressNumber,
+          addressComplement: address.addressComplement,
+          neighborhood: address.neighborhood,
+          city: address.city,
+          state: address.state,
+          label: address.label,
           addressId: selectedAddressId || undefined,
           saveAddress: !selectedAddressId && saveNewAddress,
           couponCode: appliedCoupon?.code,
@@ -360,16 +372,29 @@ export default function CheckoutForm({
             </span>
             <h2 className="font-serif text-2xl font-normal">Entrega</h2>
           </div>
-          {addresses.length > 0 && <label className="mt-5 block">
-            <span className="mb-2 block text-xs font-semibold">Endereço de entrega</span>
-            <select aria-label="Endereço de entrega" className="h-12 w-full min-w-0 rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-3 text-sm" value={selectedAddressId} onChange={event => selectAddress(event.target.value)} disabled={submitting}>
-              {addresses.map(address => <option key={address.id} value={address.id}>{address.label || address.streetAddress}, {address.addressNumber} · {address.city}/{address.state}{address.isDefault ? " (Padrão)" : ""}</option>)}
-              <option value="">Usar outro endereço</option>
-            </select>
-          </label>}
-          {selectedAddressId && <p className="mt-3 text-xs text-[#647087]">Para atualizar seus endereços, acesse <Link className="underline" href="/conta">Minha conta</Link>.</p>}
+          {selectedAddressId && <div aria-label="Endereço de entrega" role="group" className="mt-5 flex items-start gap-3 rounded-2xl border border-[#b88a3b] bg-white/80 p-5 sm:gap-4 sm:p-6">
+            <MapPin aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-[#b88a3b]" />
+            <div className="min-w-0">
+              <p className="break-words text-sm font-semibold leading-6 sm:text-base">{address.streetAddress}, {address.addressNumber}{address.addressComplement && ` · ${address.addressComplement}`}</p>
+              <p className="mt-1 break-words text-xs leading-5 text-[#647087]">{address.neighborhood} · {address.city}/{address.state} · CEP {formatPostalCode(postalCode)}</p>
+              <button type="button" className="mt-2 min-h-11 text-sm font-semibold text-[#0b2447] underline decoration-[#b88a3b]/60 underline-offset-4 hover:text-[#9a722e] disabled:opacity-50" aria-expanded={choosingAddress} aria-controls="checkout-address-options" onClick={() => setChoosingAddress(!choosingAddress)} disabled={submitting}>Alterar endereço</button>
+            </div>
+          </div>}
+          {!selectedAddressId && addresses.length > 0 && <button type="button" className="mt-5 min-h-11 text-sm font-semibold underline underline-offset-4" aria-expanded={choosingAddress} aria-controls="checkout-address-options" onClick={() => setChoosingAddress(!choosingAddress)} disabled={submitting}>Usar um endereço salvo</button>}
+          {choosingAddress && <div id="checkout-address-options" className="mt-4 space-y-3 rounded-2xl border border-[#0b2447]/10 bg-white/60 p-4">
+            <p className="text-sm font-semibold">Onde você quer receber?</p>
+            {addresses.map(saved => <button key={saved.id} type="button" aria-pressed={selectedAddressId === saved.id} onClick={() => selectAddress(saved.id)} disabled={submitting} className={`block w-full rounded-xl border p-4 text-left transition disabled:opacity-50 ${selectedAddressId === saved.id ? "border-[#b88a3b] bg-[#d8bc7b]/10" : "border-[#0b2447]/15 hover:border-[#b88a3b]"}`}>
+              <span className="block break-words text-sm font-semibold">{saved.label || saved.streetAddress}{saved.isDefault ? " · Padrão" : ""}</span>
+              <span className="mt-1 block break-words text-xs leading-5 text-[#647087]">{saved.streetAddress}, {saved.addressNumber}{saved.addressComplement && ` · ${saved.addressComplement}`}<br />{saved.neighborhood} · {saved.city}/{saved.state} · CEP {formatPostalCode(saved.postalCode)}</span>
+            </button>)}
+            <button type="button" onClick={() => selectAddress("")} disabled={submitting} className="flex min-h-11 items-center gap-2 text-sm font-semibold disabled:opacity-50"><Plus aria-hidden="true" className="size-4" />Cadastrar novo endereço</button>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+              <Link className="py-2 underline underline-offset-4" href="/conta">Gerenciar meus endereços</Link>
+              <button type="button" className="min-h-11 font-semibold" onClick={() => setChoosingAddress(false)}>Cancelar</button>
+            </div>
+          </div>}
           <div className="mt-5 grid gap-4 sm:grid-cols-6">
-            <label className="sm:col-span-2">
+            {!selectedAddressId && <label className="sm:col-span-2">
               <span className="mb-2 block text-xs font-semibold">CEP</span>
               <input
                 className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
@@ -384,8 +409,8 @@ export default function CheckoutForm({
                 onChange={(event) => handlePostalCodeChange(event.target.value)}
                 required
               />
-            </label>
-            <div className="flex items-end sm:col-span-4">
+            </label>}
+            <div className={`flex items-end ${selectedAddressId ? "sm:col-span-6" : "sm:col-span-4"}`}>
               <button
                 className="flex h-12 items-center gap-2 rounded-full border border-[#0b2447]/20 px-5 text-xs font-semibold transition hover:border-[#b88a3b] disabled:opacity-60"
                 type="button"
@@ -454,7 +479,7 @@ export default function CheckoutForm({
               </fieldset>
             )}
 
-            <AddressFields value={address} onChange={setAddress} readOnly={Boolean(selectedAddressId)} includePostalCode={false} includeLabel={!selectedAddressId && saveNewAddress} />
+            {!selectedAddressId && <AddressFields value={address} onChange={setAddress} includePostalCode={false} includeLabel={saveNewAddress} />}
             {!selectedAddressId && <label className="sm:col-span-6 flex items-start gap-3 text-sm">
               <input type="checkbox" className="mt-1 accent-[#0b2447]" checked={saveNewAddress} disabled={addresses.length >= 20} onChange={event => setSaveNewAddress(event.target.checked)} />
               <span>Salvar este endereço na minha conta.{!addresses.length && <span className="mt-1 block text-xs text-[#647087]">Seu primeiro endereço salvo será o padrão.</span>}{addresses.length >= 20 && <span className="mt-1 block text-xs text-[#647087]">Você já tem 20 endereços salvos. Este será usado apenas neste pedido.</span>}</span>
