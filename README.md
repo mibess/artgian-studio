@@ -222,6 +222,25 @@ clique explícito do administrador.
 O projeto pode ser publicado como uma aplicação Next.js na Vercel. O arquivo
 `vercel.json` mantém a detecção explícita do framework.
 
+O build da Vercel executa `node scripts/verify-store-schema.mjs` antes do
+Next.js. Essa verificação somente lê o banco real do ambiente de publicação e
+bloqueia o deploy se a última migração/hash não corresponder ao código ou se a
+coluna de telefone estiver ausente. Ela não carrega `.env.local`: validar ou
+migrar o banco de desenvolvimento não valida o banco de produção. Variáveis
+sensíveis da Vercel não são exportáveis; `vercel env run` pode usar valores
+locais como fallback e não deve ser usado para comprovar a migração de produção.
+
+Para a recuperação específica da migração 0018, o script aceita
+`--apply-contact` ou a variável **somente de build**
+`ARTGIAN_APPLY_CONTACT_MIGRATION=1`. Esse opt-in aplica apenas a migração de
+telefone a partir da 0017 validada, dentro de uma transação, verificando que
+todos os campos existentes dos clientes foram preservados. Não configure essa
+variável permanentemente. Outras migrações exigem aplicação separada e revisada.
+
+Após publicar, valide `/comprar` com uma sessão autenticada e confira os logs.
+Um HTTP 200 sem sessão não comprova o checkout: pode ser apenas o redirect
+para login ou uma resposta de streaming que contém erro de renderização.
+
 ### Indexação no Google
 
 O domínio público usado nos metadados é `https://www.artgian.com.br`, definido
