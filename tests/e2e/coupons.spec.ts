@@ -96,6 +96,7 @@ test("authenticated customer applies and removes a real coupon in checkout", asy
   await expect(page.getByRole("status")).toContainText("21,96");
   await expect(page.getByRole("status")).not.toContainText("Válido até");
   await expect(page.locator("aside")).toContainText(`Desconto · ${code}`);
+  await expect(page.getByRole("link", { name: "Ver meus pedidos", exact: true })).toHaveCount(0);
   const usage = await client.execute({
     sql: "select allocated_uses from coupons where code = ?",
     args: [code],
@@ -112,6 +113,7 @@ test("authenticated customer applies and removes a real coupon in checkout", asy
   await expect(page.locator("form").getByRole("alert")).toContainText(
     "inválido",
   );
+  await expect(page.getByRole("link", { name: "Ver meus pedidos", exact: true })).toHaveCount(0);
   await page.request.post("/api/admin/coupons", {
     headers: { origin },
     form: {

@@ -650,10 +650,7 @@ export default function CheckoutForm({
           )}
           {couponError && (
             <p role="alert" className="mt-3 text-sm text-red-700">
-              {couponError}{" "}
-              <Link href="/conta" className="underline">
-                Ver meus pedidos
-              </Link>
+              {couponError}
             </p>
           )}
           <p className="mt-3 text-xs leading-5 text-[#647087]">
