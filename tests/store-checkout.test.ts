@@ -169,9 +169,9 @@ describe("multi-item checkout", () => {
     expect(mock.fetch).not.toHaveBeenCalled();
   });
   it("rejects shipping price changes before persisting an order", async () => {
-    expect(
-      (await POST(request({ ...payload, shippingPriceCents: 1 }))).status,
-    ).toBe(409);
+    const response = await POST(request({ ...payload, shippingPriceCents: 1 }));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "SHIPPING_REQUOTE_REQUIRED" });
     expect(mock.batch).not.toHaveBeenCalled();
   });
   it("rejects a recipient without a complete name", async () => {

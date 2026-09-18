@@ -167,6 +167,7 @@ export async function POST(request: Request) {
         {
           error:
             "A modalidade de entrega não está mais disponível. Calcule novamente.",
+          code: "SHIPPING_REQUOTE_REQUIRED",
         },
         { status: 409 },
       );
@@ -175,6 +176,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error: "O valor da entrega mudou. Calcule novamente antes de pagar.",
+          code: "SHIPPING_REQUOTE_REQUIRED",
         },
         { status: 409 },
       );
@@ -335,7 +337,7 @@ export async function POST(request: Request) {
     }
     if (error instanceof ShippingProviderError) {
       return Response.json(
-        { error: "Não foi possível confirmar a entrega. Calcule novamente." },
+        { error: "Não foi possível confirmar a entrega. Calcule novamente.", code: "SHIPPING_REQUOTE_REQUIRED" },
         { status: 502 },
       );
     }

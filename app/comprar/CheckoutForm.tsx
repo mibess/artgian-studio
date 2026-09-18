@@ -131,6 +131,7 @@ export default function CheckoutForm({
   }
 
   function handlePostalCodeChange(value: string) {
+    setShippingError("");
     setAddress(current => ({ ...current, postalCode: formatPostalCode(value) }));
     quoteVersion.current += 1;
     setQuoting(false);
@@ -264,6 +265,7 @@ export default function CheckoutForm({
         checkoutUrl?: string;
         orderId?: string;
         error?: string;
+        code?: string;
       };
 
       if (response.status === 401) {
@@ -272,6 +274,14 @@ export default function CheckoutForm({
         return;
       }
 
+      if (!response.ok && result.code === "SHIPPING_REQUOTE_REQUIRED") {
+        setShippingOptions([]);
+        setSelectedServiceId("");
+        setQuotedPostalCode("");
+        setShippingError(result.error || "Calcule novamente a entrega antes de pagar.");
+        setSubmitting(false);
+        return;
+      }
       if (response.status === 409 || response.status === 404) router.refresh();
       if (!response.ok || !result.checkoutUrl) {
         throw new Error(
@@ -476,7 +486,10 @@ export default function CheckoutForm({
                 required
               />
             </label>}
-            <div className={`flex items-end ${selectedAddressId ? "sm:col-span-6" : "sm:col-span-4"}`}>
+            {quoting ? <p role="status" className="sm:col-span-6 flex items-center gap-2 text-sm text-[#647087]">
+              <span className="ui-spinner" aria-hidden="true" />
+              Calculando entrega…
+            </p> : (shippingError || (!selectedAddressId && !selectedShipping)) ? <div className={`flex items-end ${selectedAddressId ? "sm:col-span-6" : "sm:col-span-4"}`}>
               <button
                 className="flex h-12 items-center gap-2 rounded-full border border-[#0b2447]/20 px-5 text-xs font-semibold transition hover:border-[#b88a3b] disabled:opacity-60"
                 type="button"
@@ -484,16 +497,9 @@ export default function CheckoutForm({
                 disabled={quoting || submitting}
                 aria-busy={quoting}
               >
-                {quoting ? (
-                  <>
-                    <span className="ui-spinner" aria-hidden="true" />
-                    Calculando…
-                  </>
-                ) : (
-                  shippingError ? "Tentar calcular novamente" : selectedShipping ? "Recalcular entrega" : "Calcular entrega"
-                )}
+                {shippingError ? "Tentar calcular novamente" : "Calcular entrega"}
               </button>
-            </div>
+            </div> : null}
 
             {shippingError && (
               <p
