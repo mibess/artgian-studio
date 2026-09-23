@@ -25,6 +25,7 @@ import {
 } from "../../../lib/shipping";
 
 type CheckoutPayload = {
+  checkoutMode?: unknown;
   addressId?: unknown;
   saveAddress?: unknown;
   label?: string;
@@ -87,6 +88,9 @@ export async function POST(request: Request) {
     const payload = (await request.json()) as CheckoutPayload;
     if (!payload || typeof payload !== "object")
       return Response.json({ error: "Pedido inválido." }, { status: 400 });
+    if (payload.checkoutMode !== undefined && payload.checkoutMode !== "embedded")
+      return Response.json({ error: "Pagamento inválido." }, { status: 400 });
+    const embedded = payload.checkoutMode === "embedded";
     const catalog = await getProductCatalog();
     const items = checkoutItems(payload, catalog);
     if (!items?.length) {
@@ -188,6 +192,8 @@ export async function POST(request: Request) {
     const appUrl = await resolveAppUrl(request);
     if (!(await getEnvironmentVariable("MERCADO_PAGO_ACCESS_TOKEN")))
       throw new Error("Pagamento não configurado.");
+    if (embedded && !(await getEnvironmentVariable("MERCADO_PAGO_PUBLIC_KEY")))
+      return Response.json({ error: "O pagamento está temporariamente indisponível. Tente novamente em instantes." }, { status: 503 });
     if (!savedAddress && payload.saveAddress !== false) {
       await saveAddress(session.user.id, parsedAddress.data);
     }
@@ -199,6 +205,7 @@ export async function POST(request: Request) {
       id: newOrderId,
       userId: session.user.id,
       status: "pending",
+      checkoutMode: embedded ? "embedded" : "redirect",
       customerName,
       customerEmail,
       customerPhone,
@@ -233,6 +240,7 @@ export async function POST(request: Request) {
     }));
     const prepared = await createOrReuseCheckoutOrder(db, orderValues, itemValues, payload.couponCode);
     if (prepared.kind === "reused") {
+      if (embedded) return Response.json({ paymentUrl: prepared.checkoutUrl, orderId: prepared.orderId });
       return Response.json({ checkoutUrl: prepared.checkoutUrl, orderId: prepared.orderId }, { status: 200 });
     }
     if (prepared.kind === "processing") {
@@ -240,6 +248,10 @@ export async function POST(request: Request) {
     }
     // Only this request owns creation and may mark setup as failed.
     orderId = prepared.orderId;
+
+    if (embedded) {
+      return Response.json({ paymentUrl: `/comprar/pagamento?pedido=${orderId}`, orderId }, { status: 201 });
+    }
 
     const { preference, checkoutUrl } = await createCheckoutPreference({
       orderId,

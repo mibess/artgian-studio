@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getCustomerSession } from "../../lib/auth";
 import ClearPurchasedCart from "./ClearPurchasedCart";
 import { eq } from "drizzle-orm";
 import BrandHeader from "../components/BrandHeader";
@@ -51,6 +54,8 @@ export default async function PaymentResult({
 }: PaymentResultProps) {
   let order: typeof orders.$inferSelect | null = null;
   let items: (typeof orderItems.$inferSelect)[] = [];
+  const session = await getCustomerSession(await headers());
+  if (!session) redirect(`/login?next=${encodeURIComponent(`/comprar/${returnState === "success" ? "sucesso" : returnState === "failure" ? "falha" : "pendente"}${orderId ? `?pedido=${orderId}` : ""}`)}`);
 
   if (orderId) {
     try {
@@ -60,7 +65,8 @@ export default async function PaymentResult({
         .from(orders)
         .where(eq(orders.id, orderId))
         .limit(1);
-      items = await db
+      if (order?.userId !== session.user.id) order = null;
+      if (order) items = await db
         .select()
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId));
@@ -68,6 +74,9 @@ export default async function PaymentResult({
       // Keep the return page useful even if persistence is temporarily unavailable.
     }
   }
+
+  if (!order) return <main className="min-h-screen bg-[#f7f3ea] p-8 text-[#0b2447]"><BrandHeader /><div className="mx-auto mt-12 max-w-xl"><p>Pedido não encontrado nesta conta.</p><Link href="/conta" className="mt-4 inline-flex underline">Ver meus pedidos</Link></div></main>;
+  if (order?.checkoutMode === "embedded") redirect(`/comprar/pagamento?pedido=${order.id}`);
 
   const failureStatuses = new Set([
     "rejected",
@@ -81,7 +90,7 @@ export default async function PaymentResult({
       ? "success"
       : order && failureStatuses.has(order.status)
         ? "failure"
-        : returnState;
+        : "pending";
   const pageContent = content[effectiveReturnState];
 
   return (

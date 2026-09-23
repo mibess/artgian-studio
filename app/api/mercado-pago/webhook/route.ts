@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { coupons, orders, paymentEvents } from "../../../../db/schema";
+import { applyEmbeddedPayment } from "../../../../lib/embedded-payments";
 import {
   getEnvironmentVariable,
   getPayment,
@@ -62,6 +63,16 @@ export async function POST(request: Request) {
       .limit(1);
 
     if (!order) {
+      return new Response(null, { status: 200 });
+    }
+
+    if (order.checkoutMode === "embedded") {
+      const applied = await applyEmbeddedPayment(payment);
+      if (applied) await db.insert(paymentEvents).values({
+        eventKey: request.headers.get("x-request-id") ?? `${payload.id ?? "payment"}:${dataId}:${payment.status}:${payment.date_last_updated ?? ""}`,
+        orderId, paymentId: String(payment.id), action: payload.action ?? null,
+        payload: JSON.stringify({ id: payment.id, status: payment.status, status_detail: payment.status_detail, date_last_updated: payment.date_last_updated }),
+      }).onConflictDoNothing();
       return new Response(null, { status: 200 });
     }
 

@@ -37,6 +37,10 @@ export async function verifyStoreSchema(client, { applyContact = false } = {}) {
     }
     const columns = (await tx.execute("PRAGMA table_info(store_user)")).rows;
     if (!columns.some(row => row.name === "phone" && row.type === "TEXT" && Number(row.notnull) === 0)) throw new Error("A coluna de telefone está ausente ou inválida.");
+    const orderColumns = (await tx.execute("PRAGMA table_info(orders)")).rows;
+    if (!["checkout_mode", "payment_expires_at"].every(name => orderColumns.some(row => row.name === name))) throw new Error("As colunas do checkout integrado estão ausentes.");
+    const paymentColumns = (await tx.execute("PRAGMA table_info(payment_attempts)")).rows;
+    if (!["id", "order_id", "method", "status", "provider_payment_id", "request_payload", "device_id", "result", "provider_updated_at", "created_at", "updated_at"].every(name => paymentColumns.some(row => row.name === name))) throw new Error("A tabela de tentativas de pagamento está ausente ou incompleta.");
     if (applyContact) await tx.commit();
     else await tx.rollback();
     console.log(`Schema do banco verificado: ${expected.tag}.`);

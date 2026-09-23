@@ -124,7 +124,11 @@ export default async function AccountPage() {
                       {formatBrl(order.discountCents)}
                     </p>
                   )}
-                  {order.checkoutUrl &&
+                  {order.checkoutMode === "embedded" ? (
+                    <Link href={`/comprar/pagamento?pedido=${order.id}`} className="mt-4 inline-flex rounded-full bg-[#0b2447] px-5 py-3 text-sm font-semibold text-white">
+                      {order.status === "pending" ? "Continuar pagamento" : "Ver pagamento"}
+                    </Link>
+                  ) : order.checkoutUrl &&
                     ["pending", "rejected"].includes(order.status) && (
                       <a
                         href={order.checkoutUrl}

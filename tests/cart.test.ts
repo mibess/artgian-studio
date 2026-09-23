@@ -80,4 +80,7 @@ describe("login return destination", () => {
     expect(
       safeReturnTo("/comprar?produto=organizador-arco&cor=rosa-marfim"),
     ).toBe("/comprar?produto=organizador-arco&cor=rosa-marfim"));
+  it("returns to an existing payment after signing in", () =>
+    expect(safeReturnTo("/comprar/pagamento?pedido=existing-order"))
+      .toBe("/comprar/pagamento?pedido=existing-order"));
 });

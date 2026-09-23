@@ -12,8 +12,10 @@ const env = parseEnv(await readFile(envFile, "utf8"));
 if (!env.TURSO_DATABASE_URL || !env.TURSO_AUTH_TOKEN) throw new Error("Credenciais ausentes.");
 const journal = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8")).entries;
 const contactOnly = process.argv.includes("--contact");
-const baselineTag = contactOnly ? "0017_gorgeous_talon" : "0014_unusual_cassandra_nova";
-const pendingTags = contactOnly ? ["0018_sticky_phantom_reporter"] : ["0015_gray_manta", "0016_volatile_namor", "0017_gorgeous_talon"];
+const paymentsOnly = process.argv.includes("--payments");
+if (contactOnly && paymentsOnly) throw new Error("Selecione apenas uma migração: --contact ou --payments.");
+const baselineTag = paymentsOnly ? "0018_sticky_phantom_reporter" : contactOnly ? "0017_gorgeous_talon" : "0014_unusual_cassandra_nova";
+const pendingTags = paymentsOnly ? ["0019_sparkling_dust"] : contactOnly ? ["0018_sticky_phantom_reporter"] : ["0015_gray_manta", "0016_volatile_namor", "0017_gorgeous_talon"];
 const migrations = await Promise.all(journal.map(async entry => {
   const sql = await readFile(`drizzle/${entry.tag}.sql`, "utf8");
   return { ...entry, sql, hash: createHash("sha256").update(sql).digest("hex") };
@@ -58,7 +60,17 @@ async function latestMigration(connection) {
 }
 
 async function validateNewSchema(connection) {
-  if (contactOnly) {
+  if (paymentsOnly) {
+    const columns = (await connection.execute("PRAGMA table_info(orders)")).rows;
+    if (!columns.some(row => row.name === "checkout_mode" && row.type === "TEXT" && Number(row.notnull) === 1 && row.dflt_value === "'redirect'") ||
+        !columns.some(row => row.name === "payment_expires_at" && row.type === "TEXT" && Number(row.notnull) === 0)) throw new Error("Colunas de pagamento inválidas.");
+    const attempts = (await connection.execute("PRAGMA table_info(payment_attempts)")).rows;
+    if (!["id", "order_id", "method", "status", "provider_payment_id", "request_payload", "device_id", "result", "provider_updated_at", "created_at", "updated_at"].every(name => attempts.some(row => row.name === name && row.type === "TEXT"))) throw new Error("Tabela de tentativas inválida.");
+    const indexes = (await connection.execute("PRAGMA index_list(payment_attempts)")).rows;
+    if (!indexes.some(row => row.name === "payment_attempts_order_idx") || !indexes.some(row => row.name === "payment_attempts_provider_unique" && Number(row.unique) === 1)) throw new Error("Índices de pagamento inválidos.");
+    const references = (await connection.execute("PRAGMA foreign_key_list(payment_attempts)")).rows;
+    if (!references.some(row => row.table === "orders" && row.from === "order_id" && row.to === "id" && row.on_delete === "CASCADE")) throw new Error("Referência de pagamento inválida.");
+  } else if (contactOnly) {
     const columns = (await connection.execute("PRAGMA table_info(store_user)")).rows;
     if (!columns.some(row => row.name === "phone" && row.type === "TEXT" && Number(row.notnull) === 0)) throw new Error("Coluna de telefone inválida.");
   } else {
@@ -151,7 +163,7 @@ try {
       await applyPending(writeTx, current);
       await validateNewSchema(writeTx);
       // Compare original columns, not newly added columns or catalog migration data.
-      const excluded = contactOnly ? ["__drizzle_migrations", "sqlite_sequence"] : ["__drizzle_migrations", "catalog_products", "sqlite_sequence"];
+      const excluded = contactOnly || paymentsOnly ? ["__drizzle_migrations", "sqlite_sequence"] : ["__drizzle_migrations", "catalog_products", "sqlite_sequence"];
       const originalTables = before.tables.filter(row => !excluded.includes(row.name));
       const originalResults = await writeTx.batch(originalTables.map(table => `SELECT ${table.columns.map(quote).join(",")} FROM ${quote(table.name)}`));
       for (const [index, table] of originalTables.entries()) {

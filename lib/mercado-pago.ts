@@ -1,9 +1,17 @@
 export class MercadoPagoRequestError extends Error {
+  public readonly code?: string;
+  public readonly causeCodes: string[] = [];
   constructor(
     public status: number,
     detail: string,
   ) {
     super(`Mercado Pago respondeu ${status}: ${detail.slice(0, 500)}`);
+    const safeCode = (value: unknown) => typeof value === "number" || typeof value === "string" && /^[a-zA-Z0-9_.-]{1,100}$/.test(value) ? String(value) : undefined;
+    try {
+      const body = JSON.parse(detail);
+      this.code = safeCode(body.error);
+      if (Array.isArray(body.cause)) this.causeCodes = body.cause.map((cause: { code?: unknown }) => safeCode(cause.code)).filter((code: string | undefined): code is string => Boolean(code));
+    } catch { /* Provider bodies are not always JSON. Never log their raw contents. */ }
   }
   get definitelyNotCreated() {
     return [400, 401, 403, 404, 422].includes(this.status);
@@ -27,9 +35,17 @@ export type MercadoPagoPayment = {
   shipping_amount?: number;
   transaction_details?: {
     total_paid_amount?: number;
+    external_resource_url?: string;
   };
   currency_id: string;
   date_last_updated?: string;
+  payment_method_id?: string;
+  payment_type_id?: string;
+  date_of_expiration?: string;
+  metadata?: { attempt_id?: string };
+  point_of_interaction?: { transaction_data?: { qr_code?: string; qr_code_base64?: string } };
+  barcode?: { content?: string };
+  three_ds_info?: { external_resource_url?: string; creq?: string };
 };
 
 export async function getEnvironmentVariable(name: string) {
@@ -54,6 +70,8 @@ async function mercadoPagoRequest<T>(
 ): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${pathname}`, {
     ...init,
+    cache: "no-store",
+    signal: init.signal ?? AbortSignal.timeout(20_000),
     headers: {
       Authorization: `Bearer ${await getAccessToken()}`,
       "Content-Type": "application/json",
@@ -198,6 +216,24 @@ export function getPayment(paymentId: string) {
   return mercadoPagoRequest<MercadoPagoPayment>(
     `/v1/payments/${encodeURIComponent(paymentId)}`,
   );
+}
+
+export function createPayment(body: Record<string, unknown>, idempotencyKey: string, deviceId?: string | null) {
+  return mercadoPagoRequest<MercadoPagoPayment>("/v1/payments", {
+    method: "POST",
+    headers: { "X-Idempotency-Key": idempotencyKey, ...(deviceId ? { "X-meli-session-id": deviceId } : {}) },
+    body: JSON.stringify(body),
+  });
+}
+
+export function searchOrderPayments(orderId: string) {
+  return mercadoPagoRequest<{ results: MercadoPagoPayment[] }>(
+    `/v1/payments/search?external_reference=${encodeURIComponent(orderId)}&sort=date_created&criteria=desc&limit=100`,
+  );
+}
+
+export function getPaymentMethods() {
+  return mercadoPagoRequest<{ id: string; payment_type_id: string; status: string }[]>("/v1/payment_methods");
 }
 
 function timingSafeEqual(left: string, right: string) {

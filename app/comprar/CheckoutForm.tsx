@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapPin, Plus, UserRound } from "lucide-react";
+import { Barcode, CreditCard, LockKeyhole, MapPin, Plus, QrCode, UserRound } from "lucide-react";
 import { cartSelections, type CartItem } from "../../lib/cart";
 import { formatCpf, formatPhone, hasFullName } from "../../lib/brazil";
 import { formatBrl } from "../../lib/catalog";
@@ -242,6 +242,7 @@ export default function CheckoutForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           expectedSubtotalCents: subtotalCents,
+          checkoutMode: "embedded",
           ...payload,
           customerName,
           customerPhone,
@@ -262,7 +263,7 @@ export default function CheckoutForm({
         }),
       });
       const result = (await response.json()) as {
-        checkoutUrl?: string;
+        paymentUrl?: string;
         orderId?: string;
         error?: string;
         code?: string;
@@ -283,7 +284,7 @@ export default function CheckoutForm({
         return;
       }
       if (response.status === 409 || response.status === 404) router.refresh();
-      if (!response.ok || !result.checkoutUrl) {
+      if (!response.ok || !result.paymentUrl) {
         throw new Error(
           result.error || "Não foi possível iniciar o pagamento.",
         );
@@ -299,7 +300,7 @@ export default function CheckoutForm({
           /* Cart remains available when storage is blocked. */
         }
       }
-      window.location.assign(result.checkoutUrl);
+      router.push(result.paymentUrl);
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
@@ -566,20 +567,24 @@ export default function CheckoutForm({
             </span>
             <h2 className="font-serif text-2xl font-normal">Pagamento</h2>
           </div>
-          <div className="mt-5 rounded-2xl border border-dashed border-[#0b2447]/20 bg-[#f7f3ea] p-5">
+          <div className="mt-5 rounded-2xl border border-[#b88a3b]/25 bg-[#f7f3ea] p-5">
             <div className="flex items-start gap-3">
               <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#d8bc7b]/30">
-                ◇
+                <LockKeyhole size={17} aria-hidden="true" />
               </span>
               <div>
                 <strong className="text-sm">
-                  Pagamento seguro pelo Mercado Pago
+                  Seu pagamento, aqui na Artgian
                 </strong>
                 <p className="mt-1 text-xs leading-5 text-[#647087]">
-                  Você será direcionado ao Mercado Pago para escolher Pix,
-                  cartão ou outro meio disponível.
+                  Na próxima etapa, escolha como prefere pagar. Tudo com a segurança do Mercado Pago.
                 </p>
               </div>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-x-5 gap-y-3 border-t border-[#0b2447]/10 pt-4 text-xs font-semibold">
+              <span className="inline-flex items-center gap-2"><CreditCard size={17} aria-hidden="true" /> Cartão</span>
+              <span className="inline-flex items-center gap-2"><QrCode size={17} aria-hidden="true" /> Pix</span>
+              <span className="inline-flex items-center gap-2"><Barcode size={17} aria-hidden="true" /> Boleto</span>
             </div>
           </div>
         </section>
@@ -683,10 +688,10 @@ export default function CheckoutForm({
           {submitting ? (
             <span className="flex items-center gap-2">
               <span className="ui-spinner" aria-hidden="true" />
-              Abrindo o Mercado Pago…
+              Preparando seu pagamento…
             </span>
           ) : selectedShipping ? (
-            "Pagar com Mercado Pago"
+            "Continuar para pagamento"
           ) : (
             "Calcule a entrega para continuar"
           )}

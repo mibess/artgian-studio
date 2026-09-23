@@ -41,6 +41,7 @@ export default defineConfig({
       GOOGLE_CLIENT_ID: "",
       GOOGLE_CLIENT_SECRET: "",
       MERCADO_PAGO_ACCESS_TOKEN: "",
+      MERCADO_PAGO_PUBLIC_KEY: "TEST-public-key-for-mocked-sdk",
       MELHOR_ENVIO_ACCESS_TOKEN: "",
       COMMERCIAL_DATABASE_MODE: "local",
       COMMERCIAL_DEMO_MODE: "true",

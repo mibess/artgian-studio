@@ -6,7 +6,7 @@ export function safeReturnTo(value?: string) {
     if (
       !value.startsWith("/") ||
       url.origin !== "https://store.invalid" ||
-      !["/comprar", "/carrinho", "/conta", "/produtos"].includes(url.pathname)
+      !["/comprar", "/comprar/pagamento", "/carrinho", "/conta", "/produtos"].includes(url.pathname)
     )
       return "/conta";
     return url.pathname + url.search;

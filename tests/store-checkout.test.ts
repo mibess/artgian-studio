@@ -94,6 +94,21 @@ beforeEach(() => {
   vi.stubGlobal("fetch", mock.fetch);
 });
 describe("multi-item checkout", () => {
+  it("prepares embedded payment without creating a redirect preference", async () => {
+    vi.stubEnv("MERCADO_PAGO_PUBLIC_KEY", "test-public-key");
+    const response = await POST(request({ ...payload, checkoutMode: "embedded" }));
+    expect(response.status).toBe(201);
+    const result = await response.json();
+    expect(result.paymentUrl).toBe(`/comprar/pagamento?pedido=${result.orderId}`);
+    expect(result.checkoutUrl).toBeUndefined();
+    expect(mock.values.mock.calls[0][0]).toMatchObject({ checkoutMode: "embedded", status: "pending" });
+    expect(mock.fetch.mock.calls.every(([url]) => !url.includes("mercadopago"))).toBe(true);
+  });
+  it("does not reserve an order when the embedded public key is missing", async () => {
+    vi.stubEnv("MERCADO_PAGO_PUBLIC_KEY", "");
+    expect((await POST(request({ ...payload, checkoutMode: "embedded" }))).status).toBe(503);
+    expect(mock.values).not.toHaveBeenCalled();
+  });
   it("saves a new address for the session owner by default", async () => {
     expect((await POST(request({ ...payload, userId: "forged" }))).status).toBe(201);
     expect(mock.saveAddress).toHaveBeenCalledWith("customer-session-id", expect.objectContaining({ postalCode: "01001000", streetAddress: "Praça da Sé" }));

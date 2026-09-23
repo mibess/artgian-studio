@@ -55,6 +55,8 @@ export const orders = sqliteTable(
     discountCents: integer("discount_cents").notNull().default(0),
     couponRedeemedAt: text("coupon_redeemed_at"),
     checkoutUrl: text("checkout_url"),
+    checkoutMode: text("checkout_mode").notNull().default("redirect"),
+    paymentExpiresAt: text("payment_expires_at"),
     shippingCents: integer("shipping_cents").notNull(),
     shippingProvider: text("shipping_provider"),
     shippingServiceId: text("shipping_service_id"),
@@ -156,6 +158,25 @@ export const paymentEvents = sqliteTable(
     index("payment_events_order_id_idx").on(table.orderId),
   ],
 );
+
+// Only tokens produced by MercadoPago.js may be present in requestPayload.
+// PAN, CVV and card expiration are never received by the application.
+export const paymentAttempts = sqliteTable("payment_attempts", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  method: text("method").notNull(),
+  status: text("status").notNull().default("processing"),
+  providerPaymentId: text("provider_payment_id"),
+  requestPayload: text("request_payload"),
+  deviceId: text("device_id"),
+  result: text("result"),
+  providerUpdatedAt: text("provider_updated_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("payment_attempts_order_idx").on(table.orderId),
+  uniqueIndex("payment_attempts_provider_unique").on(table.providerPaymentId),
+]);
 
 export const leads = sqliteTable(
   "leads",

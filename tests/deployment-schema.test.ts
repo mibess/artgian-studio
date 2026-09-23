@@ -30,13 +30,11 @@ describe("deployment database schema gate", () => {
     await expect(verifyStoreSchema(client)).rejects.toThrow("Banco desatualizado");
     expect((await client.execute("PRAGMA table_info(store_user)")).rows.map(row => row.name)).not.toContain("phone");
   });
-  it("applies only the contact migration, preserves customer data and is idempotent", async () => {
+  it("does not silently apply new payment migrations through the old contact repair", async () => {
     await fixture();
-    await verifyStoreSchema(client, { applyContact: true });
-    await verifyStoreSchema(client);
-    await verifyStoreSchema(client, { applyContact: true });
-    expect((await client.execute("SELECT * FROM store_user")).rows).toEqual([{ id: "customer", name: "Cliente Teste", email: "test@example.com", phone: null }]);
-    expect((await client.execute("SELECT count(*) AS count FROM __drizzle_migrations")).rows[0].count).toBe(2);
+    await expect(verifyStoreSchema(client, { applyContact: true })).rejects.toThrow("outras migrações pendentes");
+    expect((await client.execute("SELECT * FROM store_user")).rows).toEqual([{ id: "customer", name: "Cliente Teste", email: "test@example.com" }]);
+    expect((await client.execute("SELECT count(*) AS count FROM __drizzle_migrations")).rows[0].count).toBe(1);
   });
   it("refuses an unexpected migration hash even with explicit repair enabled", async () => {
     await fixture();
@@ -46,8 +44,26 @@ describe("deployment database schema gate", () => {
   });
   it("checks the physical column even when the migration journal is current", async () => {
     await fixture();
-    await verifyStoreSchema(client, { applyContact: true });
-    await client.execute("ALTER TABLE store_user DROP COLUMN phone");
+    await markCurrent();
     await expect(verifyStoreSchema(client)).rejects.toThrow("coluna de telefone");
   });
+  it("requires the physical payment table and columns before publication", async () => {
+    await fixture();
+    await markCurrent();
+    await client.execute("ALTER TABLE store_user ADD phone TEXT");
+    await client.execute("CREATE TABLE orders (id TEXT PRIMARY KEY)");
+    await expect(verifyStoreSchema(client)).rejects.toThrow("colunas do checkout");
+    const migration = await readFile("drizzle/0019_sparkling_dust.sql", "utf8");
+    for (const sql of migration.split("--> statement-breakpoint")) await client.execute(sql.trim());
+    await verifyStoreSchema(client);
+    await client.execute("DROP TABLE payment_attempts");
+    await expect(verifyStoreSchema(client)).rejects.toThrow("tabela de tentativas");
+  });
 });
+
+async function markCurrent() {
+  const { entries } = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8"));
+  const latest = entries.at(-1);
+  const hash = createHash("sha256").update(await readFile(`drizzle/${latest.tag}.sql`)).digest("hex");
+  await client.execute({ sql: "INSERT INTO __drizzle_migrations VALUES (?, ?)", args: [hash, latest.when] });
+}

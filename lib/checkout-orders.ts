@@ -1,7 +1,8 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { getDb } from "../db";
-import { coupons, orderItems, orders } from "../db/schema";
+import { coupons, orderItems, orders, paymentAttempts } from "../db/schema";
+import { canRetryPayment } from "./payment-types";
 import { calculateDiscount, CouponError, couponCodeSchema, reserveCoupon } from "./coupons";
 
 type Database = Awaited<ReturnType<typeof getDb>>;
@@ -26,7 +27,7 @@ export type CheckoutOrderResult =
   | { kind: "processing"; orderId: string }
   | { kind: "created"; orderId: string; discountCents: number; couponCode?: string; expiresAt: string | null };
 
-async function retryTransaction<T>(write: () => Promise<T>): Promise<T> {
+export async function retryTransaction<T>(write: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try { return await write(); }
     catch (error) {
@@ -73,12 +74,26 @@ export async function createOrReuseCheckoutOrder(
       eq(orders.status, "pending"),
       eq(orders.subtotalCents, draft.subtotalCents),
       eq(orders.shippingCents, draft.shippingCents),
+      eq(orders.checkoutMode, draft.checkoutMode ?? "redirect"),
     )).orderBy(desc(orders.createdAt));
     const expectedPurchase = purchaseKey(draft);
     const expectedItems = itemsKey(items);
     for (const candidate of candidates) {
       if ((candidate.couponCode || null) !== couponCode || purchaseKey(candidate) !== expectedPurchase) continue;
       if (candidate.totalCents !== candidate.subtotalCents + candidate.shippingCents - candidate.discountCents) continue;
+      const existingItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, candidate.id));
+      if (itemsKey(existingItems) !== expectedItems) continue;
+      if (candidate.checkoutMode === "embedded") {
+        const [attempt] = await tx.select().from(paymentAttempts).where(eq(paymentAttempts.orderId, candidate.id)).orderBy(desc(paymentAttempts.createdAt), desc(paymentAttempts.id)).limit(1);
+        // An issued Pix/boleto or an uncertain charge survives the session/coupon
+        // deadline. Always resume it instead of creating a second payable order.
+        if (attempt && !canRetryPayment(attempt.status)) return { kind: "reused", orderId: candidate.id, checkoutUrl: `/comprar/pagamento?pedido=${candidate.id}` };
+        if (candidate.paymentExpiresAt && candidate.paymentExpiresAt <= new Date().toISOString()) {
+          await tx.update(orders).set({ status: "cancelled", updatedAt: new Date().toISOString() }).where(eq(orders.id, candidate.id));
+          if (candidate.couponId && !candidate.couponRedeemedAt) await tx.update(coupons).set({ allocatedUses: sql`max(0, ${coupons.allocatedUses} - 1)` }).where(eq(coupons.id, candidate.couponId));
+          continue;
+        }
+      }
       if (couponCode) {
         if (!candidate.couponId) continue;
         const [coupon] = await tx.select().from(coupons).where(eq(coupons.id, candidate.couponId));
@@ -94,8 +109,9 @@ export async function createOrReuseCheckoutOrder(
           throw error;
         }
       } else if (candidate.discountCents !== 0) continue;
-      const existingItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, candidate.id));
-      if (itemsKey(existingItems) !== expectedItems) continue;
+      if (candidate.checkoutMode === "embedded") {
+        return { kind: "reused", orderId: candidate.id, checkoutUrl: `/comprar/pagamento?pedido=${candidate.id}` };
+      }
       if (candidate.checkoutUrl && candidate.mercadoPagoPreferenceId) {
         return { kind: "reused", orderId: candidate.id, checkoutUrl: candidate.checkoutUrl };
       }
@@ -111,6 +127,10 @@ export async function createOrReuseCheckoutOrder(
       status: "pending",
       discountCents,
       totalCents: draft.subtotalCents + draft.shippingCents - discountCents,
+      ...(draft.checkoutMode === "embedded" ? {
+        paymentExpiresAt: new Date(Math.min(Date.now() + 24 * 60 * 60 * 1000,
+          reservation?.coupon.expiresAt ? Date.parse(reservation.coupon.expiresAt) : Infinity)).toISOString(),
+      } : {}),
       ...(reservation ? {
         couponId: reservation.coupon.id,
         couponCode: reservation.coupon.code,

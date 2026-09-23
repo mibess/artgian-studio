@@ -123,8 +123,9 @@ Antes de publicar esse ajuste, aplicar a migração aditiva
 
 Copie `.env.example` para `.env.local` e preencha as credenciais necessárias.
 
-O checkout usa o Mercado Pago Checkout Pro. Em produção, configure a URL do
-webhook como:
+O checkout usa o Mercado Pago dentro do site para cartão, Pix e boleto.
+Links antigos do Checkout Pro continuam compatíveis. Em produção, configure a
+URL do webhook como:
 
 ```text
 https://seu-dominio.com/api/mercado-pago/webhook
@@ -329,6 +330,14 @@ verificação ou o argumento adicional `--apply` para executar. Em um build de
 produção, `--runtime-env` usa as credenciais já configuradas na plataforma, sem
 exportá-las para a máquina local. A migração verifica o hash anterior e preserva
 as contagens de clientes e pedidos dentro da mesma transação.
+
+### Pagamento integrado: cartão, Pix e boleto
+
+O checkout usa a identidade visual da Artgian com CardForm em campos seguros,
+QR Code/Copia e Cola do Pix e boleto. Pagamentos pendentes podem ser retomados
+pela conta do cliente. Antes de publicar, configure `MERCADO_PAGO_PUBLIC_KEY`
+e aplique a migração `0019_sparkling_dust.sql` ao banco do ambiente.
+Consulte [configuração, recuperação de tentativas e homologação](docs/pagamento-integrado.md).
 
 ### Ativar a autenticação
 
