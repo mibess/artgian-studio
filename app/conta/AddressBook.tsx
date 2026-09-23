@@ -71,7 +71,7 @@ export default function AddressBook({ initialAddresses }: { initialAddresses: Sa
       </fieldset>
     </form>}
     {!addresses.length && editing === null && <div className="mt-5 rounded-[1.5rem] border border-dashed border-[#b88a3b]/30 bg-white/60 px-6 py-9 text-center"><MapPin size={28} strokeWidth={1.3} className="mx-auto text-[#b88a3b]" /><p className="mt-4 font-serif text-2xl">Onde vamos entregar?</p><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#647087]">Você ainda não tem endereços salvos. O primeiro endereço cadastrado será o padrão.</p></div>}
-    {editing === null && <div className="mt-5 grid items-start gap-4 sm:grid-cols-2">
+    {editing === null && <div className="mt-5 grid grid-cols-1 items-start gap-4">
       {addresses.slice(currentPage * 4, (currentPage + 1) * 4).map(address => <article key={address.id} className={`min-w-0 rounded-[1.5rem] border bg-white/80 p-5 ${address.isDefault ? "border-[#b88a3b]/40" : "border-white"}`}>
         <div className="flex items-center gap-3">
           <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${address.isDefault ? "bg-[#d8bc7b]/20 text-[#9a722e]" : "bg-[#0b2447]/5 text-[#647087]"}`}><MapPin size={19} strokeWidth={1.5} /></span>
