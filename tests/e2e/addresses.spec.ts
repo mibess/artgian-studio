@@ -243,3 +243,44 @@ test("saves contact details, reuses the card and keeps CPF separate", async ({ p
   await page.setViewportSize({ width: 1440, height: 1000 });
   await card.screenshot({ path: "screenshots/checkout-contact-desktop.png" });
 });
+
+test("invalid CPF is highlighted and focused without submitting checkout, then accepts correction", async ({ page }) => {
+  await login(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect((await page.request.post("/api/customer/contact", { data: { name: "Cliente Endereços", phone: "11999999999" } })).ok()).toBe(true);
+  expect((await page.request.post("/api/addresses", { data: { action: "save", address: { label: "Casa", postalCode: "01001000", streetAddress: "Praça da Sé", addressNumber: "42", addressComplement: "", neighborhood: "Sé", city: "São Paulo", state: "SP" } } })).ok()).toBe(true);
+  await page.route("**/api/shipping/quote", route => route.fulfill({ json: { postalCode: "01001000", options: [{ serviceId: "1", serviceName: "PAC", companyId: "1", companyName: "Correios", priceCents: 1500, deliveryTimeDays: 5 }] } }));
+  const submissions: Record<string, unknown>[] = [];
+  await page.route("**/api/checkout", route => {
+    submissions.push(route.request().postDataJSON());
+    return submissions.length === 1
+      ? route.fulfill({ status: 400, json: { error: "Informe um CPF válido com 11 dígitos.", field: "customerDocument" } })
+      : route.fulfill({ status: 503, json: { error: "Pagamento simulado para teste." } });
+  });
+  await page.goto("/comprar?produto=organizador-arco&cor=rosa-marfim&quantidade=1");
+  const cpf = page.getByLabel("CPF para emissão da etiqueta");
+  const continueButton = page.getByRole("button", { name: "Continuar para pagamento" });
+  const validationAlert = page.locator("form").getByRole("alert");
+  await cpf.fill("52998224724");
+  await cpf.blur();
+  await expect(cpf).toHaveAttribute("aria-invalid", "true");
+  await expect(validationAlert).toHaveText("Informe um CPF válido com 11 dígitos.");
+  await page.getByRole("checkbox", { name: "Confirmo que os dados pessoais e de entrega estão corretos." }).check();
+  await continueButton.click();
+  await expect(cpf).toBeFocused();
+  await expect(cpf).toBeInViewport();
+  expect(submissions).toHaveLength(0);
+  await cpf.fill("52998224725");
+  await expect(cpf).toHaveAttribute("aria-invalid", "false");
+  await expect(validationAlert).toHaveCount(0);
+  // The same field feedback also handles validation returned by the server.
+  await continueButton.click();
+  await expect(cpf).toBeFocused();
+  await expect(cpf).toHaveAttribute("aria-invalid", "true");
+  await expect(validationAlert).toHaveText("Informe um CPF válido com 11 dígitos.");
+  await cpf.fill("52998224725");
+  await continueButton.click();
+  await expect(validationAlert).toHaveText("Pagamento simulado para teste.");
+  expect(submissions).toHaveLength(2);
+  expect(submissions[1].customerDocument).toBe("529.982.247-25");
+});

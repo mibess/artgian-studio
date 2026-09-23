@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Barcode, CreditCard, LockKeyhole, MapPin, Plus, QrCode, UserRound } from "lucide-react";
 import { cartSelections, type CartItem } from "../../lib/cart";
-import { formatCpf, formatPhone, hasFullName } from "../../lib/brazil";
+import { formatCpf, formatPhone, hasFullName, isValidCpf } from "../../lib/brazil";
 import { formatBrl } from "../../lib/catalog";
 import type { ShippingOption } from "../../lib/shipping";
 import ProductColorImage from "../components/ProductColorImage";
@@ -71,6 +71,8 @@ export default function CheckoutForm({
   const [savingContact, setSavingContact] = useState(false);
   const [contactError, setContactError] = useState("");
   const [customerDocument, setCustomerDocument] = useState("");
+  const [documentError, setDocumentError] = useState("");
+  const documentInput = useRef<HTMLInputElement>(null);
   const initialAddress = addresses.find(address => address.isDefault) ?? addresses[0];
   const [selectedAddressId, setSelectedAddressId] = useState(initialAddress?.id ?? "");
   const [choosingAddress, setChoosingAddress] = useState(false);
@@ -205,10 +207,21 @@ export default function CheckoutForm({
     }
   }
 
+  function showDocumentError(message = "Informe um CPF válido com 11 dígitos.") {
+    setDocumentError(message);
+    documentInput.current?.focus({ preventScroll: true });
+    documentInput.current?.scrollIntoView({ block: "center" });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setError("");
+    if (!isValidCpf(customerDocument)) {
+      showDocumentError();
+      return;
+    }
+    setDocumentError("");
     if (editingContact && !(await saveContact())) return;
 
     if (
@@ -267,11 +280,18 @@ export default function CheckoutForm({
         orderId?: string;
         error?: string;
         code?: string;
+        field?: string;
       };
 
       if (response.status === 401) {
         const next = `${window.location.pathname}${window.location.search}`;
         router.push(`/login?next=${encodeURIComponent(next)}`);
+        return;
+      }
+
+      if (!response.ok && result.field === "customerDocument") {
+        showDocumentError(result.error);
+        setSubmitting(false);
         return;
       }
 
@@ -423,19 +443,28 @@ export default function CheckoutForm({
                 CPF para emissão da etiqueta
               </span>
               <input
-                className="h-12 w-full rounded-xl border border-[#0b2447]/15 bg-[#f7f3ea] px-4 outline-none transition focus:border-[#b88a3b] focus:ring-2 focus:ring-[#b88a3b]/15"
+                ref={documentInput}
+                className={`h-12 w-full rounded-xl border bg-[#f7f3ea] px-4 outline-none transition focus:ring-2 ${documentError ? "border-red-500 focus:border-red-500 focus:ring-red-500/15" : "border-[#0b2447]/15 focus:border-[#b88a3b] focus:ring-[#b88a3b]/15"}`}
                 name="customerDocument"
+                aria-invalid={Boolean(documentError)}
+                aria-describedby={`checkout-document-help${documentError ? " checkout-document-error" : ""}`}
                 inputMode="numeric"
                 autoComplete="off"
                 placeholder="000.000.000-00"
                 maxLength={14}
                 value={customerDocument}
-                onChange={(event) =>
-                  setCustomerDocument(formatCpf(event.target.value))
-                }
+                onChange={event => {
+                  setCustomerDocument(formatCpf(event.target.value));
+                  setDocumentError("");
+                }}
+                onBlur={() => {
+                  if (customerDocument && !isValidCpf(customerDocument)) setDocumentError("Informe um CPF válido com 11 dígitos.");
+                }}
+                onInvalid={() => setDocumentError("Informe um CPF válido com 11 dígitos.")}
                 required
               />
-              <span className="mt-2 block text-[0.7rem] leading-4 text-[#647087]">
+              {documentError && <span id="checkout-document-error" role="alert" className="mt-2 block text-xs font-medium text-red-700">{documentError}</span>}
+              <span id="checkout-document-help" className="mt-2 block text-[0.7rem] leading-4 text-[#647087]">
                 Usado somente no processamento do pedido e da entrega.
               </span>
             </label>

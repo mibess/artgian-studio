@@ -132,11 +132,17 @@ export async function POST(request: Request) {
     const shippingServiceId = clean(payload.shippingServiceId, 40);
     const claimedShippingPriceCents = Number(payload.shippingPriceCents);
 
+    if (!isValidCpf(customerDocument)) {
+      return Response.json(
+        { error: "Informe um CPF válido com 11 dígitos.", field: "customerDocument" },
+        { status: 400 },
+      );
+    }
+
     if (
       !hasFullName(customerName) ||
       !customerEmail.includes("@") ||
       ![10, 11].includes(customerPhone.length) ||
-      !isValidCpf(customerDocument) ||
       postalCode.length !== 8 ||
       !streetAddress ||
       !addressNumber ||

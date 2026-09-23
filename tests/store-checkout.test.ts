@@ -94,6 +94,14 @@ beforeEach(() => {
   vi.stubGlobal("fetch", mock.fetch);
 });
 describe("multi-item checkout", () => {
+  it.each(["", "5299822472", "52998224724", "11111111111"])("identifies an invalid CPF before creating an order or requesting shipping: %s", async customerDocument => {
+    const response = await POST(request({ ...payload, customerDocument }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Informe um CPF válido com 11 dígitos.", field: "customerDocument" });
+    expect(mock.fetch).not.toHaveBeenCalled();
+    expect(mock.values).not.toHaveBeenCalled();
+    expect(mock.saveAddress).not.toHaveBeenCalled();
+  });
   it("prepares embedded payment without creating a redirect preference", async () => {
     vi.stubEnv("MERCADO_PAGO_PUBLIC_KEY", "test-public-key");
     const response = await POST(request({ ...payload, checkoutMode: "embedded" }));
