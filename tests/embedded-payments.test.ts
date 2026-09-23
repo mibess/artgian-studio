@@ -85,6 +85,30 @@ describe("embedded checkout", () => {
     expect(JSON.stringify(result)).not.toContain(card.token);
     expect((await db.select().from(paymentAttempts))[0]).toMatchObject({ requestPayload: null, deviceId: null });
   });
+  it.each(["card", "pix", "boleto"] as const)("accepts SDK dot-separated device IDs for %s through the payment endpoint", async method => {
+    const deviceId = `${"a".repeat(70)}.${"b".repeat(90)}.${"c".repeat(69)}`;
+    const response = await POST(request({ ...input(method), deviceId }), context());
+    expect(response.status).toBe(200);
+    expect(creationCalls()).toHaveLength(1);
+    expect(creationCalls()[0][1].headers["X-meli-session-id"]).toBe(deviceId);
+    expect(await response.text()).not.toContain(deviceId);
+  });
+  it("rejects malformed device headers before contacting the provider and logs no submitted values", async () => {
+    const log = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      for (const deviceId of ["session\r\nX-Injected: value", "a".repeat(257), "session with spaces"]) {
+        const response = await POST(request({ ...input("card"), deviceId }), context());
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: "Não foi possível validar a sessão de pagamento. Recarregue a página e tente novamente." });
+        expect(JSON.stringify(log.mock.calls)).not.toContain(deviceId);
+      }
+      expect(log).toHaveBeenCalledWith("[payment] invalid submission", { issues: [{ field: "deviceId", code: "invalid_format" }] });
+      expect(JSON.stringify(log.mock.calls)).not.toContain(card.identificationNumber);
+      expect(JSON.stringify(log.mock.calls)).not.toContain(card.token);
+      expect(mock.fetch).not.toHaveBeenCalled();
+      expect(await db.select().from(paymentAttempts)).toHaveLength(0);
+    } finally { log.mockRestore(); }
+  });
   it("returns a boleto code and only trusted HTTPS document URLs", async () => {
     nextPayment = { status: "pending", status_detail: "pending_waiting_payment", barcode: { content: "23790000000000000000000000000000000000000000" }, transaction_details: { external_resource_url: "https://www.mercadopago.com.br/ticket/123" } };
     const result = await submitPayment(orderId, "buyer", input("boleto"));

@@ -67,6 +67,18 @@ O arquivo está em `backups/store-before-migrations-2026-09-23T19-27-50-466Z.jso
 a chave correspondente está em `~/.codex/backup-keys/artgian-studio/`, fora do
 repositório. Nenhum desses arquivos é enviado ao Git ou à Vercel.
 
+### Identificador de segurança do SDK
+
+O SDK real gera `MP_DEVICE_SESSION_ID` com segmentos separados por pontos.
+Esse identificador é enviado sem alterações em `X-meli-session-id`. A validação
+aceita os pontos e mantém o limite de tamanho e a rejeição de espaços/quebras de
+linha. Uma regra que aceitava somente letras, números, hífen e sublinhado foi
+corrigida após bloquear submissões em produção antes da criação da cobrança.
+Há regressões na API para cartão, Pix e boleto, além da simulação no navegador.
+Erros de validação registram apenas nomes conhecidos dos campos e códigos de
+erro, sem os valores enviados, e retornam orientações específicas para sessão,
+CPF, emissor e parcelamento.
+
 ## Fluxo e recuperação
 
 1. `/api/checkout` recebe `checkoutMode: "embedded"`, valida catálogo, entrega e
@@ -104,6 +116,7 @@ enquanto a anterior está pendente ou incerta.
 
 ## Referências oficiais
 
+- [Identificador de segurança do dispositivo](https://www.mercadopago.com.br/developers/pt/docs/checkout-bricks/how-tos/improve-payment-approval/recommendations)
 - [CardForm e captura segura](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-payments/integration-configuration/card/integrate-via-cardform/introduction)
 - [API do SDK CardForm](https://github.com/mercadopago/sdk-js/blob/main/docs/card-form.md)
 - [Estilos dos campos seguros](https://github.com/mercadopago/sdk-js/blob/main/docs/fields.md)

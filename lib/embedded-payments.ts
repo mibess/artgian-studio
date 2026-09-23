@@ -19,7 +19,9 @@ export class PaymentError extends Error {
 export const paymentSubmissionSchema = z.object({
   requestId: z.uuid(),
   method: z.enum(["card", "pix", "boleto"]),
-  deviceId: z.string().regex(/^[a-zA-Z0-9_-]{1,256}$/).optional(),
+  // Mercado Pago's security SDK returns dot-separated identifiers. Preserve
+  // them verbatim for X-meli-session-id while excluding header control chars.
+  deviceId: z.string().regex(/^[a-zA-Z0-9_.-]{1,256}$/).optional(),
   card: z.object({
     token: z.string().regex(/^[a-zA-Z0-9_-]{8,256}$/),
     paymentMethodId: z.string().regex(/^[a-z0-9_]{1,60}$/),

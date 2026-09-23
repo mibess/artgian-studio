@@ -1,4 +1,6 @@
 // Browser-only SDK double. Tests never send card data or make real payments.
+// Match the dot-separated format observed in Mercado Pago's real security SDK.
+window.MP_DEVICE_SESSION_ID = `${"a".repeat(70)}.${"b".repeat(90)}.${"c".repeat(69)}`;
 window.MercadoPago = class {
   cardForm({ form, iframe, callbacks }) {
     if (!iframe) throw new Error("Secure iframes must be enabled");

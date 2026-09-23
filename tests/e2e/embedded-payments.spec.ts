@@ -35,6 +35,7 @@ test("custom card checkout keeps secure fields, handles refusal and approves wit
       const body = route.request().postDataJSON();
       expect(body.method).toBe("card");
       expect(body.card.token).toBe("test-token-from-secure-sdk");
+      expect(body.deviceId).toMatch(/^[a-z]+\.[a-z]+\.[a-z]+$/);
       expect(JSON.stringify(body)).not.toContain("5031433215406351");
       expect(body.card).not.toHaveProperty("cvv");
       state.attemptId = crypto.randomUUID();
