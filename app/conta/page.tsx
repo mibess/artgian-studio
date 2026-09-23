@@ -85,7 +85,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <h3 className="mt-4 font-serif text-2xl">Sua primeira criação espera por você.</h3>
             <p className="mt-2 text-sm text-[#647087]">Você ainda não tem pedidos nesta conta.</p>
             <Link href="/produtos" className="mt-6 inline-flex items-center gap-3 rounded-full bg-[#0b2447] px-6 py-3 text-sm font-semibold text-white">Conhecer as criações <ArrowRight size={16} /></Link>
-          </div> : <div className="mt-5 grid items-start gap-4 md:grid-cols-2">
+          </div> : <div className="mt-5 grid grid-cols-1 items-start gap-4">
             {purchases.map(order => {
               const orderProducts = items.filter(item => item.orderId === order.id);
               const paid = order.status === "paid";
