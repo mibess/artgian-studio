@@ -177,14 +177,12 @@ test("manage multiple addresses and use them in checkout on mobile", async ({ pa
   await expect(page.getByRole("group", { name: "Dados de contato" })).toContainText("(11) 99999-9999");
   await page.getByLabel("CPF para emissão da etiqueta").fill("52998224725");
   await page.getByRole("checkbox", { name: "Confirmo que os dados pessoais e de entrega estão corretos." }).check();
-  await page.getByRole("button", { name: "Calcular entrega", exact: true }).click();
   await expect(page.getByRole("button", { name: "Calcular entrega", exact: true })).toHaveCount(0);
   await expect(page.getByRole("radio", { name: /Correios/ })).toBeChecked();
   await page.getByLabel("CEP", { exact: true }).fill("01310100");
-  await expect(page.getByRole("button", { name: "Calcular entrega", exact: true })).toBeVisible();
   await expect(page.getByRole("radio", { name: /Correios/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "Calcular entrega", exact: true }).click();
   await expect(page.getByRole("radio", { name: /Correios/ })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Calcular entrega", exact: true })).toHaveCount(0);
   let submitted: Record<string, unknown> | undefined;
   await page.route("**/api/checkout", async route => {
     submitted = route.request().postDataJSON();

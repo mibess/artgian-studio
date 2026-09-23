@@ -91,10 +91,10 @@ export default function CheckoutForm({
     (selectedShipping?.priceCents ?? 0);
 
   const quoteItemsKey = JSON.stringify(items);
-  const quoteSavedAddress = useEffectEvent(() => { void calculateQuote(); });
+  const quoteAddress = useEffectEvent(() => { void calculateQuote(); });
   useEffect(() => {
-    if (!selectedAddressId) return;
-    const timer = setTimeout(() => quoteSavedAddress(), 0);
+    if (onlyPostalCodeDigits(postalCode).length !== 8) return;
+    const timer = setTimeout(() => quoteAddress(), selectedAddressId ? 0 : 350);
     return () => {
       clearTimeout(timer);
       quoteVersion.current += 1;
@@ -489,7 +489,7 @@ export default function CheckoutForm({
             {quoting ? <p role="status" className="sm:col-span-6 flex items-center gap-2 text-sm text-[#647087]">
               <span className="ui-spinner" aria-hidden="true" />
               Calculando entrega…
-            </p> : (shippingError || (!selectedAddressId && !selectedShipping)) ? <div className={`flex items-end ${selectedAddressId ? "sm:col-span-6" : "sm:col-span-4"}`}>
+            </p> : shippingError ? <div className={`flex items-end ${selectedAddressId ? "sm:col-span-6" : "sm:col-span-4"}`}>
               <button
                 className="flex h-12 items-center gap-2 rounded-full border border-[#0b2447]/20 px-5 text-xs font-semibold transition hover:border-[#b88a3b] disabled:opacity-60"
                 type="button"
@@ -497,7 +497,7 @@ export default function CheckoutForm({
                 disabled={quoting || submitting}
                 aria-busy={quoting}
               >
-                {shippingError ? "Tentar calcular novamente" : "Calcular entrega"}
+                Tentar calcular novamente
               </button>
             </div> : null}
 
