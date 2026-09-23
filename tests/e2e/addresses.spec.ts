@@ -25,6 +25,7 @@ async function login(page: Page) {
 }
 test("CEP fills account and checkout addresses, keeps manual edits and handles errors", async ({ page }) => {
   await login(page);
+  await page.getByRole("tab", { name: /^Endereços/ }).click();
   await page.unroute("**/api/addresses/lookup?*");
   let releaseLookup!: () => void;
   const delayedLookup = new Promise<void>(resolve => { releaseLookup = resolve; });
@@ -77,6 +78,7 @@ test("manage multiple addresses and use them in checkout on mobile", async ({ pa
   await page.setViewportSize({ width: 375, height: 812 });
   await login(page);
   await page.goto("/conta");
+  await page.getByRole("tab", { name: /^Endereços/ }).click();
   const book = page.getByRole("region", { name: "Seus endereços" });
   await expect(book.getByText("Você ainda não tem endereços salvos.", { exact: false })).toBeVisible();
   await book.getByRole("button", { name: "Cadastrar endereço" }).click();
@@ -196,6 +198,7 @@ test("manage multiple addresses and use them in checkout on mobile", async ({ pa
   await page.screenshot({ path: "screenshots/addresses-checkout-mobile.png", fullPage: true });
 
   await page.goto("/conta");
+  await page.getByRole("tab", { name: /^Endereços/ }).click();
   await work.getByRole("button", { name: "Excluir", exact: true }).click();
   await work.getByRole("button", { name: "Confirmar exclusão" }).click();
   await expect(work).toHaveCount(0);

@@ -1,0 +1,87 @@
+import { createClient } from "@libsql/client";
+import { expect, test } from "@playwright/test";
+
+test("account prioritizes orders, paginates, shows product photos and preserves address drafts across tabs", async ({ page }) => {
+  const origin = "http://127.0.0.1:3108";
+  const email = `marina+${Date.now()}@example.com`;
+  await page.context().setExtraHTTPHeaders({ "x-forwarded-for": "198.19.3.42" });
+  expect((await page.request.post("/api/auth/sign-up/email", { headers: { origin }, data: { name: "Marina Alves", email, password: "AccountTest!12345" } })).ok()).toBe(true);
+  const db = createClient({ url: process.env.E2E_DATABASE_URL! });
+  await db.execute({ sql: "UPDATE store_user SET email_verified = 1 WHERE email = ?", args: [email] });
+  const userId = String((await db.execute({ sql: "SELECT id FROM store_user WHERE email = ?", args: [email] })).rows[0].id);
+  expect((await page.request.post("/api/auth/sign-in/email", { headers: { origin }, data: { email, password: "AccountTest!12345" } })).ok()).toBe(true);
+  const productRecords = (await db.execute("SELECT store_id, name, storefront FROM catalog_products WHERE store_id IS NOT NULL ORDER BY store_id")).rows;
+  const samples = productRecords.map(row => ({ id: String(row.store_id), name: String(row.name), variant: JSON.parse(String(row.storefront)).variants[0] })).filter(product => product.variant);
+  const ids: string[] = [];
+  const states = [["paid", "preparing"], ["paid", "shipped"], ["pending", "preparing"], ["paid", "delivered"], ["cancelled", "preparing"], ["refunded", "preparing"], ["paid", "preparing"]];
+  for (const [index, [status, delivery]] of states.entries()) {
+    const id = crypto.randomUUID();
+    ids.push(id);
+    const product = samples[index % samples.length];
+    await db.execute({ sql: `INSERT INTO orders (id, user_id, status, fulfillment_status, checkout_mode, customer_name, customer_email, customer_phone, postal_code, street_address, address_number, neighborhood, city, state, subtotal_cents, shipping_cents, total_cents, created_at) VALUES (?, ?, ?, ?, 'embedded', 'Marina Alves', ?, '11999999999', '01001000', 'Praça da Sé', '42', 'Sé', 'São Paulo', 'SP', 5500, 1500, 7000, ?)`, args: [id, userId, status, delivery, email, `2026-09-${String(23 - index).padStart(2, "0")} 12:00:00`] });
+    await db.execute({ sql: "INSERT INTO order_items (order_id, product_id, product_name, color, quantity, unit_price_cents) VALUES (?, ?, ?, ?, 1, 5500)", args: [id, product.id, product.name, product.variant.name] });
+  }
+  await db.execute({ sql: "INSERT INTO order_items (order_id, product_id, product_name, color, quantity, unit_price_cents) VALUES (?, 'produto-removido-do-catalogo', 'Peça personalizada antiga', 'Azul', 1, 1000)", args: [ids[0]] });
+  db.close();
+  for (const [index, label] of ["Casa", "Trabalho", "Família", "Ateliê", "Apartamento", "Escritório", "Casa de campo"].entries()) {
+    expect((await page.request.post("/api/addresses", { headers: { origin }, data: { action: "save", address: { label, postalCode: "01001000", streetAddress: "Praça da Sé", addressNumber: String(index + 1), addressComplement: index === 0 ? "Apto 12" : "", neighborhood: "Sé", city: "São Paulo", state: "SP" } } })).ok()).toBe(true);
+  }
+  await page.goto("/conta");
+  const ordersTab = page.getByRole("tab", { name: /^Pedidos/ });
+  const addressesTab = page.getByRole("tab", { name: /^Endereços/ });
+  const orders = page.getByRole("region", { name: "Seus pedidos", exact: true });
+  await expect(ordersTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "Seus endereços" })).toBeHidden();
+  await expect(orders.getByRole("article")).toHaveCount(4);
+  await expect(orders.getByText("Em preparação", { exact: true })).toBeVisible();
+  await expect(orders.getByText("Enviado", { exact: true })).toBeVisible();
+  await expect(orders.getByText("Entregue", { exact: true })).toBeVisible();
+  await expect.poll(() => orders.locator("img").evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  const first = orders.getByRole("article", { name: `Pedido #${ids[0].slice(0, 8)}` });
+  await first.getByText("Ver mais 1 item", { exact: true }).click();
+  await expect(first.getByText("Peça personalizada antiga", { exact: true })).toBeVisible();
+  await expect(first.getByLabel("Imagem do produto indisponível")).toBeVisible();
+  await first.getByText("Ver mais 1 item", { exact: true }).click();
+  await page.screenshot({ path: "screenshots/account-orders-desktop.png", fullPage: true });
+  await page.getByRole("navigation", { name: "Páginas dos pedidos" }).getByRole("link", { name: "Próximos" }).click();
+  await expect(orders.getByRole("article")).toHaveCount(3);
+  await expect(orders.getByRole("heading", { name: `Pedido #${ids[6].slice(0, 8)}` })).toBeVisible();
+  await page.getByRole("link", { name: "Anteriores", exact: true }).click();
+  await expect(orders.getByRole("article")).toHaveCount(4);
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "screenshots/account-orders-mobile.png", fullPage: true });
+
+  await ordersTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(addressesTab).toBeFocused();
+  await expect(addressesTab).toHaveAttribute("aria-selected", "true");
+  await expect(orders).toBeHidden();
+  const addresses = page.getByRole("region", { name: "Seus endereços", exact: true });
+  await expect(addresses.getByRole("article")).toHaveCount(4);
+  await addresses.getByRole("button", { name: "Próximos", exact: true }).click();
+  await expect(addresses.getByRole("article")).toHaveCount(3);
+  await expect(addresses.getByRole("heading", { name: "Casa de campo", exact: true })).toBeVisible();
+  await addresses.getByRole("button", { name: "Anteriores", exact: true }).click();
+  await expect(addresses.getByText("Padrão", { exact: true })).toBeVisible();
+  await page.screenshot({ path: "screenshots/account-addresses-mobile.png", fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: "screenshots/account-addresses-desktop.png", fullPage: true });
+  await addresses.getByRole("button", { name: "Próximos", exact: true }).click();
+  const country = addresses.getByRole("article").filter({ has: page.getByRole("heading", { name: "Casa de campo", exact: true }) });
+  await country.getByRole("button", { name: "Tornar padrão" }).click();
+  await expect(country.getByText("Padrão", { exact: true })).toBeVisible();
+  await expect(addresses.getByRole("navigation", { name: "Páginas dos endereços" })).toContainText("1 de 2");
+  await addresses.getByRole("button", { name: "Cadastrar endereço" }).click();
+  await page.getByLabel("Identificação (opcional)").fill("Meu novo endereço");
+  await ordersTab.click();
+  await addressesTab.click();
+  await expect(page.getByLabel("Identificação (opcional)")).toHaveValue("Meu novo endereço");
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await page.reload();
+  await expect(addressesTab).toHaveAttribute("aria-selected", "true");
+  await page.goto("/conta");
+  await expect(ordersTab).toHaveAttribute("aria-selected", "true");
+  await first.getByRole("link", { name: "Acompanhar pedido", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Acompanhe seu pedido." })).toBeVisible();
+});

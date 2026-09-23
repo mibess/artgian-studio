@@ -97,10 +97,14 @@ test("tracking requires the owner, waits for payment, and supports previous chec
   await page.goto(`/comprar/pendente?pedido=${pendingId}`);
   await expect(page.getByRole("link", { name: "Acompanhar pedido" })).toHaveCount(0);
 
+  const anonymousContext = await browser.newContext();
+  const anonymous = await anonymousContext.newPage();
+  await anonymous.goto(`${origin}/conta/pedidos/${paidId}`);
+  await expect(anonymous).toHaveURL(/\/login\?next=/);
+  await anonymousContext.close();
+  // Keep the login page's background session requests out of API-driven sign-in.
   const otherContext = await browser.newContext();
   const other = await otherContext.newPage();
-  await other.goto(`${origin}/conta/pedidos/${paidId}`);
-  await expect(other).toHaveURL(/\/login\?next=/);
   await customer(other);
   await other.goto(`${origin}/conta/pedidos/${paidId}`);
   // Next's streamed notFound response can have HTTP 200; assert the rendered denial.

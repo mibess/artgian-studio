@@ -298,6 +298,12 @@ pedidos associados ao ID do cliente durante o checkout. Pedidos como visitante
 não são vinculados por coincidência de e-mail. O checkout exige login.
 O acesso administrativo continua usando sua autenticação separada.
 
+A conta abre na aba **Pedidos**, com miniaturas, etapa atual e acesso ao pagamento
+ou acompanhamento. A aba **Endereços** mantém as ações de cadastro, edição,
+exclusão e seleção do padrão. Ambas exibem quatro cards por página; os pedidos
+mais antigos continuam acessíveis pela paginação. A troca de abas mantém o
+rascunho de endereço aberto. `/conta?aba=enderecos` abre os endereços diretamente.
+
 ### Acompanhamento da entrega
 
 Após a aprovação, **Acompanhar pedido** aparece no pagamento e em `/conta`.
