@@ -544,7 +544,7 @@ export default function CheckoutForm({
                       </span>
                     </span>
                     <strong className="shrink-0 text-sm">
-                      {formatBrl(option.priceCents)}
+                      {option.priceCents === 0 ? "Grátis" : formatBrl(option.priceCents)}
                     </strong>
                   </label>
                 ))}
@@ -749,7 +749,7 @@ export default function CheckoutForm({
               <dt className="text-white/55">Entrega</dt>
               <dd className="text-right">
                 {selectedShipping
-                  ? formatBrl(selectedShipping.priceCents)
+                  ? selectedShipping.priceCents === 0 ? "Grátis" : formatBrl(selectedShipping.priceCents)
                   : "Calcule pelo CEP"}
               </dd>
             </div>

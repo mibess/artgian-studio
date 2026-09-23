@@ -149,7 +149,7 @@ export async function POST(request: Request) {
     if (
       !shippingServiceId ||
       !Number.isInteger(claimedShippingPriceCents) ||
-      claimedShippingPriceCents <= 0
+      claimedShippingPriceCents < 0
     ) {
       return Response.json(
         { error: "Calcule e escolha uma modalidade de entrega." },
@@ -171,6 +171,9 @@ export async function POST(request: Request) {
         },
         { status: 409 },
       );
+    }
+    if (shippingOption.priceCents === 0 && (city.toLowerCase() !== "brodowski" || state !== "SP")) {
+      return Response.json({ error: "O endereço não corresponde ao CEP informado. Revise a cidade e a UF." }, { status: 400 });
     }
     if (shippingOption.priceCents !== claimedShippingPriceCents) {
       return Response.json(

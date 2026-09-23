@@ -104,6 +104,8 @@ export async function createOrReuseCheckoutOrder(
 
     const reservation = couponCode ? await reserveCoupon(tx, couponCode, draft.subtotalCents) : null;
     const discountCents = reservation?.discountCents ?? 0;
+    if (draft.shippingCents === 0 && discountCents === draft.subtotalCents)
+      throw new CouponError("Este cupom cobre o pedido inteiro; não é possível criar um pagamento de R$ 0,00.");
     await tx.insert(orders).values({
       ...draft,
       status: "pending",

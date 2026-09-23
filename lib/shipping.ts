@@ -36,6 +36,34 @@ const PROVIDER_NAMES: Record<ShippingProvider, string> = {
   super_frete: "SuperFrete",
 };
 
+// Brodowski/SP has street-specific CEPs within this range. Confirm the locality
+// before granting free shipping so an unassigned CEP cannot receive the offer.
+async function isBrodowskiPostalCode(postalCode: string) {
+  const normalized = normalizePostalCode(postalCode);
+  if (!/^1434\d{4}$/.test(normalized)) return false;
+
+  let response: Response;
+  try {
+    response = await fetch(`https://viacep.com.br/ws/${normalized}/json/`, {
+      signal: AbortSignal.timeout(5000),
+      next: { revalidate: 86400 },
+    });
+  } catch {
+    throw new ShippingProviderError("Não foi possível confirmar o CEP. Tente novamente.", 503);
+  }
+  if (!response.ok)
+    throw new ShippingProviderError("Não foi possível confirmar o CEP. Tente novamente.", 503);
+  const address = await response.json() as { cep?: unknown; localidade?: unknown; uf?: unknown; erro?: unknown };
+  return address.erro !== true && address.erro !== "true" &&
+    normalizePostalCode(address.cep) === normalized &&
+    address.localidade === "Brodowski" && address.uf === "SP";
+}
+
+async function applyFreeShipping(postalCode: string, options: ShippingOption[]) {
+  if (!await isBrodowskiPostalCode(postalCode)) return options;
+  return options.map(option => ({ ...option, priceCents: 0 }));
+}
+
 export function getConfiguredShippingProvider(): ShippingProvider {
   const provider = process.env.SHIPPING_PROVIDER?.trim() || "melhor_envio";
   if (!SHIPPING_PROVIDERS.includes(provider as ShippingProvider)) {
@@ -124,7 +152,7 @@ export async function quoteProductShipping(input: {
     provider,
   );
 
-  return { provider, selection, options };
+  return { provider, selection, options: await applyFreeShipping(input.destinationPostalCode, options) };
 }
 
 export async function quoteCartShipping(
@@ -147,12 +175,13 @@ export async function quoteCartShipping(
     };
   });
   const provider = getConfiguredShippingProvider();
+  const options = await calculateProviderCartShipping(
+    { items: lines, destinationPostalCode },
+    provider,
+  );
   return {
     provider,
     selections,
-    options: await calculateProviderCartShipping(
-      { items: lines, destinationPostalCode },
-      provider,
-    ),
+    options: await applyFreeShipping(destinationPostalCode, options),
   };
 }

@@ -639,6 +639,28 @@ describe("checkout and payment lifecycle", () => {
     ).toBe(order.totalCents);
     expect(payment.shipments.cost).toBe(15);
   });
+  it("rejects a fully discounted order with free shipping before creating a payment", async () => {
+    await seed({ value: 100 });
+    const originalFetch = mock.fetch.getMockImplementation()!;
+    mock.fetch.mockImplementation((url: string, options?: RequestInit) =>
+      url.includes("viacep.com.br")
+        ? Promise.resolve(Response.json({ cep: "14341-052", localidade: "Brodowski", uf: "SP" }))
+        : originalFetch(url, options),
+    );
+    const response = await checkout(request("/api/checkout", {
+      ...checkoutBody,
+      items: [{ productId: "organizador-arco", color: "rosa-marfim", quantity: 1 }],
+      postalCode: "14341052",
+      city: "Brodowski",
+      shippingPriceCents: 0,
+      couponCode: "TEST10",
+    }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("R$ 0,00") });
+    expect(await db.select().from(orders)).toHaveLength(0);
+    expect((await db.select().from(coupons))[0].allocatedUses).toBe(0);
+    expect(mock.fetch.mock.calls.some(([url]) => url.includes("checkout/preferences"))).toBe(false);
+  });
   it("releases only definitive preference creation failures; network uncertainty keeps the reservation", async () => {
     await seed();
     const original = mock.fetch.getMockImplementation()!;

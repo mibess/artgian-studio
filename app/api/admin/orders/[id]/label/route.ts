@@ -116,7 +116,7 @@ export async function POST(request: Request, context: LabelRouteContext) {
           "A modalidade de entrega não está mais disponível.",
         );
       }
-      if (selectedOption.priceCents !== order.shippingCents) {
+      if (order.shippingCents !== 0 && selectedOption.priceCents !== order.shippingCents) {
         return adminRedirect(
           request,
           "error",

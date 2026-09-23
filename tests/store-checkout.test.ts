@@ -177,6 +177,40 @@ describe("multi-item checkout", () => {
     expect(await response.json()).toMatchObject({ code: "SHIPPING_REQUOTE_REQUIRED" });
     expect(mock.batch).not.toHaveBeenCalled();
   });
+  it("quotes and charges free shipping only for a confirmed Brodowski CEP", async () => {
+    const originalFetch = mock.fetch.getMockImplementation()!;
+    mock.fetch.mockImplementation((url: string, options?: RequestInit) =>
+      url.includes("viacep.com.br")
+        ? Promise.resolve(Response.json({ cep: "14341-052", localidade: "Brodowski", uf: "SP" }))
+        : originalFetch(url, options),
+    );
+    const destination = { ...payload, postalCode: "14341052", city: "Brodowski", state: "SP" };
+    const quoted = await quote(request({ items, postalCode: destination.postalCode }));
+    expect(quoted.status).toBe(200);
+    expect((await quoted.json()).options[0]).toMatchObject({ serviceId: "1", priceCents: 0 });
+
+    const checkedOut = await POST(request({ ...destination, shippingPriceCents: 0 }));
+    expect(checkedOut.status).toBe(201);
+    expect(mock.values.mock.calls[0][0]).toMatchObject({ shippingCents: 0, totalCents: 12770 });
+    const payment = JSON.parse(mock.fetch.mock.calls.find(([url]) => url.includes("checkout/preferences"))![1].body);
+    expect(payment.shipments.cost).toBe(0);
+
+    const forged = await POST(request({ ...destination, shippingPriceCents: 1500 }));
+    expect(forged.status).toBe(409);
+    expect(await forged.json()).toMatchObject({ code: "SHIPPING_REQUOTE_REQUIRED" });
+    expect((await POST(request({ ...destination, city: "São Paulo", shippingPriceCents: 0 }))).status).toBe(400);
+  });
+  it("does not grant free shipping to an unconfirmed CEP in Brodowski's range", async () => {
+    const originalFetch = mock.fetch.getMockImplementation()!;
+    mock.fetch.mockImplementation((url: string, options?: RequestInit) =>
+      url.includes("viacep.com.br")
+        ? Promise.resolve(Response.json({ cep: "14349-999", localidade: "Outra cidade", uf: "SP" }))
+        : originalFetch(url, options),
+    );
+    const quoted = await quote(request({ items, postalCode: "14349999" }));
+    expect(quoted.status).toBe(200);
+    expect((await quoted.json()).options[0].priceCents).toBe(1500);
+  });
   it("rejects a recipient without a complete name", async () => {
     const response = await POST(request({ ...payload, customerName: "Mibess" }));
     expect(response.status).toBe(400);
