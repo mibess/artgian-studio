@@ -5,6 +5,19 @@ import { pathToFileURL } from "node:url";
 
 const digest = value => createHash("sha256").update(value).digest("hex");
 
+export async function verifyFulfillmentSchema(connection) {
+  const columns = (await connection.execute("PRAGMA table_info(orders)")).rows;
+  if (!columns.some(row => row.name === "fulfillment_status" && row.type === "TEXT" && Number(row.notnull) === 1 && row.dflt_value === "'preparing'") ||
+      !columns.some(row => row.name === "fulfillment_revision" && row.type === "INTEGER" && Number(row.notnull) === 1 && String(row.dflt_value) === "0") ||
+      !["fulfillment_note", "fulfillment_updated_at"].every(name => columns.some(row => row.name === name && row.type === "TEXT" && Number(row.notnull) === 0))) throw new Error("As colunas de acompanhamento da entrega estão ausentes ou inválidas.");
+  const events = (await connection.execute("PRAGMA table_info(order_fulfillment_events)")).rows;
+  if (!["id", "order_id", "status", "note", "tracking_code", "source", "created_at"].every(name => events.some(row => row.name === name && row.type === "TEXT"))) throw new Error("O histórico de acompanhamento da entrega está ausente ou incompleto.");
+  const indexes = (await connection.execute("PRAGMA index_info(order_fulfillment_events_order_idx)")).rows;
+  if (indexes.map(row => row.name).join(",") !== "order_id,created_at") throw new Error("Índice do histórico de acompanhamento inválido.");
+  const references = (await connection.execute("PRAGMA foreign_key_list(order_fulfillment_events)")).rows;
+  if (!references.some(row => row.table === "orders" && row.from === "order_id" && row.to === "id" && row.on_delete === "CASCADE")) throw new Error("Referência do histórico de acompanhamento inválida.");
+}
+
 export async function verifyStoreSchema(client, { applyContact = false } = {}) {
   const { entries } = JSON.parse(await readFile(new URL("../drizzle/meta/_journal.json", import.meta.url), "utf8"));
   const migrations = await Promise.all(entries.map(async entry => {
@@ -41,6 +54,7 @@ export async function verifyStoreSchema(client, { applyContact = false } = {}) {
     if (!["checkout_mode", "payment_expires_at"].every(name => orderColumns.some(row => row.name === name))) throw new Error("As colunas do checkout integrado estão ausentes.");
     const paymentColumns = (await tx.execute("PRAGMA table_info(payment_attempts)")).rows;
     if (!["id", "order_id", "method", "status", "provider_payment_id", "request_payload", "device_id", "result", "provider_updated_at", "created_at", "updated_at"].every(name => paymentColumns.some(row => row.name === name))) throw new Error("A tabela de tentativas de pagamento está ausente ou incompleta.");
+    await verifyFulfillmentSchema(tx);
     if (applyContact) await tx.commit();
     else await tx.rollback();
     console.log(`Schema do banco verificado: ${expected.tag}.`);

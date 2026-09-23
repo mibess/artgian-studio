@@ -55,7 +55,12 @@ describe("deployment database schema gate", () => {
     await expect(verifyStoreSchema(client)).rejects.toThrow("colunas do checkout");
     const migration = await readFile("drizzle/0019_sparkling_dust.sql", "utf8");
     for (const sql of migration.split("--> statement-breakpoint")) await client.execute(sql.trim());
+    await expect(verifyStoreSchema(client)).rejects.toThrow("colunas de acompanhamento");
+    const fulfillment = await readFile("drizzle/0020_order_fulfillment.sql", "utf8");
+    for (const sql of fulfillment.split("--> statement-breakpoint")) await client.execute(sql.trim());
     await verifyStoreSchema(client);
+    await client.execute("DROP TABLE order_fulfillment_events");
+    await expect(verifyStoreSchema(client)).rejects.toThrow("histórico de acompanhamento");
     await client.execute("DROP TABLE payment_attempts");
     await expect(verifyStoreSchema(client)).rejects.toThrow("tabela de tentativas");
   });

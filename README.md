@@ -298,6 +298,15 @@ pedidos associados ao ID do cliente durante o checkout. Pedidos como visitante
 não são vinculados por coincidência de e-mail. O checkout exige login.
 O acesso administrativo continua usando sua autenticação separada.
 
+### Acompanhamento da entrega
+
+Após a aprovação, **Acompanhar pedido** aparece no pagamento e em `/conta`.
+O cliente vê as etapas de preparação até entrega em `/conta/pedidos/[id]`.
+O administrador atualiza a etapa, o código de rastreio e uma observação em
+**Pedidos e entregas** (`/admin/pedidos`), com histórico das mudanças.
+O acompanhamento é manual e começa em **Em preparação**. Requer a migração
+`0020_order_fulfillment.sql`; veja [operação e publicação](docs/acompanhamento-pedidos.md).
+
 ### Endereços do cliente
 
 No checkout, “Seus dados” mostra um cartão com nome, e-mail e telefone quando

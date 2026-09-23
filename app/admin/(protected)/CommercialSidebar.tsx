@@ -47,7 +47,7 @@ const groups = [
     label: "Comercial",
     items: [
       { href: "/admin/orcamentos", label: "Orçamentos", icon: BriefcaseBusiness },
-      { href: "/admin/pedidos", label: "Pedidos e etiquetas", icon: PackageCheck },
+      { href: "/admin/pedidos", label: "Pedidos e entregas", icon: PackageCheck },
       { href: "/admin/pedidos-comerciais", label: "Pedidos comerciais", icon: ClipboardList },
       { href: "/admin/descontos", label: "Descontos", icon: Tags },
       { href: "/admin/produtos", label: "Produtos", icon: Boxes },

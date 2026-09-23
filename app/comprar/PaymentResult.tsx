@@ -157,6 +157,7 @@ export default async function PaymentResult({
           )}
 
           <div className="mt-9 flex flex-wrap justify-center gap-3">
+            {order.status === "paid" && <Link href={`/conta/pedidos/${order.id}`} className="rounded-full bg-[#0b2447] px-6 py-3 text-sm font-semibold text-white">Acompanhar pedido</Link>}
             {order?.status === "pending" && (
               <Link
                 className="rounded-full bg-[#0b2447] px-6 py-3 text-sm font-semibold text-white"

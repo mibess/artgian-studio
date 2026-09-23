@@ -69,6 +69,10 @@ export const orders = sqliteTable(
     shippingLabelStatus: text("shipping_label_status"),
     shippingLabelUrl: text("shipping_label_url"),
     shippingTrackingCode: text("shipping_tracking_code"),
+    fulfillmentStatus: text("fulfillment_status").notNull().default("preparing"),
+    fulfillmentNote: text("fulfillment_note"),
+    fulfillmentUpdatedAt: text("fulfillment_updated_at"),
+    fulfillmentRevision: integer("fulfillment_revision").notNull().default(0),
     shippingLabelError: text("shipping_label_error"),
     shippingLabelUpdatedAt: text("shipping_label_updated_at"),
     totalCents: integer("total_cents").notNull(),
@@ -86,6 +90,16 @@ export const orders = sqliteTable(
     index("orders_payment_id_idx").on(table.mercadoPagoPaymentId),
   ],
 );
+
+export const orderFulfillmentEvents = sqliteTable("order_fulfillment_events", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  note: text("note"),
+  trackingCode: text("tracking_code"),
+  source: text("source").notNull().default("manual"),
+  createdAt: text("created_at").notNull(),
+}, table => [index("order_fulfillment_events_order_idx").on(table.orderId, table.createdAt)]);
 
 export const coupons = sqliteTable("coupons", {
   id: text("id").primaryKey(),

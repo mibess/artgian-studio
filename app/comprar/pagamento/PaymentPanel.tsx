@@ -119,7 +119,8 @@ export default function PaymentPanel({ initialState, publicKey, payer }: {
       <span className="mx-auto grid size-16 place-items-center rounded-full bg-[#d8bc7b]/25 text-[#0b2447]"><CheckCircle2 size={32} /></span>
       <h3 className="mt-5 font-serif text-2xl">{state.orderStatus === "paid" ? "Tudo certo com a sua compra." : state.orderStatus === "refunded" ? "Pagamento estornado." : "Pagamento em contestação."}</h3>
       <p className="mt-3 text-sm leading-6 text-[#647087]">{state.orderStatus === "paid" ? "Seu pedido foi confirmado. Obrigado por escolher a Artgian Studio." : "O status deste pedido foi atualizado pelo Mercado Pago."}</p>
-      <Link className={buttonClass} href="/produtos">Continuar explorando <ArrowRight size={17} /></Link>
+      {state.orderStatus === "paid" && <Link className={buttonClass} href={`/conta/pedidos/${state.orderId}`}>Acompanhar pedido <ArrowRight size={17} /></Link>}
+      <Link className={state.orderStatus === "paid" ? "mt-5 inline-flex text-sm underline underline-offset-4" : buttonClass} href="/produtos">Continuar explorando</Link>
     </div> : <>
       {canPay && !expired && <>
         <div role="group" aria-label="Forma de pagamento" className="grid grid-cols-3 gap-2 sm:gap-3">

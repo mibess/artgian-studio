@@ -11,6 +11,7 @@ import BrandHeader from "../components/BrandHeader";
 import SignOutButton from "./SignOutButton";
 import AddressBook from "./AddressBook";
 import { listAddresses } from "../../lib/addresses/repository";
+import { fulfillmentStep } from "../../lib/fulfillment-status";
 export const metadata: Metadata = {
   title: "Minha conta | Artgian Studio",
   robots: { index: false, follow: false },
@@ -142,6 +143,10 @@ export default async function AccountPage() {
                       Rastreio: <strong>{order.shippingTrackingCode}</strong>
                     </p>
                   )}
+                  {order.status === "paid" && <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <Link href={`/conta/pedidos/${order.id}`} className="inline-flex rounded-full bg-[#0b2447] px-5 py-3 text-sm font-semibold text-white">Acompanhar pedido</Link>
+                    <span className="text-xs font-semibold text-[#9a722e]">{fulfillmentStep(order.fulfillmentStatus).label}</span>
+                  </div>}
                 </article>
               ))}
             </div>

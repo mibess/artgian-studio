@@ -83,4 +83,10 @@ describe("login return destination", () => {
   it("returns to an existing payment after signing in", () =>
     expect(safeReturnTo("/comprar/pagamento?pedido=existing-order"))
       .toBe("/comprar/pagamento?pedido=existing-order"));
+  it("returns to order tracking without allowing other private routes", () => {
+    const destination = `/conta/pedidos/${crypto.randomUUID()}`;
+    expect(safeReturnTo(destination)).toBe(destination);
+    expect(safeReturnTo(`${destination}/admin`)).toBe("/conta");
+    expect(safeReturnTo("/conta/pedidos/../../api/admin/orders")).toBe("/conta");
+  });
 });
