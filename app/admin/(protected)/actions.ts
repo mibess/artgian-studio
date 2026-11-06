@@ -979,6 +979,9 @@ export async function createInstagramReplyDraft(formData: FormData) {
   if (!leadId) throw new Error("Lead inválido.");
   const result = await createReplyDraftForLead(leadId);
   revalidatePath(`/admin/leads/${leadId}`);
+  if (result.status === "paused") {
+    redirect(`/admin/leads/${leadId}?erro=Geração+de+respostas+por+IA+pausada`);
+  }
   if (result.status === "blocked") {
     redirect(`/admin/leads/${leadId}?erro=Contato+bloqueado+por+opt-out`);
   }

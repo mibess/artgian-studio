@@ -24,12 +24,18 @@ import { scheduleFollowupReview } from "./followups";
 
 const EDITABLE_STATUSES = ["draft", "failed"];
 
+function isAiReplyGenerationEnabled() {
+  return process.env.AI_REPLY_GENERATION_ENABLED === "true";
+}
+
 type CommercialDecisionGenerator = typeof generateCommercialDecision;
 
 export async function enhanceReplyDraftWithAi(
   input: { leadId: string; messageId: string },
   dependencies: { generateDecision?: CommercialDecisionGenerator } = {},
 ) {
+  if (!isAiReplyGenerationEnabled()) return { status: "paused" as const };
+
   const db = await getCommercialDb();
   const [lead] = await db
     .select()
@@ -150,6 +156,8 @@ export async function enhanceReplyDraftWithAi(
 }
 
 export async function createReplyDraftForLead(leadId: string) {
+  if (!isAiReplyGenerationEnabled()) return { status: "paused" as const };
+
   const db = await getCommercialDb();
   const [lead] = await db
     .select()

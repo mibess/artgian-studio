@@ -300,6 +300,12 @@ export async function runWorkerOnce(
             .set({ status: "completed", finishedAt: now, lastError: null })
             .where(eq(jobs.id, job.id));
           return { processed: true as const, alreadyReplied: true as const };
+        } else if (draft.status === "paused") {
+          await db
+            .update(jobs)
+            .set({ status: "waiting_review", finishedAt: now, lastError: null })
+            .where(eq(jobs.id, job.id));
+          return { processed: true as const, paused: true as const };
         } else {
           throw new Error(`Não foi possível criar o rascunho: ${draft.status}`);
         }
