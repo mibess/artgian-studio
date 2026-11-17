@@ -24,11 +24,11 @@ export default async function CustomerOrderMessages({ params }: { params: Promis
   });
   return <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
     <BrandHeader />
-    <div className="mx-auto max-w-3xl px-4 py-7 sm:px-8 sm:py-10">
+    <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8 lg:py-10">
       <Link href="/conta" className="inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-[#647087] hover:text-[#0b2447]"><ArrowLeft size={15} /> Meus pedidos</Link>
       <header className="mt-4 mb-6">
         <p className="text-[0.6rem] font-bold uppercase tracking-[.22em] text-[#b88a3b]">Cuidado em cada detalhe</p>
-        <h1 className="mt-2 font-serif text-3xl tracking-tight sm:text-4xl">Conversa com o vendedor</h1>
+        <h1 className="mt-2 font-serif text-3xl tracking-tight sm:text-5xl">Conversa com o vendedor</h1>
         <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[#0b2447]/10 bg-white/65 p-4">
           <Package size={22} strokeWidth={1.5} className="mt-1 shrink-0 text-[#b88a3b]" />
           <div className="min-w-0"><h2 className="break-words text-sm font-semibold">{thread.item.productName}</h2>
