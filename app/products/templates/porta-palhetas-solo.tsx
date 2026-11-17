@@ -12,6 +12,7 @@ export default function ProductTemplate({
   children?: React.ReactNode;
 }) {
   const features = product.presentation.features;
+  const squarePhotos = product.presentation.imageAspect === "square";
   return (
     <main
       className="min-h-screen overflow-hidden bg-[#e9b08e] text-[#182645]"
@@ -37,14 +38,14 @@ export default function ProductTemplate({
             <span className="h-px w-10 bg-current" />
             {product.presentation.copy.text001?.value}
           </div>
-          <h1 className="mt-8 max-w-2xl font-serif text-[clamp(4.3rem,8.2vw,8.5rem)] font-normal leading-[0.78] tracking-[-0.07em]">
+          <h1 aria-label={product.name} className="mt-8 max-w-2xl font-serif text-[clamp(4.3rem,8.2vw,8.5rem)] font-normal leading-[0.78] tracking-[-0.07em]">
             {product.presentation.copy.text002?.value}
             <em className="mt-3 block pl-[22%] font-normal text-[#fff8ed] [text-shadow:0_1px_0_#fff]">
               {product.presentation.copy.text003?.value}
             </em>
           </h1>
           <p className="mt-10 max-w-lg text-base leading-7 text-[#182645]/72">
-            {product.description}
+            {product.presentation.copy.text020?.value || product.description}
           </p>
 
           <div className="mt-8 flex items-end gap-5 border-t border-[#182645]/15 pt-7">
@@ -64,7 +65,7 @@ export default function ProductTemplate({
           <ProductPurchase product={product} />
         </div>
 
-        <div className="relative min-h-[38rem] lg:min-h-[48rem]">
+        <div className={squarePhotos ? "relative aspect-square w-full" : "relative min-h-[38rem] lg:min-h-[48rem]"}>
           <div className="absolute inset-0 rotate-2 rounded-[3rem] bg-[#fff7ed]/35" />
           <figure className="absolute inset-3 overflow-hidden rounded-[2.6rem] bg-[#fff7ed] shadow-[0_35px_90px_rgba(61,36,26,.22)] lg:inset-6">
             <ProductColorImage
@@ -123,7 +124,7 @@ export default function ProductTemplate({
         </div>
 
         <div className="mt-20 grid overflow-hidden rounded-[2rem] bg-[#182645] text-[#fffaf4] lg:grid-cols-[1.02fr_.98fr]">
-          <div className="min-h-[30rem] overflow-hidden bg-[#f2d2bd]">
+          <div className={squarePhotos ? "aspect-square w-full self-center overflow-hidden" : "min-h-[30rem] overflow-hidden bg-[#f2d2bd]"}>
             <img
               className="h-full w-full object-cover object-center"
               src={product.presentation.media[1]?.src || product.image}

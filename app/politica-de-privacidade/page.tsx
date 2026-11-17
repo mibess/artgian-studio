@@ -129,6 +129,36 @@ export default function PrivacyPolicyPage() {
           operacionais ou nos serviços utilizados. A versão vigente e a data da
           última atualização permanecerão publicadas nesta página.
         </p>
+        <p>Última atualização: 25 de outubro de 2026.</p>
+      </LegalSection>
+
+      <LegalSection title="11. Cookies e estatísticas de acesso">
+        <p>
+          Utilizamos armazenamento essencial para recursos como login e carrinho.
+          Somente se você escolher “Permitir estatísticas”, carregamos o Google
+          Analytics para medir visitas às páginas públicas, visualizações de
+          produtos, adições ao carrinho e cliques de contato. Esses dados ajudam
+          a entender o interesse pela loja e melhorar sua experiência.
+        </p>
+        <p>
+          Não enviamos ao Analytics nomes personalizados nas peças, mensagens,
+          dados de pedidos, e-mail, telefone ou endereço. As páginas de acesso,
+          conta, administração e pagamento ficam fora dessa medição. Parâmetros
+          de endereço e fragmentos de links também não são enviados. Não usamos
+          esses cookies para publicidade personalizada.
+        </p>
+        <p>
+          Ao aceitar, identificadores de cookies e informações técnicas de
+          navegação são tratados pelo Google, que pode processá-los fora do
+          Brasil conforme sua
+          <a className="ml-1 font-semibold text-[#9b702a] underline" href="https://policies.google.com/privacy?hl=pt-BR" target="_blank" rel="noreferrer">
+            Política de Privacidade
+          </a>
+          . Você pode recusar sem impedir compras ou atendimento e revogar sua
+          permissão pelo botão “Preferências de cookies” nas páginas públicas.
+          Ao revogar, interrompemos novas medições e removemos os cookies do
+          Analytics acessíveis neste site.
+        </p>
       </LegalSection>
     </LegalPage>
   );

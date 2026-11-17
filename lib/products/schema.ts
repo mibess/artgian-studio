@@ -22,6 +22,7 @@ export const presentationSchema = z.object({
   ]),
   accent: color,
   background: color,
+  imageAspect: z.literal("square").optional().describe("Molduras quadradas para capa e foto de ambiente no modelo porta-palhetas-solo. Omita para usar as proporções originais do modelo."),
   copy: z.record(
     z.string().regex(/^text\d+$/),
     z.object({ label: z.string().max(100), value: z.string().max(3000) }),

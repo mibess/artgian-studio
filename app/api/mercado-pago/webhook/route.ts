@@ -1,13 +1,15 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { coupons, orders, paymentEvents } from "../../../../db/schema";
+import { orders, paymentEvents } from "../../../../db/schema";
 import { applyEmbeddedPayment } from "../../../../lib/embedded-payments";
 import {
   getEnvironmentVariable,
   getPayment,
-  mapPaymentStatus,
   validateWebhookSignature,
 } from "../../../../lib/mercado-pago";
+
+import { applyRedirectPayment } from "../../../../lib/redirect-payments";
+import { retryTransaction } from "../../../../lib/checkout-orders";
 
 type WebhookPayload = {
   id?: string | number;
@@ -51,16 +53,15 @@ export async function POST(request: Request) {
 
     const payment = await getPayment(dataId);
     const orderId = payment.external_reference;
-    if (!orderId) {
+    if (!orderId || String(payment.id) !== dataId) {
       return new Response(null, { status: 200 });
     }
 
     const db = await getDb();
-    const [order] = await db
+    const [order] = await retryTransaction(() => db.transaction(async tx => tx
       .select()
       .from(orders)
-      .where(eq(orders.id, orderId))
-      .limit(1);
+      .where(eq(orders.id, orderId)), { behavior: "immediate" }));
 
     if (!order) {
       return new Response(null, { status: 200 });
@@ -68,25 +69,19 @@ export async function POST(request: Request) {
 
     if (order.checkoutMode === "embedded") {
       const applied = await applyEmbeddedPayment(payment);
-      if (applied) await db.insert(paymentEvents).values({
+      if (applied) await retryTransaction(() => db.transaction(async tx => { await tx.insert(paymentEvents).values({
         eventKey: request.headers.get("x-request-id") ?? `${payload.id ?? "payment"}:${dataId}:${payment.status}:${payment.date_last_updated ?? ""}`,
         orderId, paymentId: String(payment.id), action: payload.action ?? null,
         payload: JSON.stringify({ id: payment.id, status: payment.status, status_detail: payment.status_detail, date_last_updated: payment.date_last_updated }),
-      }).onConflictDoNothing();
+      }).onConflictDoNothing(); }, { behavior: "immediate" }));
       return new Response(null, { status: 200 });
     }
 
-    const totalPaidAmount =
-      payment.transaction_details?.total_paid_amount ??
-      payment.transaction_amount + (payment.shipping_amount ?? 0);
-    const paidAmountCents = Math.round(totalPaidAmount * 100);
-    const matchesOrder =
-      payment.currency_id === "BRL" && paidAmountCents === order.totalCents;
     const requestId = request.headers.get("x-request-id");
     const eventKey =
       requestId ?? `${payload.id ?? "payment"}:${dataId}:${payment.status}`;
 
-    await db
+    await retryTransaction(() => db.transaction(async tx => { await tx
       .insert(paymentEvents)
       .values({
         eventKey,
@@ -95,56 +90,14 @@ export async function POST(request: Request) {
         action: payload.action ?? null,
         payload: JSON.stringify({ notification: payload, payment }),
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing(); }, { behavior: "immediate" }));
 
-    if (matchesOrder) {
-      const applyPayment = async (
-        writer: typeof db | import("../../../../lib/coupons").CouponTransaction,
-      ) => {
-        await writer
-          .update(orders)
-          .set({
-            status: mapPaymentStatus(payment.status),
-            mercadoPagoPaymentId: String(payment.id),
-            mercadoPagoStatus: payment.status,
-            mercadoPagoStatusDetail: payment.status_detail ?? null,
-            updatedAt: new Date().toISOString(),
-          })
-          .where(eq(orders.id, orderId));
-      };
-      if (order.couponId && payment.status === "approved") {
-        await db.transaction(
-          async (tx) => {
-            await applyPayment(tx);
-            const redeemed = await tx
-              .update(orders)
-              .set({ couponRedeemedAt: new Date().toISOString() })
-              .where(
-                and(eq(orders.id, orderId), isNull(orders.couponRedeemedAt)),
-              )
-              .returning({ couponId: orders.couponId });
-            if (redeemed.length && redeemed[0].couponId) {
-              await tx
-                .delete(coupons)
-                .where(
-                  and(
-                    eq(coupons.id, redeemed[0].couponId),
-                    eq(coupons.source, "game"),
-                  ),
-                );
-            }
-          },
-          { behavior: "immediate" },
-        );
-      } else {
-        await applyPayment(db);
-      }
-    }
+    await applyRedirectPayment(payment);
 
     return new Response(null, { status: 200 });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Falha ao processar webhook.";
-    return Response.json({ error: message }, { status: 500 });
+  } catch {
+    // Database errors may contain SQL parameters, including payment/order data.
+    console.error("[payment] webhook_processing_failed");
+    return Response.json({ error: "Falha ao processar webhook." }, { status: 500 });
   }
 }

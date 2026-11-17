@@ -22,6 +22,7 @@ export type ProductPresentation = {
     | "suporte-pocket";
   accent: string;
   background: string;
+  imageAspect?: "square";
   copy: Record<string, { label: string; value: string }>;
   media: { src: string; alt: string }[];
   features: string[][];

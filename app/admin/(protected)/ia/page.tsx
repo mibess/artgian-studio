@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Bot, CircleDollarSign, Cpu, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { getOperationsData } from "../../../../src/db/commercial";
 import { PageHeader, formatDateTime } from "../_components";
@@ -16,7 +17,8 @@ export default async function AiPage() {
   const costPerLead=leadsWithUsage.size?cost/leadsWithUsage.size:0;
   const costPerCustomer=convertedLeadIds.size?convertedAiCost/convertedLeadIds.size:0;
   return <>
-    <PageHeader eyebrow="Rastreabilidade" title="Inteligência artificial" description="Cada chamada, decisão, token e custo fica registrado. Claims comerciais permanecem sob controle humano." />
+    <PageHeader eyebrow="Rastreabilidade" title="Consumo de IA" description="Cada chamada, decisão, token e custo fica registrado. Claims comerciais permanecem sob controle humano." />
+    <p className="mb-5 text-sm text-[#718088]">Para ativar ou pausar cada uso de IA, abra a <Link href="/admin/automacao" className="font-semibold text-[#bc5b40] underline underline-offset-4">central de Automação e IA</Link>.</p>
     <section className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[
       {label:"Chamadas registradas",value:aiUsage.length,icon:Bot,color:"bg-[#eee2f0] text-[#74527b]"},
       {label:"Tokens de entrada",value:inputTokens.toLocaleString("pt-BR"),icon:Cpu,color:"bg-[#dce8f6] text-[#425d91]"},

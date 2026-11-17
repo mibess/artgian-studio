@@ -8,6 +8,8 @@ import { getCustomerSession } from "../../../../lib/auth";
 import { formatBrl } from "../../../../lib/catalog";
 import { fulfillmentDate, fulfillmentStep, fulfillmentSteps } from "../../../../lib/fulfillment-status";
 import { FulfillmentError, getCustomerFulfillment } from "../../../../lib/order-fulfillment";
+import { getOrderMessageUnreadCounts } from "../../../../lib/order-messages";
+import OrderMessageLink from "../../OrderMessageLink";
 
 export const metadata: Metadata = { title: "Acompanhar pedido | Artgian Studio", robots: { index: false, follow: false } };
 
@@ -20,6 +22,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     throw error;
   });
   const paid = order.status === "paid";
+  const unreadCounts = await getOrderMessageUnreadCounts([order.id], "customer");
   const current = fulfillmentStep(order.fulfillmentStatus);
   const currentIndex = fulfillmentSteps.findIndex(step => step.id === current.id);
   return <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
@@ -66,7 +69,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
         </div>
         <aside aria-label="Resumo do pedido" className="min-w-0 rounded-[2rem] bg-[#0b2447] p-6 text-white shadow-[0_24px_70px_rgba(11,36,71,.16)] sm:p-8">
           <p className="text-[0.6rem] font-bold uppercase tracking-[0.22em] text-[#d8bc7b]">Preparado para você</p><h2 className="mt-3 font-serif text-3xl">Seu pedido.</h2>
-          <ul className="mt-6 divide-y divide-white/10">{items.map(item => <li key={item.id} className="py-4 first:pt-0"><p className="text-sm font-semibold">{item.productName}</p><p className="mt-1 break-words text-xs leading-5 text-white/60">{item.quantity} un. · {item.color}{item.personalization ? ` · “${item.personalization}”` : ""}</p></li>)}</ul>
+          <ul className="mt-6 divide-y divide-white/10">{items.map(item => <li key={item.id} className="py-4 first:pt-0"><p className="text-sm font-semibold">{item.productName}</p><p className="mt-1 break-words text-xs leading-5 text-white/60">{item.quantity} un. · {item.color}{item.personalization ? ` · “${item.personalization}”` : ""}</p><OrderMessageLink orderId={order.id} itemId={item.id} productName={item.productName} unread={unreadCounts[item.id] ?? 0} dark /></li>)}</ul>
           <div className="mt-4 flex justify-between gap-4 border-t border-white/15 pt-5"><span className="text-sm text-white/60">Total com frete</span><strong className="font-serif text-2xl font-normal text-[#d8bc7b]">{formatBrl(order.totalCents)}</strong></div>
           <div className="mt-7 flex items-start gap-3 rounded-2xl bg-white/5 p-4"><MapPin size={17} className="mt-0.5 shrink-0 text-[#d8bc7b]" /><div className="min-w-0 break-words text-xs leading-5"><p className="font-semibold">Entrega para {order.customerName}</p><p className="mt-1 text-white/60">{order.streetAddress}, {order.addressNumber}{order.addressComplement ? ` · ${order.addressComplement}` : ""}<br />{order.neighborhood} · {order.city}/{order.state}<br />CEP {order.postalCode.replace(/(\d{5})(\d{3})/, "$1-$2")}</p></div></div>
           <Link href="/produtos" className="mt-6 inline-flex text-xs text-white/65 underline underline-offset-4">Continuar comprando</Link>

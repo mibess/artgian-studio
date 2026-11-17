@@ -34,6 +34,7 @@ export default defineConfig({
       TURSO_AUTH_TOKEN: "",
       BETTER_AUTH_SECRET: "e2e-only-secret-do-not-use-in-production-123456789",
       BETTER_AUTH_URL: "http://127.0.0.1:3108",
+      MCP_PUBLIC_URL: "http://127.0.0.1:3108/mcp",
       AUTH_EMAIL_TEST_OUTBOX: "./data/e2e-auth-emails.jsonl",
       SMTP_HOST: "",
       SMTP_USER: "",
@@ -52,6 +53,9 @@ export default defineConfig({
       QSTASH_TOKEN: "",
       QSTASH_CURRENT_SIGNING_KEY: "",
       QSTASH_NEXT_SIGNING_KEY: "",
+      MIBESS_NOTIFY_ENABLED: "false",
+      MIBESS_NOTIFY_API_KEY: "",
+      MIBESS_NOTIFY_BASE_URL: "",
     },
   },
 });

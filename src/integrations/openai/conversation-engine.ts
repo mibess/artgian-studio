@@ -5,6 +5,7 @@ import { z } from "zod";
 import { aiUsage, auditLogs, exceptions, systemSettings } from "../../../db/schema";
 import { getBusinessConfig } from "../../config/business";
 import { getCommercialDb } from "../../db/commercial";
+import { isAiFeatureEnabled } from "../../features/automation/server";
 import {
   AI_ACTIONS,
   CircuitBreaker,
@@ -159,6 +160,7 @@ export async function generateCommercialDecision(
   const model =
     context.message.length <= 180 && fastModel ? fastModel : primaryModel;
   if (!apiKey || !model) return { ...fallback, source: "rules" };
+  if (!(await isAiFeatureEnabled("replies"))) return { ...fallback, source: "rules" };
   if (!openAiCircuitBreaker.canExecute()) {
     return { ...fallback, source: "rules" };
   }
@@ -283,6 +285,9 @@ export async function generateOutboundOpening(input: {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   const model = process.env.OPENAI_MODEL?.trim();
   if (!apiKey || !model || !openAiCircuitBreaker.canExecute()) {
+    return { message: fallback, source: "rules" as const };
+  }
+  if (!(await isAiFeatureEnabled("openings"))) {
     return { message: fallback, source: "rules" as const };
   }
   const budget = await getAiBudgetStatus();

@@ -1,27 +1,35 @@
 import Link from "next/link";
 import { AtSign as Instagram, Bot, MessageSquareText, Sparkles } from "lucide-react";
 import { SubmitButton } from "../../../components/PendingButton";
-import { getConversationsOverview, getSystemSettings } from "../../../../src/db/commercial";
-import { Avatar, PageHeader, StatusBadge, formatDateTime } from "../_components";
+import { getAutomationControls } from "../../../../src/features/automation/server";
+import { getConversationsPage } from "../../../../src/db/relationship";
+import { queryValue, type PaginationParams } from "../../../../src/features/leads/pagination";
+import { InstagramConversationLink } from "../InstagramConversationLink";
+import { Pagination } from "../Pagination";
+import { Avatar, EmptyState, PageHeader, StatusBadge, formatDateTime } from "../_components";
 import { simulateInbound } from "../actions";
 
-export default async function ConversationsPage({ searchParams }: { searchParams: Promise<{ erro?: string }> }) {
-  const [params, rows, settings] = await Promise.all([
-    searchParams,
-    getConversationsOverview(),
-    getSystemSettings(),
+export default async function ConversationsPage({ searchParams }: { searchParams: Promise<PaginationParams> }) {
+  const params = await searchParams;
+  const [result, controls] = await Promise.all([
+    getConversationsPage(params),
+    getAutomationControls(),
   ]);
+  const { rows } = result;
   const autoRepliesActive =
     process.env.INSTAGRAM_AUTO_REPLY_ENABLED === "true" &&
-    settings.automation_paused !== "true" &&
-    settings.auto_replies_paused === "false";
+    controls.repliesEnabled &&
+    !controls.automationPaused &&
+    !controls.autoRepliesPaused;
   return <>
     <PageHeader eyebrow="Instagram inbound" title="Conversas" description="Mensagens organizadas por intenção, com sugestão de resposta e escalada quando a informação não é segura." />
-    {params.erro && <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">{params.erro}</p>}
+    {params.erro && <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">{queryValue(params.erro)}</p>}
     <div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
       <section className="overflow-hidden rounded-[22px] border border-[#e1e1db] bg-white shadow-[0_8px_28px_rgba(32,52,60,.04)]">
         <header className="flex items-center justify-between border-b border-[#ecece7] px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8b979d]">Caixa de entrada</p><h2 className="mt-1 text-base font-semibold">Conversas recentes</h2></div><span className="flex items-center gap-2 rounded-full bg-[#e1f0e8] px-3 py-1.5 text-[9px] font-bold text-[#32745e]"><span className="size-1.5 rounded-full bg-[#4eaa83]"/>Monitorando</span></header>
-        <div className="divide-y divide-[#efefea]">{rows.map(({conversation,lead},index)=><Link href={`/admin/leads/${lead.id}`} key={conversation.id} className="flex items-center gap-3 px-5 py-4 transition hover:bg-[#faf9f6]"><Avatar name={lead.name} username={lead.instagramUsername} index={index}/><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="truncate text-xs font-bold text-[#294653]">{lead.name || `@${lead.instagramUsername}`}</p>{lead.score>=80&&<span className="rounded-full bg-[#f8ded5] px-2 py-0.5 text-[8px] font-bold text-[#9e4934]">Alta intenção</span>}</div><p className="mt-1 truncate text-[10px] text-[#7d8a90]">@{lead.instagramUsername} · {lead.productInterest || "Conversa iniciada"}</p></div><div className="hidden text-right sm:block"><StatusBadge status={conversation.status}/><p className="mt-1.5 text-[9px] text-[#9aa3a7]">{formatDateTime(conversation.lastMessageAt)}</p></div></Link>)}</div>
+        <div className="divide-y divide-[#efefea]">{rows.map(({conversation,lead},index)=><div key={conversation.id} className="flex flex-col gap-2 px-5 py-4 transition hover:bg-[#faf9f6] sm:flex-row sm:items-center sm:gap-3"><Link href={`/admin/leads/${lead.id}`} className="flex min-w-0 flex-1 items-center gap-3"><Avatar name={lead.name} username={lead.instagramUsername} index={index}/><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="truncate text-xs font-bold text-[#294653]">{lead.name || `@${lead.instagramUsername}`}</p>{lead.score>=80&&<span className="rounded-full bg-[#f8ded5] px-2 py-0.5 text-[8px] font-bold text-[#9e4934]">Alta intenção</span>}</div><p className="mt-1 truncate text-[10px] text-[#7d8a90]">@{lead.instagramUsername} · {lead.productInterest || "Conversa iniciada"}</p></div><div className="hidden text-right sm:block"><StatusBadge status={conversation.status}/><p className="mt-1.5 text-[9px] text-[#9aa3a7]">{formatDateTime(conversation.lastMessageAt)}</p></div></Link><InstagramConversationLink conversation={conversation}/></div>)}</div>
+        {!result.total && <EmptyState title="Nenhuma conversa ainda" description="As conversas recebidas aparecerão aqui." />}
+        <Pagination data={result} pathname="/admin/conversas" params={params} label="conversas" />
       </section>
       <aside className="space-y-5">
         <section className="rounded-[22px] bg-[#193848] p-6 text-white shadow-[0_14px_40px_rgba(25,56,72,.12)]">
@@ -33,7 +41,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
             <SubmitButton pendingLabel="Processando…" className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#f1c865] px-4 py-3 text-xs font-extrabold text-[#193848] disabled:opacity-60"><Bot size={15}/>Processar em dry-run</SubmitButton>
           </form>
         </section>
-        <section className="rounded-[20px] border border-[#e1e1db] bg-white p-5"><div className="flex items-center gap-3"><MessageSquareText className={autoRepliesActive?"text-[#3f8b6d]":"text-[#d96245]"} size={18}/><div><p className="text-xs font-bold text-[#344f5c]">{autoRepliesActive?"Respostas automáticas ativas":"Respostas automáticas pausadas"}</p><p className="mt-0.5 text-[10px] text-[#8a959b]">{autoRepliesActive?"DMs comerciais seguras podem ser respondidas; casos ambíguos continuam em revisão.":"Sugestões são criadas como jobs, sem envio automático."}</p></div></div></section>
+        <section className="rounded-[20px] border border-[#e1e1db] bg-white p-5"><div className="flex items-center gap-3"><MessageSquareText className={autoRepliesActive?"text-[#3f8b6d]":"text-[#d96245]"} size={18}/><div><p className="text-xs font-bold text-[#344f5c]">{autoRepliesActive?"Envio automático permitido":"Envio automático indisponível"}</p><p className="mt-0.5 text-[10px] text-[#8a959b]">{autoRepliesActive?"O envio ainda depende de orçamento, regras e horário. Casos ambíguos continuam em revisão.":controls.repliesEnabled?"Confira as permissões de envio na central de Automação e IA.":"A geração de respostas por IA está pausada. Sugestões locais continuam disponíveis para revisão."}</p><Link href="/admin/automacao" className="mt-2 inline-block text-xs font-semibold text-[#bc5b40] underline underline-offset-4">Ver controles de Automação e IA</Link></div></div></section>
       </aside>
     </div>
   </>;

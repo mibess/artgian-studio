@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { user } from "./auth-schema";
 export * from "./auth-schema";
+export * from "./mcp-schema";
 import {
   index,
   integer,
@@ -101,6 +102,33 @@ export const orderFulfillmentEvents = sqliteTable("order_fulfillment_events", {
   createdAt: text("created_at").notNull(),
 }, table => [index("order_fulfillment_events_order_idx").on(table.orderId, table.createdAt)]);
 
+// Independent of order deletion: accepted/uncertain publications retain their identity.
+export const notifyOutbox = sqliteTable("notify_outbox", {
+  id: text("id").primaryKey(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  type: text("type").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  targetOrigin: text("target_origin").notNull(),
+  payload: text("payload").notNull(),
+  status: text("status", { enum: ["pending", "publishing", "accepted", "failed"] }).notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  cycleAttempts: integer("cycle_attempts").notNull().default(0),
+  nextAttemptAt: text("next_attempt_at"),
+  leaseToken: text("lease_token"),
+  leaseExpiresAt: text("lease_expires_at"),
+  lastError: text("last_error"),
+  notifyEventId: text("notify_event_id"),
+  occurredAt: text("occurred_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  lastAttemptAt: text("last_attempt_at"),
+  acceptedAt: text("accepted_at"),
+}, table => [
+  uniqueIndex("notify_outbox_key_unique").on(table.idempotencyKey),
+  index("notify_outbox_pending_idx").on(table.targetOrigin, table.status, table.nextAttemptAt),
+  index("notify_outbox_lease_idx").on(table.status, table.leaseExpiresAt),
+]);
+
 export const coupons = sqliteTable("coupons", {
   id: text("id").primaryKey(),
   code: text("code").notNull(),
@@ -153,6 +181,20 @@ export const orderItems = sqliteTable(
   },
   (table) => [index("order_items_order_id_idx").on(table.orderId)],
 );
+
+export const orderItemMessages = sqliteTable("order_item_messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  orderItemId: integer("order_item_id").notNull().references(() => orderItems.id, { onDelete: "cascade" }),
+  sender: text("sender", { enum: ["customer", "seller"] }).notNull(),
+  body: text("body").notNull(),
+  clientId: text("client_id").notNull(),
+  createdAt: text("created_at").notNull(),
+  readAt: text("read_at"),
+}, table => [
+  index("order_item_messages_thread_idx").on(table.orderItemId, table.id),
+  index("order_item_messages_unread_idx").on(table.orderItemId, table.sender, table.readAt),
+  uniqueIndex("order_item_messages_client_unique").on(table.orderItemId, table.sender, table.clientId),
+]);
 
 export const paymentEvents = sqliteTable(
   "payment_events",

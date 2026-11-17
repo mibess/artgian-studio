@@ -11,6 +11,7 @@ import {
 
 import { useProductCatalog } from "./products/context";
 import { getProductSelection } from "./catalog";
+import { trackAddToCart } from "./analytics";
 
 export const CART_STORAGE_KEY = "artgian:cart:v1";
 const CHANGE_EVENT = "artgian:cart-change";
@@ -85,8 +86,11 @@ export function useCart() {
       (sum, item) => sum + item.subtotalCents,
       0,
     ),
-    add: (item: CartItem) =>
-      writeCart(addCartItem(readCart(getSnapshot()), item, catalog)),
+    add: (item: CartItem) => {
+      writeCart(addCartItem(readCart(getSnapshot()), item, catalog));
+      const product = catalog[item.productId];
+      if (product) trackAddToCart(product, item.quantity, item.color);
+    },
     remove: (key: string) =>
       writeCart(
         readCart(getSnapshot()).filter((item) => cartItemKey(item) !== key),

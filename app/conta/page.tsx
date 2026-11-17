@@ -14,6 +14,8 @@ import SignOutButton from "./SignOutButton";
 import AddressBook from "./AddressBook";
 import AccountTabs from "./AccountTabs";
 import OrderThumbnail from "./OrderThumbnail";
+import OrderMessageLink from "./OrderMessageLink";
+import { getOrderMessageUnreadCounts } from "../../lib/order-messages";
 import { listAddresses } from "../../lib/addresses/repository";
 import { fulfillmentStep } from "../../lib/fulfillment-status";
 
@@ -29,7 +31,7 @@ const statuses: Record<string, string> = {
 const pageSize = 4;
 type OrderItem = typeof orderItems.$inferSelect;
 
-function ItemPreview({ item, catalog }: { item: OrderItem; catalog: ProductCatalog }) {
+function ItemPreview({ item, catalog, unread }: { item: OrderItem; catalog: ProductCatalog; unread: number }) {
   const product = Object.hasOwn(catalog, item.productId) ? catalog[item.productId] : undefined;
   const image = product?.variants.find(variant => variant.name === item.color || variant.key === item.color)?.image || product?.image;
   return <div className="flex min-w-0 items-center gap-3.5">
@@ -38,6 +40,7 @@ function ItemPreview({ item, catalog }: { item: OrderItem; catalog: ProductCatal
       <p className="break-words font-serif text-xl leading-tight">{item.productName}</p>
       <p className="mt-1.5 break-words text-xs leading-5 text-[#647087]">{item.quantity} {item.quantity === 1 ? "unidade" : "unidades"} · {item.color}</p>
       {item.personalization && <p className="mt-1 break-words text-xs leading-5 text-[#647087]">“{item.personalization}”</p>}
+      <OrderMessageLink orderId={item.orderId} itemId={item.id} productName={item.productName} unread={unread} />
     </div>
   </div>;
 }
@@ -60,6 +63,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     .orderBy(desc(orders.createdAt), desc(orders.id)).limit(pageSize).offset((page - 1) * pageSize);
   const items = purchases.length ? await db.select().from(orderItems)
     .where(inArray(orderItems.orderId, purchases.map(order => order.id))).orderBy(orderItems.id) : [];
+  const unreadCounts = await getOrderMessageUnreadCounts(purchases.map(order => order.id), "customer");
   const firstName = session.user.name.trim().split(/\s+/)[0];
 
   return <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
@@ -98,10 +102,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                   <h3 id={`order-${order.id}`} className="text-xs font-semibold">Pedido <span className="font-mono text-[#647087]">#{order.id.slice(0, 8)}</span></h3>
                   <time className="text-[0.65rem] text-[#647087]">{date}</time>
                 </div>
-                {orderProducts[0] ? <ItemPreview item={orderProducts[0]} catalog={catalog} /> : <p className="flex items-center gap-2 text-sm"><Package size={18} /> Sua compra na Artgian</p>}
+                {orderProducts[0] ? <ItemPreview item={orderProducts[0]} catalog={catalog} unread={unreadCounts[orderProducts[0].id] ?? 0} /> : <p className="flex items-center gap-2 text-sm"><Package size={18} /> Sua compra na Artgian</p>}
                 {orderProducts.length > 1 && <details className="group mt-3">
-                  <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 text-xs font-semibold text-[#647087] hover:text-[#0b2447] [&::-webkit-details-marker]:hidden"><ChevronDown size={14} className="transition group-open:rotate-180" /> Ver mais {orderProducts.length - 1} {orderProducts.length === 2 ? "item" : "itens"}</summary>
-                  <ul className="mt-3 space-y-4 border-t border-[#0b2447]/10 pt-4">{orderProducts.slice(1).map(item => <li key={item.id}><ItemPreview item={item} catalog={catalog} /></li>)}</ul>
+                  <summary className="flex min-h-8 cursor-pointer list-none flex-wrap items-center gap-2 text-xs font-semibold text-[#647087] hover:text-[#0b2447] [&::-webkit-details-marker]:hidden"><ChevronDown size={14} className="transition group-open:rotate-180" /><span>Ver mais {orderProducts.length - 1} {orderProducts.length === 2 ? "item" : "itens"}</span>{orderProducts.slice(1).some(item => unreadCounts[item.id] > 0) && <span className="rounded-full bg-[#d8bc7b]/30 px-2 py-1 text-[0.6rem] text-[#846023]">Novas mensagens</span>}</summary>
+                  <ul className="mt-3 space-y-4 border-t border-[#0b2447]/10 pt-4">{orderProducts.slice(1).map(item => <li key={item.id}><ItemPreview item={item} catalog={catalog} unread={unreadCounts[item.id] ?? 0} /></li>)}</ul>
                 </details>}
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[0.65rem] font-semibold ${statusClass}`}><span aria-hidden="true" className="size-1.5 rounded-full bg-current" />{status}</span>

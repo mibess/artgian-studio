@@ -4,9 +4,11 @@ import {
   parseStringList,
 } from "../../../../lib/products/repository";
 import { ProductManager } from "./ProductManager";
+import { getDraftProductIds } from "../../../../lib/products/drafts";
 import { PageHeader } from "../_components";
+import Link from "next/link";
 export default async function ProductsPage() {
-  const rows = await getProductRecords();
+  const [rows, draftIds] = await Promise.all([getProductRecords(), getDraftProductIds()]);
   const products = rows.map((p) => ({
     id: p.id,
     version: p.version,
@@ -36,7 +38,8 @@ export default async function ProductsPage() {
         title="Catálogo de produtos"
         description="Um cadastro para a loja, as vendas e o atendimento. Mantenha a identidade de cada página e as informações comerciais sempre atualizadas."
       />
-      <ProductManager initialProducts={products} />
+      <div className="mb-6"><Link href="/admin/mcp" className="text-sm font-semibold underline">Conectar IA para cadastrar produtos →</Link></div>
+      <ProductManager initialProducts={products} initialDraftIds={[...draftIds]} />
     </>
   );
 }

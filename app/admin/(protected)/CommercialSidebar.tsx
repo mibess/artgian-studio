@@ -48,6 +48,7 @@ const groups = [
     items: [
       { href: "/admin/orcamentos", label: "Orçamentos", icon: BriefcaseBusiness },
       { href: "/admin/pedidos", label: "Pedidos e entregas", icon: PackageCheck },
+      { href: "/admin/mensagens", label: "Mensagens de compras", icon: MessageCircleMore },
       { href: "/admin/pedidos-comerciais", label: "Pedidos comerciais", icon: ClipboardList },
       { href: "/admin/descontos", label: "Descontos", icon: Tags },
       { href: "/admin/produtos", label: "Produtos", icon: Boxes },
@@ -58,8 +59,9 @@ const groups = [
   {
     label: "Operação",
     items: [
-      { href: "/admin/ia", label: "Inteligência artificial", icon: Bot },
-      { href: "/admin/jobs", label: "Automações", icon: Gauge },
+      { href: "/admin/automacao", label: "Automação e IA", icon: Workflow },
+      { href: "/admin/ia", label: "Consumo de IA", icon: Bot },
+      { href: "/admin/jobs", label: "Fila de tarefas", icon: Gauge },
       { href: "/admin/excecoes", label: "Revisão humana", icon: CircleAlert },
       { href: "/admin/configuracoes", label: "Configurações", icon: Settings2 },
     ],
@@ -128,7 +130,7 @@ export function CommercialSidebar({ companyName, instagramHandle, paused }: Comm
         </form>
         <div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-white/35">
           <span className={`size-1.5 rounded-full ${paused ? "bg-[#f3c76b]" : "bg-[#68d391]"}`} />
-          {paused ? "Operação sob controle manual" : "Automações seguras ativas"}
+          {paused ? "Pausas individuais preservadas" : "Execução sujeita aos controles"}
         </div>
         <form action={signOutAdmin} className="mt-3">
           <SubmitButton pendingLabel="Saindo…" className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-medium text-white/60 hover:bg-white/7 hover:text-white disabled:opacity-60">

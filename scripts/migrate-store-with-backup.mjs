@@ -4,20 +4,25 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { parseEnv } from "node:util";
-import { verifyFulfillmentSchema } from "./verify-store-schema.mjs";
+import { verifyFulfillmentSchema, verifyNotifySchema, verifyMcpSchema, verifyOrderMessagesSchema } from "./verify-store-schema.mjs";
 
 // Explicit opt-in: a backup and local restore rehearsal always precede remote writes.
 const envFile = process.argv.find(arg => arg.startsWith("--env="))?.slice(6);
-if (!envFile) throw new Error("Informe --env=/caminho/seguro.env.");
-const env = parseEnv(await readFile(envFile, "utf8"));
+const runtimeEnv = process.argv.includes("--runtime-env");
+if ((!envFile && !runtimeEnv) || (envFile && runtimeEnv)) throw new Error("Informe --env=/caminho/seguro.env ou --runtime-env, não ambos.");
+const env = runtimeEnv ? process.env : parseEnv(await readFile(envFile, "utf8"));
 if (!env.TURSO_DATABASE_URL || !env.TURSO_AUTH_TOKEN) throw new Error("Credenciais ausentes.");
 const journal = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8")).entries;
 const contactOnly = process.argv.includes("--contact");
 const paymentsOnly = process.argv.includes("--payments");
 const fulfillmentOnly = process.argv.includes("--fulfillment");
-if ([contactOnly, paymentsOnly, fulfillmentOnly].filter(Boolean).length > 1) throw new Error("Selecione apenas uma migração: --contact, --payments ou --fulfillment.");
-const baselineTag = fulfillmentOnly ? "0019_sparkling_dust" : paymentsOnly ? "0018_sticky_phantom_reporter" : contactOnly ? "0017_gorgeous_talon" : "0014_unusual_cassandra_nova";
-const pendingTags = fulfillmentOnly ? ["0020_order_fulfillment"] : paymentsOnly ? ["0019_sparkling_dust"] : contactOnly ? ["0018_sticky_phantom_reporter"] : ["0015_gray_manta", "0016_volatile_namor", "0017_gorgeous_talon"];
+const notifyOnly = process.argv.includes("--notify");
+const mcpOnly = process.argv.includes("--mcp");
+const chatOnly = process.argv.includes("--chat");
+const additiveOnly = mcpOnly || chatOnly;
+if ([contactOnly, paymentsOnly, fulfillmentOnly, notifyOnly, mcpOnly, chatOnly].filter(Boolean).length > 1) throw new Error("Selecione apenas uma migração: --contact, --payments, --fulfillment, --notify, --mcp ou --chat.");
+const baselineTag = chatOnly ? "0022_omniscient_azazel" : mcpOnly ? "0021_mibess_notify_outbox" : notifyOnly ? "0020_order_fulfillment" : fulfillmentOnly ? "0019_sparkling_dust" : paymentsOnly ? "0018_sticky_phantom_reporter" : contactOnly ? "0017_gorgeous_talon" : "0014_unusual_cassandra_nova";
+const pendingTags = chatOnly ? ["0023_order_item_messages"] : mcpOnly ? ["0022_omniscient_azazel"] : notifyOnly ? ["0021_mibess_notify_outbox"] : fulfillmentOnly ? ["0020_order_fulfillment"] : paymentsOnly ? ["0019_sparkling_dust"] : contactOnly ? ["0018_sticky_phantom_reporter"] : ["0015_gray_manta", "0016_volatile_namor", "0017_gorgeous_talon"];
 const migrations = await Promise.all(journal.map(async entry => {
   const sql = await readFile(`drizzle/${entry.tag}.sql`, "utf8");
   return { ...entry, sql, hash: createHash("sha256").update(sql).digest("hex") };
@@ -37,19 +42,15 @@ const decode = value => {
 const sortedRows = rows => rows.map(row => JSON.stringify(row)).sort();
 const client = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN, intMode: "bigint" });
 
-async function snapshot(connection) {
-  const schema = (await connection.execute("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name")).rows;
+async function snapshot(connection, atomicRead = false) {
+  const schemaRows = (await connection.execute("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND (name NOT LIKE 'sqlite_%' OR name='sqlite_sequence') ORDER BY type, name")).rows;
+  const schema = schemaRows.filter(row => row.name !== "sqlite_sequence");
   const tables = [];
-  const entries = schema.filter(row => row.type === "table");
-  const results = await connection.batch(entries.map(entry => `SELECT * FROM ${quote(entry.name)}`));
+  const entries = schemaRows.filter(row => row.type === "table");
+  const results = await connection.batch(entries.map(entry => `SELECT * FROM ${quote(entry.name)}`), ...(atomicRead ? ["read"] : []));
   for (const [index, entry] of entries.entries()) {
     const result = results[index];
     tables.push({ name: entry.name, columns: result.columns, rows: result.rows.map(row => result.columns.map(column => encode(row[column]))) });
-  }
-  const sequenceExists = (await connection.execute("SELECT name FROM sqlite_master WHERE name='sqlite_sequence'")).rows.length;
-  if (sequenceExists) {
-    const result = await connection.execute("SELECT * FROM sqlite_sequence");
-    tables.push({ name: "sqlite_sequence", columns: result.columns, rows: result.rows.map(row => result.columns.map(column => encode(row[column]))) });
   }
   return { at: new Date().toISOString(), schema: schema.map(row => ({ type: row.type, name: row.name, sql: row.sql })), tables };
 }
@@ -62,7 +63,13 @@ async function latestMigration(connection) {
 }
 
 async function validateNewSchema(connection) {
-  if (fulfillmentOnly) {
+  if (chatOnly) {
+    await verifyOrderMessagesSchema(connection);
+  } else if (mcpOnly) {
+    await verifyMcpSchema(connection);
+  } else if (notifyOnly) {
+    await verifyNotifySchema(connection);
+  } else if (fulfillmentOnly) {
     await verifyFulfillmentSchema(connection);
   } else if (paymentsOnly) {
     const columns = (await connection.execute("PRAGMA table_info(orders)")).rows;
@@ -98,22 +105,53 @@ async function applyPending(connection, latest) {
   }
 }
 
+async function applyAdditiveAtomic(connection, latest, source) {
+  const migration = migrations.find(entry => entry.tag === pendingTags.at(-1));
+  const ddl = migration.sql.split("--> statement-breakpoint").map(sql => sql.trim()).filter(Boolean);
+  if (ddl.some(sql => !/^CREATE (TABLE|(?:UNIQUE )?INDEX) /i.test(sql))) throw new Error("A migração selecionada deve ser exclusivamente aditiva.");
+  const prefix = `_migration_check_${randomBytes(8).toString("hex")}`;
+  const guard = quote(prefix);
+  const tables = source.tables.filter(t => !["__drizzle_migrations", "sqlite_sequence"].includes(t.name));
+  const statements = [
+    `CREATE TEMP TABLE ${guard} (ok INTEGER NOT NULL CHECK (ok=1))`,
+    { sql: `INSERT INTO ${guard} SELECT CASE WHEN (SELECT hash FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1)=? AND (SELECT created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1)=? THEN 1 ELSE 0 END`, args: [latest.hash, latest.when] },
+    ...tables.map((t, i) => `CREATE TEMP TABLE ${quote(`${prefix}_${i}`)} AS SELECT ${t.columns.map(quote).join(",")} FROM ${quote(t.name)}`),
+    ...ddl,
+    { sql: "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)", args: [migration.hash, migration.when] },
+    ...tables.map((t, i) => {
+      const columns = t.columns.map(quote).join(","), before = quote(`${prefix}_${i}`), after = quote(t.name);
+      return `INSERT INTO ${guard} SELECT CASE WHEN (SELECT COUNT(*) FROM ${before}) != (SELECT COUNT(*) FROM ${after}) OR EXISTS(SELECT ${columns} FROM ${before} EXCEPT SELECT ${columns} FROM ${after}) OR EXISTS(SELECT ${columns} FROM ${after} EXCEPT SELECT ${columns} FROM ${before}) THEN 0 ELSE 1 END`;
+    }),
+    `INSERT INTO ${guard} SELECT CASE WHEN integrity_check='ok' THEN 1 ELSE 0 END FROM pragma_integrity_check`,
+    `INSERT INTO ${guard} SELECT CASE WHEN EXISTS(SELECT 1 FROM pragma_foreign_key_check) THEN 0 ELSE 1 END`,
+    ...tables.map((_, i) => `DROP TABLE ${quote(`${prefix}_${i}`)}`),
+    `DROP TABLE ${guard}`,
+  ];
+  // All validation is executed by SQLite before the implicit commit, with no
+  // data round-trips while holding the write lock. Any failed CHECK rolls back.
+  await connection.batch(statements, "write");
+}
+
 let readTx;
 let writeTx;
 let rehearsal;
 let stage = "read remote snapshot";
 try {
-  readTx = await client.transaction("read");
-  const latest = await latestMigration(readTx);
+  // MCP and chat add only tables/indexes. A single read batch avoids holding an
+  // interactive snapshot across several network round trips on a busy store.
+  readTx = additiveOnly ? undefined : await client.transaction("read");
+  const reader = readTx || client;
+  const latest = await latestMigration(reader);
   if (latest.tag === pendingTags.at(-1)) {
-    await validateNewSchema(readTx);
-    await readTx.rollback();
+    await validateNewSchema(reader);
+    await readTx?.rollback();
     console.log("Migrações solicitadas já aplicadas; nenhuma alteração.");
     process.exitCode = 0;
   } else {
     if (latest.tag !== baselineTag) throw new Error(`O banco não está na migração ${baselineTag} esperada.`);
-    const source = await snapshot(readTx);
-    await readTx.rollback();
+    const source = await snapshot(reader, additiveOnly);
+    await readTx?.rollback();
+    if (additiveOnly && !source.tables.some(table => table.name === "__drizzle_migrations" && table.rows.length)) throw new Error("Backup sem histórico de migrações.");
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     stage = "encrypt backup";
     const backupDir = path.resolve("backups");
@@ -151,7 +189,8 @@ try {
       if (!actual || JSON.stringify(sortedRows(actual.rows)) !== JSON.stringify(sortedRows(table.rows))) throw new Error(`Restauração falhou: ${table.name}`);
     }
     stage = "rehearse migrations locally";
-    await applyPending(rehearsal, latest);
+    if (additiveOnly) await applyAdditiveAtomic(rehearsal, latest, restored);
+    else await applyPending(rehearsal, latest);
     await validateNewSchema(rehearsal);
     console.log(`Backup criptografado e restauração local verificados: ${backupPath}`);
     console.log(`Chave de recuperação (fora do repositório): ${keyPath}`);
@@ -159,15 +198,21 @@ try {
     if (!process.argv.includes("--apply")) {
       console.log("Ensaio concluído. Use --apply para alterar o banco remoto.");
     } else {
-      writeTx = await client.transaction("write");
       stage = "apply remote migrations";
+      if (additiveOnly) {
+        await applyAdditiveAtomic(client, latest, source);
+        stage = "verify committed additive schema";
+        await validateNewSchema(client);
+        console.log(`Migração ${pendingTags.at(-1)} aplicada atomicamente. Todos os dados anteriores e a integridade foram preservados.`);
+      } else {
+      writeTx = await client.transaction("write");
       const current = await latestMigration(writeTx);
       if (current.tag !== latest.tag) throw new Error("O banco mudou durante o backup.");
       const before = await snapshot(writeTx);
       await applyPending(writeTx, current);
       await validateNewSchema(writeTx);
       // Compare original columns, not newly added columns or catalog migration data.
-      const excluded = contactOnly || paymentsOnly || fulfillmentOnly ? ["__drizzle_migrations", "sqlite_sequence"] : ["__drizzle_migrations", "catalog_products", "sqlite_sequence"];
+      const excluded = contactOnly || paymentsOnly || fulfillmentOnly || notifyOnly || additiveOnly ? ["__drizzle_migrations", "sqlite_sequence"] : ["__drizzle_migrations", "catalog_products", "sqlite_sequence"];
       const originalTables = before.tables.filter(row => !excluded.includes(row.name));
       const originalResults = await writeTx.batch(originalTables.map(table => `SELECT ${table.columns.map(quote).join(",")} FROM ${quote(table.name)}`));
       for (const [index, table] of originalTables.entries()) {
@@ -179,13 +224,15 @@ try {
       if (result.length !== 1 || result[0].integrity_check !== "ok") throw new Error("Falha na verificação de integridade.");
       await writeTx.commit();
       console.log("Migrações remotas aplicadas atomicamente. Dados anteriores e integridade preservados.");
+      }
     }
   }
 } catch (error) {
   await writeTx?.rollback().catch(() => {});
   await readTx?.rollback().catch(() => {});
   // Do not emit URLs, credentials or database records in errors.
-  console.error(error instanceof Error && !error.code ? error.message : `Falha no backup/migração (${stage}, ${error.code || "unknown"}); nenhuma transação pendente foi confirmada.`);
+  const outcome = stage === "verify committed additive schema" ? "A migração já foi confirmada; confira o schema antes de tentar novamente." : "Nenhuma transação pendente foi confirmada; confira o estado remoto antes de repetir em caso de falha de rede.";
+  console.error(error instanceof Error && !error.code ? error.message : `Falha no backup/migração (${stage}, ${error.code || "unknown"}). ${outcome}`);
   process.exitCode = 1;
 } finally {
   readTx?.close();

@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { CalendarClock, CheckCircle2, MapPin, Package, Palette, UserRound } from "lucide-react";
-import { getBriefingsOverview } from "../../../../src/db/commercial";
+import { getBriefingsPage } from "../../../../src/db/relationship";
+import type { PaginationParams } from "../../../../src/features/leads/pagination";
+import { Pagination } from "../Pagination";
 import { Avatar, EmptyState, PageHeader, StatusBadge, formatDateTime } from "../_components";
 
-export default async function BriefingsPage() {
-  const rows = await getBriefingsOverview();
+export default async function BriefingsPage({ searchParams }: { searchParams: Promise<PaginationParams> }) {
+  const params = await searchParams;
+  const result = await getBriefingsPage(params);
+  const { rows } = result;
   return <>
     <PageHeader eyebrow="Personalização" title="Briefings" description="Informações construídas gradualmente a partir da conversa, sem transformar o atendimento em interrogatório." />
     {!rows.length?<EmptyState title="Nenhum briefing ainda" description="Os briefings aparecem quando uma conversa traz detalhes úteis para personalização ou orçamento."/>:<div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">{rows.map(({briefing,lead},index)=><Link href={`/admin/leads/${lead.id}`} key={briefing.id} className="group rounded-[22px] border border-[#e1e1db] bg-white p-5 shadow-[0_8px_28px_rgba(32,52,60,.04)] transition hover:-translate-y-0.5 hover:shadow-md">
@@ -13,5 +17,6 @@ export default async function BriefingsPage() {
       <div className="mt-4 grid grid-cols-2 gap-3 text-[9px] text-[#718088]"><span className="flex items-center gap-1.5"><UserRound size={12}/>{briefing.recipient || "Destinatário pendente"}</span><span className="flex items-center gap-1.5"><Palette size={12}/>{briefing.customizationText || briefing.preferredColors || "Personalização pendente"}</span><span className="flex items-center gap-1.5"><CalendarClock size={12}/>{briefing.desiredDeadline || "Prazo pendente"}</span><span className="flex items-center gap-1.5"><MapPin size={12}/>{[briefing.city,briefing.state].filter(Boolean).join("/") || "Local pendente"}</span></div>
       <div className="mt-4 flex items-center justify-between border-t border-[#eeeae3] pt-3"><span className="text-[9px] text-[#9aa3a7]">Atualizado {formatDateTime(briefing.updatedAt)}</span><span className="flex items-center gap-1 text-[9px] font-bold text-[#d96245]"><CheckCircle2 size={12}/>{briefing.needsQuote?"Precisa de orçamento":"Preço validado"}</span></div>
     </Link>)}</div>}
+    <Pagination data={result} pathname="/admin/briefings" params={params} label="briefings" />
   </>;
 }

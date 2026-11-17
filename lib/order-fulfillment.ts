@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb } from "../db";
 import { orderFulfillmentEvents, orderItems, orders } from "../db/schema";
 import { retryTransaction } from "./checkout-orders";
+import { enqueueFulfillment } from "./mibess-notify/outbox";
 
 export class FulfillmentError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -43,7 +44,9 @@ export async function updateOrderFulfillment(orderId: string, input: z.infer<typ
       fulfillmentStatus: input.status, fulfillmentNote: note, shippingTrackingCode: trackingCode,
       fulfillmentUpdatedAt: now, fulfillmentRevision: order.fulfillmentRevision + 1,
     }).where(eq(orders.id, order.id));
-    await tx.insert(orderFulfillmentEvents).values({ id: crypto.randomUUID(), orderId, status: input.status, note, trackingCode, source: "manual", createdAt: now });
+    const event = { id: crypto.randomUUID(), orderId, status: input.status, note, trackingCode, source: "manual", createdAt: now };
+    await tx.insert(orderFulfillmentEvents).values(event);
+    await enqueueFulfillment(tx, order, event);
     return true;
   }, { behavior: "immediate" }));
 }

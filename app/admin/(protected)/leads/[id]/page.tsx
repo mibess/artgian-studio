@@ -7,6 +7,8 @@ import { getBusinessConfig, isDefinedBusinessValue } from "../../../../../src/co
 import { buildBriefingSummary, CHANNEL_STATE_LABELS, CONSUMER_PIPELINE, INTENT_LABELS, PIPELINE_LABELS, type Intent } from "../../../../../src/features/leads/domain";
 import { OUTBOUND_PIPELINES, OUTBOUND_PIPELINE_LABELS } from "../../../../../src/features/outbound/domain";
 import { isConversationMessageVisible } from "../../../../../src/features/conversations/presentation";
+import { InstagramConversationLink } from "../../InstagramConversationLink";
+import { instagramProfileUrl } from "../../../../../src/integrations/instagram/links";
 import { Avatar, StatusBadge, formatBrl, formatDateTime } from "../../_components";
 import { approveInstagramReply, blockLeadContact, confirmCommercialOrder, createInstagramReplyDraft, escalateInstagramConversation, registerQuote, registerWhatsappHandoff, updateLeadStage } from "../../actions";
 
@@ -15,6 +17,7 @@ export default async function LeadDetailPage({ params, searchParams }: { params:
   const [detail, business] = await Promise.all([getLeadDetail(id), getBusinessConfig()]);
   if (!detail) notFound();
   const { lead, conversation, messages, briefing, timeline } = detail;
+  const profileUrl = instagramProfileUrl(lead.instagramUsername);
   const pipelineOptions = lead.leadType === "partner" ? OUTBOUND_PIPELINES.partner : CONSUMER_PIPELINE;
   const visibleMessages = messages.filter(isConversationMessageVisible);
   const commentReviewOnly = Boolean(
@@ -38,13 +41,13 @@ export default async function LeadDetailPage({ params, searchParams }: { params:
     {query.erro && <div className="mb-5 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800"><AlertTriangle size={16}/>{query.erro}</div>}
     <header className="mb-6 flex flex-col gap-5 rounded-[22px] border border-[#e1e1db] bg-white p-5 sm:flex-row sm:items-center sm:p-6">
       <Avatar name={lead.name} username={lead.instagramUsername} size="lg"/>
-      <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold tracking-[-0.04em] text-[#173244]">{lead.name || `@${lead.instagramUsername}`}</h1><StatusBadge status={lead.pipelineStage}/></div><p className="mt-1 flex items-center gap-1.5 text-xs text-[#7b898f]"><Instagram size={13}/>@{lead.instagramUsername} · {lead.source}</p></div>
+      <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold tracking-[-0.04em] text-[#173244]">{lead.name || `@${lead.instagramUsername}`}</h1><StatusBadge status={lead.pipelineStage}/></div><p className="mt-1 flex items-center gap-1.5 text-xs text-[#7b898f]"><Instagram size={13}/>{profileUrl ? <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[#d96245]">@{lead.instagramUsername}</a> : `@${lead.instagramUsername}`} · {lead.source}</p></div>
       <div className="flex items-center gap-3"><div className="text-right"><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#8e999e]">Lead score</p><p className="text-3xl font-semibold tracking-[-0.05em] text-[#e06649]">{lead.score}</p></div><div className="h-11 w-px bg-[#e6e6e1]"/><form action={updateLeadStage} className="flex items-center gap-2"><input type="hidden" name="leadId" value={lead.id}/><select name="pipelineStage" defaultValue={lead.pipelineStage} className="h-10 rounded-xl border border-[#dfe2de] bg-[#faf9f6] px-3 text-[10px] font-bold text-[#526873] outline-none">{pipelineOptions.map(stage=><option key={stage} value={stage}>{PIPELINE_LABELS[stage as keyof typeof PIPELINE_LABELS] || OUTBOUND_PIPELINE_LABELS[stage]}</option>)}</select><SubmitButton pendingLabel="Movendo…" className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#173244] px-3 text-[9px] font-bold text-white disabled:opacity-60">Mover</SubmitButton></form></div>
     </header>
     <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
       <div className="space-y-5">
         <section className="overflow-hidden rounded-[22px] border border-[#e1e1db] bg-white">
-          <header className="flex items-center justify-between border-b border-[#ecece7] px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8b979d]">Histórico completo</p><h2 className="mt-1 text-base font-semibold">Conversa no Instagram</h2></div><span className="text-[9px] font-bold text-[#7c8a90]">{visibleMessages.length} mensagens</span></header>
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ecece7] px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8b979d]">Histórico completo</p><h2 className="mt-1 text-base font-semibold">Conversa no Instagram</h2></div><span className="text-[9px] font-bold text-[#7c8a90]">{visibleMessages.length} mensagens</span>{conversation && <InstagramConversationLink conversation={conversation}/>}</header>
           <div className="max-h-[620px] space-y-4 overflow-y-auto bg-[#f8f7f3] p-5">{visibleMessages.map((message)=>{
             const editable=message.direction==="outbound"&&["draft","failed"].includes(message.status);
             const uncertain=message.status==="send_uncertain";

@@ -1,8 +1,9 @@
 import { desc, inArray } from "drizzle-orm";
 import Link from "next/link";
+import { MessageCircleMore } from "lucide-react";
 import { getDb } from "../../../../db";
 import { orderItems, orders } from "../../../../db/schema";
-import { maskCpf } from "../../../../lib/brazil";
+import { digitsOnly, formatPhone, maskCpf } from "../../../../lib/brazil";
 import { formatBrl } from "../../../../lib/catalog";
 import {
   getConfiguredShippingProvider,
@@ -13,6 +14,7 @@ import {
 import { hasFullName } from "../../../../lib/brazil";
 import { NativeSubmitButton } from "../../../components/PendingButton";
 import { fulfillmentDate, fulfillmentStep, fulfillmentSteps } from "../../../../lib/fulfillment-status";
+import { getOrderMessageUnreadCounts } from "../../../../lib/order-messages";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,7 @@ export default async function AdminOrdersPage({
     .limit(51)
     .offset((page - 1) * 50);
   const recentOrders = pageOrders.slice(0, 50);
+  const unreadCounts = await getOrderMessageUnreadCounts(recentOrders.map(order => order.id), "seller");
   const feedbackOrderId = recentOrders.some(order => order.id === params.updatedOrder) ? params.updatedOrder : undefined;
   const items = recentOrders.length
     ? await db
@@ -73,11 +76,14 @@ export default async function AdminOrdersPage({
               Pedidos, entregas e etiquetas
             </h1>
           </div>
-          <span
-            className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${isSandbox ? "bg-amber-100 text-amber-900" : "bg-red-100 text-red-900"}`}
-          >
-            {shippingProviderName(configuredProvider)}: {isSandbox ? "SANDBOX" : "PRODUÇÃO"}
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href="/admin/mensagens" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#0b2447]/15 bg-white px-4 py-2 text-xs font-semibold"><MessageCircleMore size={16} /> Mensagens de compras</Link>
+            <span
+              className={`w-fit rounded-full px-4 py-2 text-xs font-bold ${isSandbox ? "bg-amber-100 text-amber-900" : "bg-red-100 text-red-900"}`}
+            >
+              {shippingProviderName(configuredProvider)}: {isSandbox ? "SANDBOX" : "PRODUÇÃO"}
+            </span>
+          </div>
         </div>
 
         {params.message && !feedbackOrderId && (
@@ -98,6 +104,13 @@ export default async function AdminOrdersPage({
             </p>
           )}
           {rows.map(({ order, items }) => {
+            const phoneDigits = digitsOnly(order.customerPhone);
+            const contactPhone = /^\d{10,11}$/.test(phoneDigits)
+              ? `55${phoneDigits}`
+              : /^55\d{10,11}$/.test(phoneDigits) ? phoneDigits : null;
+            const phoneLabel = contactPhone
+              ? formatPhone(contactPhone.slice(2))
+              : order.customerPhone;
             const orderProvider = resolveShippingProvider(
               order.shippingProvider,
             );
@@ -130,11 +143,12 @@ export default async function AdminOrdersPage({
                     </h2>
                     <ul className="mt-2 space-y-1 text-xs text-[#647087]">
                       {items.map((item) => (
-                        <li key={item.id}>
+                        <li key={item.id} className="flex flex-col items-start">
                           {item.quantity} × {item.productName} · {item.color}
                           {item.personalization
                             ? ` · “${item.personalization}”`
                             : ""}
+                          <Link href={`/admin/mensagens/${order.id}/${item.id}`} className="mt-1 inline-flex min-h-11 items-center gap-1.5 rounded-full px-2 text-xs font-semibold text-[#0b2447] underline underline-offset-4 hover:bg-[#0b2447]/5"><MessageCircleMore size={14} /> Mensagens sobre este item{unreadCounts[item.id] > 0 && <span className="rounded-full bg-[#f8ded5] px-2 py-0.5 text-[10px] font-bold text-[#9e4934]">{unreadCounts[item.id]} {unreadCounts[item.id] === 1 ? "nova" : "novas"}</span>}</Link>
                         </li>
                       ))}
                     </ul>
@@ -232,6 +246,38 @@ export default async function AdminOrdersPage({
                     )}
                   </div>
                 </div>
+                <section aria-label={`Dados do cliente do pedido ${order.id.slice(0, 8)}`} className="mt-6 rounded-xl border border-[#0b2447]/10 bg-[#f7f3ea]/50 p-4 sm:p-5">
+                  <h3 className="text-sm font-semibold">Dados do cliente</h3>
+                  <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="min-w-0">
+                      <dt className="text-xs text-[#647087]">Nome completo</dt>
+                      <dd className="mt-1 break-words font-medium">{order.customerName || "Não informado"}</dd>
+                      <dd className="mt-1 text-xs text-[#647087]">CPF: {maskCpf(order.customerDocument)}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-[#647087]">E-mail</dt>
+                      <dd className="mt-1 break-words">
+                        {order.customerEmail ? <a href={`mailto:${order.customerEmail}`} className="underline decoration-[#b88a3b]/60 underline-offset-4 hover:text-[#946b28]">{order.customerEmail}</a> : "Não informado"}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-[#647087]">Telefone</dt>
+                      <dd className="mt-1">
+                        {contactPhone ? <a href={`tel:+${contactPhone}`} className="underline decoration-[#b88a3b]/60 underline-offset-4 hover:text-[#946b28]">{phoneLabel}</a> : phoneLabel || "Não informado"}
+                      </dd>
+                      {contactPhone && <dd className="mt-2"><a href={`https://wa.me/${contactPhone}`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-full border border-[#0b2447]/20 bg-white px-4 py-2 text-xs font-semibold hover:bg-[#f7f3ea]">Abrir WhatsApp<span className="sr-only"> de {order.customerName} (nova aba)</span></a></dd>}
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-[#647087]">Endereço de entrega</dt>
+                      <dd className="mt-1 break-words leading-6">
+                        {order.streetAddress}, {order.addressNumber}
+                        {order.addressComplement && <> · {order.addressComplement}</>}
+                        <br />{order.neighborhood} · {order.city}/{order.state}
+                        <br />CEP: {order.postalCode}
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
                 {order.status === "paid" && <section aria-label={`Acompanhamento do pedido ${order.id.slice(0, 8)}`} className="mt-6 border-t border-[#0b2447]/10 pt-5">
                   <div className="flex flex-wrap items-baseline justify-between gap-3"><h3 className="text-sm font-semibold">Acompanhamento da entrega</h3><p className="text-xs text-[#647087]">{fulfillmentStep(order.fulfillmentStatus).label}{order.fulfillmentUpdatedAt ? ` · ${fulfillmentDate(order.fulfillmentUpdatedAt)}` : ""}</p></div>
                   <form action={`/api/admin/orders/${order.id}/fulfillment?page=${page}`} method="post" className="mt-4 grid gap-4 sm:grid-cols-2">

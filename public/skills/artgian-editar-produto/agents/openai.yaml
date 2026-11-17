@@ -1,0 +1,12 @@
+interface:
+  display_name: "Editar produtos da Artgian"
+  short_description: "Edite os dados e as fotos de produtos da Artgian"
+  default_prompt: "Use $artgian-editar-produto para editar um produto existente no catálogo da Artgian."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "artgian"
+      description: "Catálogo de produtos da Artgian"
+      transport: "streamable_http"
+      url: "https://www.artgian.com.br/mcp"

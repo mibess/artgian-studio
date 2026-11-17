@@ -5,6 +5,57 @@ import { pathToFileURL } from "node:url";
 
 const digest = value => createHash("sha256").update(value).digest("hex");
 
+export async function verifyOrderMessagesSchema(connection) {
+  const columns = (await connection.execute("PRAGMA table_info(order_item_messages)")).rows;
+  const required = { id: "INTEGER", order_item_id: "INTEGER", sender: "TEXT", body: "TEXT", client_id: "TEXT", created_at: "TEXT", read_at: "TEXT" };
+  if (!Object.entries(required).every(([name, type]) => columns.some(row => row.name === name && row.type === type && Number(row.notnull) === (name === "read_at" ? 0 : 1))) ||
+      !columns.some(row => row.name === "id" && Number(row.pk) === 1)) throw new Error("A tabela de mensagens de compras está ausente ou incompleta.");
+  const indexes = (await connection.execute("PRAGMA index_list(order_item_messages)")).rows;
+  for (const [name, names, unique] of [
+    ["order_item_messages_thread_idx", "order_item_id,id", 0],
+    ["order_item_messages_unread_idx", "order_item_id,sender,read_at", 0],
+    ["order_item_messages_client_unique", "order_item_id,sender,client_id", 1],
+  ]) {
+    const fields = (await connection.execute(`PRAGMA index_info(${name})`)).rows;
+    if (!indexes.some(row => row.name === name && Number(row.unique) === unique) || fields.map(row => row.name).join(",") !== names) throw new Error(`Índice de mensagens de compras inválido: ${name}.`);
+  }
+  const references = (await connection.execute("PRAGMA foreign_key_list(order_item_messages)")).rows;
+  if (!references.some(row => row.table === "order_items" && row.from === "order_item_id" && row.to === "id" && row.on_delete === "CASCADE")) throw new Error("Referência de mensagens de compras inválida.");
+}
+
+export async function verifyMcpSchema(connection) {
+  const required = {
+    mcp_clients: ["id", "name", "redirect_uris", "secret_hash", "created_at"],
+    mcp_connections: ["id", "client_id", "scopes", "created_at", "revoked_at"],
+    mcp_credentials: ["hash", "kind", "connection_id", "details", "expires_at"],
+    mcp_product_operations: ["id", "connection_id", "key", "fingerprint", "product_id", "response"],
+    mcp_rate_limits: ["key", "count", "expires_at"],
+    product_images: ["id", "owner", "content_hash", "data", "width", "height", "created_at"],
+  };
+  for (const [table, names] of Object.entries(required)) {
+    const columns = (await connection.execute(`PRAGMA table_info(${table})`)).rows;
+    if (!names.every(name => columns.some(row => row.name === name))) throw new Error(`Schema MCP ausente ou incompleto: ${table}.`);
+  }
+  for (const [table, name, columns] of [["mcp_product_operations", "mcp_product_operations_key_unique", "connection_id,key"], ["product_images", "product_images_owner_hash_unique", "owner,content_hash"]]) {
+    const indexes = (await connection.execute(`PRAGMA index_list(${table})`)).rows;
+    const index = (await connection.execute(`PRAGMA index_info(${name})`)).rows;
+    if (!indexes.some(row => row.name === name && Number(row.unique) === 1) || index.map(row => row.name).join(",") !== columns) throw new Error(`Índice MCP inválido: ${name}.`);
+  }
+}
+
+export async function verifyNotifySchema(connection) {
+  const columns = (await connection.execute("PRAGMA table_info(notify_outbox)")).rows;
+  const names = ["id", "idempotency_key", "type", "correlation_id", "target_origin", "payload", "status", "attempts", "cycle_attempts", "next_attempt_at", "lease_token", "lease_expires_at", "last_error", "notify_event_id", "occurred_at", "created_at", "updated_at", "last_attempt_at", "accepted_at"];
+  if (!names.every(name => columns.some(row => row.name === name))) throw new Error("A outbox do Notify está ausente ou incompleta.");
+  const indexes = (await connection.execute("PRAGMA index_list(notify_outbox)")).rows;
+  if (!indexes.some(row => row.name === "notify_outbox_key_unique" && Number(row.unique) === 1) ||
+    !indexes.some(row => row.name === "notify_outbox_pending_idx") || !indexes.some(row => row.name === "notify_outbox_lease_idx")) throw new Error("Índices da outbox do Notify inválidos.");
+  const key = (await connection.execute("PRAGMA index_info(notify_outbox_key_unique)")).rows;
+  if (key.map(row => row.name).join(",") !== "idempotency_key") throw new Error("Chave única da outbox do Notify inválida.");
+  const trigger = (await connection.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name='notify_outbox_immutable'")).rows;
+  if (trigger.length !== 1) throw new Error("Proteção de imutabilidade da outbox ausente.");
+}
+
 export async function verifyFulfillmentSchema(connection) {
   const columns = (await connection.execute("PRAGMA table_info(orders)")).rows;
   if (!columns.some(row => row.name === "fulfillment_status" && row.type === "TEXT" && Number(row.notnull) === 1 && row.dflt_value === "'preparing'") ||
@@ -55,6 +106,9 @@ export async function verifyStoreSchema(client, { applyContact = false } = {}) {
     const paymentColumns = (await tx.execute("PRAGMA table_info(payment_attempts)")).rows;
     if (!["id", "order_id", "method", "status", "provider_payment_id", "request_payload", "device_id", "result", "provider_updated_at", "created_at", "updated_at"].every(name => paymentColumns.some(row => row.name === name))) throw new Error("A tabela de tentativas de pagamento está ausente ou incompleta.");
     await verifyFulfillmentSchema(tx);
+    await verifyNotifySchema(tx);
+    await verifyMcpSchema(tx);
+    await verifyOrderMessagesSchema(tx);
     if (applyContact) await tx.commit();
     else await tx.rollback();
     console.log(`Schema do banco verificado: ${expected.tag}.`);

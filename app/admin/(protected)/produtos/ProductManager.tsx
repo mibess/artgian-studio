@@ -124,17 +124,25 @@ function Check({
 }
 export function ProductManager({
   initialProducts,
+  initialDraftIds,
 }: {
   initialProducts: ProductInput[];
+  initialDraftIds: string[];
 }) {
   const editorRef = useRef<HTMLFormElement>(null);
   const [products, setProducts] = useState(initialProducts);
+  const [draftIds, setDraftIds] = useState(() => new Set(initialDraftIds));
   const [draft, setDraft] = useState<ProductInput | null>(null);
   const [tab, setTab] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  function referenceForTemplate(template: Storefront["presentation"]["template"]) {
+    const examples = products.filter(p => p.storefront?.presentation.template === template);
+    return examples.find(p => p.storefront?.slug === template) ?? examples[0];
+  }
   function edit(p: ProductInput) {
     setDraft(structuredClone(p));
     setTab(0);
@@ -157,6 +165,24 @@ export function ProductManager({
   function presentation(next: Partial<Storefront["presentation"]>) {
     if (draft?.storefront)
       store({ presentation: { ...draft.storefront.presentation, ...next } });
+  }
+  async function uploadImage(file: File) {
+    setUploading(true); setError("");
+    try {
+      const response = await fetch("/api/admin/products/images", { method: "POST", headers: { "Content-Type": file.type }, body: file });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error_description || result.error || "Falha ao enviar imagem.");
+      setDraft(d => {
+        if (!d?.storefront) return d;
+        const s = d.storefront;
+        return { ...d, storefront: { ...s,
+          variants: s.variants.map(v => v.image ? v : { ...v, image: result.url }),
+          presentation: { ...s.presentation, media: [...s.presentation.media.filter(m => m.src), { src: result.url, alt: d.name }] },
+        } };
+      });
+      setMessage("Imagem enviada. Salve o produto para aplicar.");
+    } catch (error) { setError(error instanceof Error ? error.message : "Falha ao enviar imagem."); }
+    finally { setUploading(false); }
   }
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -183,6 +209,13 @@ export function ProductManager({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
       const saved = { ...draft, id: data.id, version: data.version };
+      if (saved.active && draftIds.has(saved.id)) {
+        setDraftIds(previous => {
+          const remaining = new Set(previous);
+          remaining.delete(saved.id);
+          return remaining;
+        });
+      }
       setDraft(saved);
       setProducts((list) =>
         [...list.filter((p) => p.id !== saved.id), saved].sort((a, b) =>
@@ -197,6 +230,7 @@ export function ProductManager({
     }
   }
   const s = draft?.storefront;
+  const selectedProduct = draft?.id ? products.find(p => p.id === draft.id) : undefined;
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[300px_1fr]">
       <aside className="space-y-4">
@@ -220,14 +254,14 @@ export function ProductManager({
                     : p.pricingType === "from"
                       ? `A partir de ${formatBrl(p.priceFromCents || 0)}`
                       : "Sob orçamento"}{" "}
-                  · {p.active ? "Ativo" : "Arquivado"}
+                  · {p.active ? "Ativo" : p.id && draftIds.has(p.id) ? "Rascunho" : "Arquivado"}
                 </span>
-                <span className="mt-1 block text-xs text-[#718088]">
+                {p.active && <span className="mt-1 block text-xs text-[#718088]">
                   {p.storefront?.listed
                     ? "Vitrine e atendimento"
                     : "Atendimento"}
                   {p.storefront?.purchasable ? " · Compra direta" : ""}
-                </span>
+                </span>}
               </button>
             ))}
         </div>
@@ -247,11 +281,11 @@ export function ProductManager({
             <h2 className="text-xl font-semibold">
               {draft.id ? draft.name : "Novo produto"}
             </h2>
-            {s && draft.id && (
+            {selectedProduct?.active && selectedProduct.storefront && (
               <a
                 target="_blank"
                 rel="noreferrer"
-                href={`/produtos/${s.slug}`}
+                href={`/produtos/${selectedProduct.storefront.slug}`}
                 className="text-xs font-bold underline"
               >
                 Ver página ↗
@@ -379,9 +413,7 @@ export function ProductManager({
                 <>
                   <TextField
                     label="Endereço do produto"
-                    disabled={Boolean(
-                      products.find((p) => p.id === draft.id)?.storefront,
-                    )}
+                    disabled={Boolean(selectedProduct?.storefront)}
                     value={s.slug}
                     onChange={(v) => store({ slug: v })}
                   />
@@ -624,9 +656,7 @@ export function ProductManager({
                     onChange={(e) => {
                       const template = e.target
                         .value as Storefront["presentation"]["template"];
-                      const reference = products.find(
-                        (p) => p.storefront?.presentation.template === template,
-                      )?.storefront;
+                      const reference = referenceForTemplate(template)?.storefront;
                       presentation(
                         template === "standard"
                           ? { template }
@@ -651,14 +681,19 @@ export function ProductManager({
                       <option key={t} value={t}>
                         Estilo{" "}
                         {
-                          products.find(
-                            (p) => p.storefront?.presentation.template === t,
-                          )?.name
+                          referenceForTemplate(t)?.name
                         }
                       </option>
                     ))}
                   </select>
                 </label>
+                {s.presentation.template === "porta-palhetas-solo" && (
+                  <Check
+                    label="Molduras quadradas para a capa e a foto de ambiente"
+                    value={s.presentation.imageAspect === "square"}
+                    onChange={checked => presentation({ imageAspect: checked ? "square" : undefined })}
+                  />
+                )}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <TextField
                     type="color"
@@ -690,9 +725,15 @@ export function ProductManager({
                   onChange={(contactUrl) => presentation({ contactUrl })}
                 />
                 <h3 className="font-bold">Imagens da página</h3>
+                <label className="block rounded-xl border border-[#dcded9] p-4 text-sm">
+                  Enviar imagem do produto (obrigatória para cadastrar)
+                  <input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading || busy} className="mt-3 block w-full"
+                    onChange={e => { const file = e.currentTarget.files?.[0]; if (file) void uploadImage(file); e.currentTarget.value = ""; }} />
+                  <span className="mt-2 block text-xs">{uploading ? "Enviando imagem…" : "PNG, JPEG ou WebP estático, até 2 MB. A imagem fica salva na loja."}</span>
+                </label>
                 <p className="text-xs text-[#718088]">
                   A primeira imagem é a capa. Use um caminho da loja ou uma URL
-                  HTTPS. Nos estilos existentes, mantenha as posições das
+                  de imagem já enviada. Nos estilos existentes, mantenha as posições das
                   imagens.
                 </p>
                 {s.presentation.media.map((m, i) => (

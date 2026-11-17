@@ -1,5 +1,5 @@
 import { getBusinessConfig } from "../../../src/config/business";
-import { getDashboardData } from "../../../src/db/commercial";
+import { getSystemSettings } from "../../../src/db/commercial";
 import { CommercialSidebar } from "./CommercialSidebar";
 import { Pause } from "lucide-react";
 import { headers } from "next/headers";
@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 
 export default async function CommercialLayout({ children }: { children: React.ReactNode }) {
   if (!hasAdminAccess(await headers())) redirect("/admin/login");
-  const [business, data] = await Promise.all([getBusinessConfig(), getDashboardData()]);
-  const paused = data.settings.automation_paused === "true";
+  const [business, settings] = await Promise.all([getBusinessConfig(), getSystemSettings()]);
+  const paused = settings.automation_paused === "true";
   return (
     <div className="min-h-screen bg-[#f3f1eb] text-[#193244]">
       <CommercialSidebar companyName={business.company.name} instagramHandle={business.company.instagramHandle} paused={paused} />

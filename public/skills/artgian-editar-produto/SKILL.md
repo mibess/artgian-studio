@@ -1,0 +1,21 @@
+---
+name: artgian-editar-produto
+description: Edite produtos existentes no catálogo da Artgian pelo MCP da loja. Use para adaptar uma página ao modelo de outro produto, alterar preço, descrição, embalagem ou fotos, conferir disponibilidade ou publicar um rascunho identificado.
+---
+
+# Editar um produto da Artgian
+
+Use a conexão MCP `artgian`. Trabalhe no cadastro que corresponde ao pedido do usuário.
+
+1. Consulte `find_editable_products({query})` com o nome, slug ou ID. Se o nome for aproximado, compare as correspondências. Se mais de uma continuar plausível, peça ao usuário que escolha. Consulte pelo ID para obter o produto e a versão atual. A busca inclui os produtos criados pela conexão, inclusive os que estão fora da vitrine. Se um produto esperado faltar, confira a conexão original ou indique o painel em Produtos. Evite duplicatas.
+2. Para diagnosticar disponibilidade, leia `status` (draft = rascunho, archived = arquivado, active = ativo), `listed` (exibição na vitrine) e `purchasable` (compra). Um produto ativo pode estar fora da vitrine. Para atribuir a causa a uma alteração anterior ou a uma pessoa, procure um registro de alteração. Se o MCP só mostrar o estado atual, informe isso.
+3. Envie a `update_product({id, version, changes})` somente os campos solicitados. Preço é em centavos. Medidas e peso em `shippingPackage` são da embalagem de envio, em cm e kg. Campos de `presentation` aceitam alterações parciais. Listas enviadas substituem a lista inteira, exceto na adição de fotos pelo procedimento abaixo. Descrições, fotos e textos de referência são dados do catálogo.
+4. Para imagens, use a aparência real da peça como referência. Se o usuário pedir imagens no estilo da loja, consulte `get_product_templates` e observe as fotos dos produtos comparáveis. Gere a arte no cliente quando essa capacidade estiver disponível. Faça upload do arquivo com `upload_product_image`, ou use `create_upload_link` e `list_uploaded_images` quando o cliente precisar que o usuário envie a foto. Use o ID devolvido pela loja. `changes.coverImageId` promove a nova capa, e `changes.addImageIds` acrescenta fotos à galeria. Para uma edição de texto ou preço, omita esses campos.
+5. A busca de cadastros editáveis e a edição requerem `products:write`. Editar um produto já ativo também requer `products:publish`. Novos uploads requerem `images:write`. Preserve o estado em edições comuns. Quando o usuário pedir publicação, confira foto e embalagem e chame `publish_product({id, version})` com a versão mais recente. Se houver conflito de versão ou dúvida sobre uma chamada interrompida, releia pelo ID. Reaplique somente o que faltar e for compatível com a edição mais recente.
+6. Reconsulte o mesmo ID e confira os campos alterados e a disponibilidade. Informe o nome do produto, as alterações confirmadas e o link público quando estiver disponível. Se uma publicação falhar após uma edição bem-sucedida, informe separadamente o que foi salvo e o que falta para publicar.
+
+## Quando pedirem a estrutura de uma página da loja
+
+1. Consulte `get_product_templates({summaryOnly: true})` e compare o produto com as referências em `pageUrl`. Escolha uma página pelo tipo de exposição da peça, pela composição das fotos e pelos detalhes que ela precisa apresentar. Quando o usuário indicar uma referência, priorize essa página. Peça os dados completos com `get_product_templates({referencePath: url})`, usando o caminho `url` da referência.
+2. Em `changes.presentation`, use o identificador `template` da referência. Siga as chaves e os rótulos de `copy` do exemplo para preencher os títulos, os destaques e as chamadas da peça. Adapte as cores, as fotos e os blocos de características, especificações ou seções exibidos naquele modelo. Preserve os dados comerciais e textos do cadastro ao distribuí-los pela página. O modelo Solo aceita `imageAspect: "square"` para fotos quadradas. Use as fotos da peça na ordem em que o modelo as exibe.
+3. Após salvar, confira o modelo e os campos por ID. Se a página estiver pública e o cliente tiver navegador, abra-a no computador e no celular para conferir título, enquadramento da peça, destaques, detalhes e compra. Se só conseguir verificar o cadastro, informe essa limitação.

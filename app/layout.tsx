@@ -4,6 +4,7 @@ import { SITE_URL } from "../lib/site-url";
 import "./globals.css";
 import { getPublicProductCatalog } from "../lib/products/repository";
 import { ProductCatalogProvider } from "../lib/products/context";
+import StoreAnalytics from "./components/StoreAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +73,10 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} bg-[#f7f3ea] font-sans antialiased`}
       >
-        <ProductCatalogProvider catalog={await getPublicProductCatalog()}>{children}</ProductCatalogProvider>
+        <ProductCatalogProvider catalog={await getPublicProductCatalog()}>
+          {children}
+          <StoreAnalytics />
+        </ProductCatalogProvider>
       </body>
     </html>
   );

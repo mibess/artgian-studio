@@ -21,12 +21,9 @@ import {
   sendInstagramText,
 } from "../../integrations/instagram/send";
 import { scheduleFollowupReview } from "./followups";
+import { isAiFeatureEnabled } from "../automation/server";
 
 const EDITABLE_STATUSES = ["draft", "failed"];
-
-function isAiReplyGenerationEnabled() {
-  return process.env.AI_REPLY_GENERATION_ENABLED === "true";
-}
 
 type CommercialDecisionGenerator = typeof generateCommercialDecision;
 
@@ -34,7 +31,7 @@ export async function enhanceReplyDraftWithAi(
   input: { leadId: string; messageId: string },
   dependencies: { generateDecision?: CommercialDecisionGenerator } = {},
 ) {
-  if (!isAiReplyGenerationEnabled()) return { status: "paused" as const };
+  if (!(await isAiFeatureEnabled("replies"))) return { status: "paused" as const };
 
   const db = await getCommercialDb();
   const [lead] = await db
@@ -156,7 +153,7 @@ export async function enhanceReplyDraftWithAi(
 }
 
 export async function createReplyDraftForLead(leadId: string) {
-  if (!isAiReplyGenerationEnabled()) return { status: "paused" as const };
+  if (!(await isAiFeatureEnabled("replies"))) return { status: "paused" as const };
 
   const db = await getCommercialDb();
   const [lead] = await db
