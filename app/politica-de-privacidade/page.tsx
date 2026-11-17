@@ -7,19 +7,22 @@ export const metadata: Metadata = {
     "Saiba como a Artgian Studio coleta, utiliza, armazena e protege dados pessoais.",
 };
 
+const LAST_UPDATED = "16 de novembro de 2026";
+
 export default function PrivacyPolicyPage() {
   return (
     <LegalPage
       eyebrow="Privacidade e proteção de dados"
       title="Política de Privacidade"
+      lastUpdated={LAST_UPDATED}
       description="A Artgian Studio respeita a sua privacidade e trata dados pessoais de forma transparente, segura e limitada às finalidades descritas nesta política."
     >
       <LegalSection title="1. Quem somos">
         <p>
           A Artgian Studio, representada por Angélica Santos, cria e comercializa
           produtos personalizados em impressão 3D. Esta política se aplica ao
-          site, ao atendimento e às interações com o perfil @artgian.studio no
-          Instagram.
+          site, ao atendimento, aos avisos sobre pedidos por e-mail e WhatsApp
+          e às interações com o perfil @artgian.studio no Instagram.
         </p>
       </LegalSection>
 
@@ -29,7 +32,8 @@ export default function PrivacyPolicyPage() {
           mensagens, comentários e informações enviadas voluntariamente durante
           o atendimento. Em pedidos, também podemos tratar telefone, e-mail,
           endereço de entrega, dados do produto e informações necessárias ao
-          pagamento e envio.
+          pagamento e envio. Quando você escolhe receber avisos pelo WhatsApp,
+          registramos essa escolha, a data e hora e a origem da autorização.
         </p>
         <p>
           Não solicitamos senhas do Instagram. Dados de pagamento são processados
@@ -47,7 +51,37 @@ export default function PrivacyPolicyPage() {
         </p>
       </LegalSection>
 
-      <LegalSection title="4. Integração com Instagram e Meta">
+      <LegalSection title="4. Avisos sobre pedidos por e-mail e WhatsApp">
+        <p>
+          Enviamos ao e-mail informado no pedido avisos relacionados à sua compra,
+          como confirmação de pagamento e atualizações sobre preparação, envio e
+          entrega. Essas comunicações são utilizadas para acompanhar e executar
+          o pedido, e seu envio é informado no checkout.
+        </p>
+        <p>
+          Os avisos pelo WhatsApp são opcionais. Para recebê-los no telefone
+          informado, você deve marcar a opção específica no checkout, que começa
+          desmarcada. É possível concluir a compra sem autorizar mensagens pelo
+          WhatsApp. Essa autorização se refere aos avisos daquele pedido e não
+          inclui promoções ou publicidade.
+        </p>
+        <p>
+          Você pode cancelar gratuitamente os avisos pelo WhatsApp a qualquer
+          momento: responda, por texto, apenas a palavra <strong>SAIR</strong> ou
+          {" "}<strong>PARAR</strong> na conversa com o WhatsApp da Artgian que
+          enviou a mensagem. Após processarmos a solicitação, interrompemos novos
+          avisos automáticos pelo WhatsApp para o seu número. Mensagens que já
+          estiverem em envio ainda poderão chegar. Você também pode solicitar o
+          cancelamento pelos canais de contato indicados nesta política.
+        </p>
+        <p>
+          O cancelamento das mensagens pelo WhatsApp não cancela a compra nem
+          altera o atendimento ou a entrega. Os avisos do pedido por e-mail
+          continuam sendo enviados, independentemente da opção pelo WhatsApp.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="5. Integração com Instagram e Meta">
         <p>
           Quando você interage com a Artgian Studio pelo Instagram, recebemos
           somente os dados disponibilizados pela Meta e autorizados pelas
@@ -58,17 +92,18 @@ export default function PrivacyPolicyPage() {
         </p>
       </LegalSection>
 
-      <LegalSection title="5. Compartilhamento">
+      <LegalSection title="6. Compartilhamento">
         <p>
           Dados podem ser compartilhados, no limite necessário, com provedores de
-          hospedagem e tecnologia, Meta/Instagram, meios de pagamento, plataformas
-          de frete e transportadoras. Também poderemos compartilhar informações
+          hospedagem e tecnologia, envio de e-mails e mensagens,
+          Meta/Instagram/WhatsApp, meios de pagamento, plataformas de frete e
+          transportadoras. Também poderemos compartilhar informações
           quando houver obrigação legal ou para proteger direitos e prevenir
           atividades ilícitas.
         </p>
       </LegalSection>
 
-      <LegalSection title="6. Armazenamento e segurança">
+      <LegalSection title="7. Armazenamento e segurança">
         <p>
           Adotamos medidas técnicas e administrativas razoáveis para proteger os
           dados contra acesso não autorizado, perda, alteração ou divulgação. Os
@@ -77,7 +112,7 @@ export default function PrivacyPolicyPage() {
         </p>
       </LegalSection>
 
-      <LegalSection title="7. Seus direitos">
+      <LegalSection title="8. Seus direitos">
         <p>
           Nos termos da Lei Geral de Proteção de Dados (LGPD), você pode solicitar
           confirmação e acesso, correção, portabilidade quando aplicável,
@@ -87,7 +122,7 @@ export default function PrivacyPolicyPage() {
         </p>
       </LegalSection>
 
-      <LegalSection title="8. Exclusão de dados">
+      <LegalSection title="9. Exclusão de dados">
         <p>
           As instruções para solicitar a exclusão estão disponíveis em
           <a className="ml-1 font-semibold text-[#9b702a] underline" href="/exclusao-de-dados">
@@ -98,7 +133,7 @@ export default function PrivacyPolicyPage() {
         </p>
       </LegalSection>
 
-      <LegalSection title="9. Contato">
+      <LegalSection title="10. Contato">
         <p>
           Para dúvidas ou solicitações de privacidade, fale com a Artgian Studio
           pelo Instagram
@@ -123,16 +158,16 @@ export default function PrivacyPolicyPage() {
         </p>
       </LegalSection>
 
-      <LegalSection title="10. Atualizações desta política">
+      <LegalSection title="11. Atualizações desta política">
         <p>
           Esta política poderá ser atualizada para refletir mudanças legais,
           operacionais ou nos serviços utilizados. A versão vigente e a data da
           última atualização permanecerão publicadas nesta página.
         </p>
-        <p>Última atualização: 25 de outubro de 2026.</p>
+        <p>Última atualização: {LAST_UPDATED}.</p>
       </LegalSection>
 
-      <LegalSection title="11. Cookies e estatísticas de acesso">
+      <LegalSection title="12. Cookies e estatísticas de acesso">
         <p>
           Utilizamos armazenamento essencial para recursos como login e carrinho.
           Somente se você escolher “Permitir estatísticas”, carregamos o Google

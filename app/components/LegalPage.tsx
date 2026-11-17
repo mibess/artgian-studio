@@ -6,11 +6,13 @@ export function LegalPage({
   eyebrow,
   title,
   description,
+  lastUpdated = "1º de setembro de 2026",
   children,
 }: {
   eyebrow: string;
   title: string;
   description: string;
+  lastUpdated?: string;
   children: ReactNode;
 }) {
   return (
@@ -28,7 +30,7 @@ export function LegalPage({
             {description}
           </p>
           <p className="mt-4 text-xs font-semibold text-[#7b8798]">
-            Última atualização: 1º de setembro de 2026
+            Última atualização: {lastUpdated}
           </p>
         </header>
 
