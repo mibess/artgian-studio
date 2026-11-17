@@ -9,8 +9,6 @@ import { getDb } from "../../db";
 import { orders, orderItems } from "../../db/schema";
 import { formatBrl, type ProductCatalog } from "../../lib/catalog";
 import { getProductCatalog } from "../../lib/products/repository";
-import BrandHeader from "../components/BrandHeader";
-import SignOutButton from "./SignOutButton";
 import AddressBook from "./AddressBook";
 import AccountTabs from "./AccountTabs";
 import OrderThumbnail from "./OrderThumbnail";
@@ -64,20 +62,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const items = purchases.length ? await db.select().from(orderItems)
     .where(inArray(orderItems.orderId, purchases.map(order => order.id))).orderBy(orderItems.id) : [];
   const unreadCounts = await getOrderMessageUnreadCounts(purchases.map(order => order.id), "customer");
-  const firstName = session.user.name.trim().split(/\s+/)[0];
-
-  return <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
-    <BrandHeader />
-    <div className="mx-auto max-w-5xl px-5 py-6 sm:px-8 lg:py-10">
-      <header className="flex items-center justify-between gap-3 border-b border-[#0b2447]/10 pb-5">
-        <div className="min-w-0 flex-1">
-          <p className="text-[0.6rem] font-bold uppercase tracking-[.24em] text-[#b88a3b]">Seu espaço na Artgian</p>
-          <h1 className="mt-2 break-words font-serif text-3xl tracking-tight sm:text-5xl">Olá, {firstName}.</h1>
-          <p className="mt-2 break-all text-xs text-[#647087]">{session.user.email}</p>
-        </div>
-        <SignOutButton />
-      </header>
-      <AccountTabs orderCount={total} addressCount={addresses.length} addresses={<AddressBook initialAddresses={addresses} />} orders={
+  return <AccountTabs orderCount={total} addressCount={addresses.length} addresses={<AddressBook initialAddresses={addresses} />} orders={
         <section aria-labelledby="orders-title">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 id="orders-title" className="font-serif text-3xl">Seus pedidos</h2>
@@ -125,7 +110,5 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             {page < pageCount ? <Link href={`/conta?pagina=${page + 1}`} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#0b2447]/15 px-4 font-semibold">Próximos <ArrowRight size={14} /></Link> : <span className="px-4 text-[#647087]/50">Próximos</span>}
           </nav>}
         </section>
-      } />
-    </div>
-  </main>;
+      } />;
 }
