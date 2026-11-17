@@ -21,6 +21,7 @@ import {
   sendInstagramText,
 } from "../../integrations/instagram/send";
 import { scheduleFollowupReview } from "./followups";
+import { isAiFeatureEnabled } from "../automation/server";
 
 const EDITABLE_STATUSES = ["draft", "failed"];
 
@@ -30,6 +31,8 @@ export async function enhanceReplyDraftWithAi(
   input: { leadId: string; messageId: string },
   dependencies: { generateDecision?: CommercialDecisionGenerator } = {},
 ) {
+  if (!(await isAiFeatureEnabled("replies"))) return { status: "paused" as const };
+
   const db = await getCommercialDb();
   const [lead] = await db
     .select()
@@ -150,6 +153,8 @@ export async function enhanceReplyDraftWithAi(
 }
 
 export async function createReplyDraftForLead(leadId: string) {
+  if (!(await isAiFeatureEnabled("replies"))) return { status: "paused" as const };
+
   const db = await getCommercialDb();
   const [lead] = await db
     .select()

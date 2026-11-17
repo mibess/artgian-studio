@@ -6,6 +6,8 @@ import { getProductCatalog } from "../../lib/products/repository";
 import type { Product } from "../../lib/catalog";
 import ProductPurchase from "./ProductPurchase";
 import { ProductPrice } from "./ProductPrice";
+import { productStructuredData, serializeStructuredData } from "../../lib/structured-data";
+import { SITE_URL } from "../../lib/site-url";
 import Aurora from "./templates/bandeja-aurora";
 import Arco from "./templates/organizador-arco";
 import Solo from "./templates/porta-palhetas-solo";
@@ -35,6 +37,9 @@ export async function productMetadata(id: string): Promise<Metadata> {
     openGraph: {
       title,
       description,
+      url: new URL(product.href, SITE_URL).href,
+      siteName: "Artgian Studio",
+      locale: "pt_BR",
       images: product.image ? [product.image] : [],
     },
     twitter: {
@@ -51,6 +56,10 @@ export async function ProductPage({ id }: { id: string }) {
   const Template = templates[product.presentation.template];
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeStructuredData(productStructuredData(product)) }}
+      />
       {Template ? (
         <Template product={product}>
           <ExtraSections product={product} />

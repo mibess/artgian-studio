@@ -9,6 +9,7 @@ import {
   timelineEvents,
 } from "../../db/schema";
 import { getCommercialDb } from "../db/commercial";
+import { getAutomationControls } from "../features/automation/server";
 import { tryAutoSendInstagramReply } from "../features/conversations/automation";
 import {
   createReplyDraftForLead,
@@ -109,7 +110,10 @@ export async function runWorkerOnce(
   const db = await getCommercialDb();
   const now = new Date().toISOString();
   await recoverStaleJobs(new Date(now));
+  const controls = await getAutomationControls();
   const supportedJobFilter = and(
+    controls.qualificationEnabled ? undefined : ne(jobs.type, "discover_prospects"),
+    controls.qualificationEnabled ? undefined : ne(jobs.type, "import_instagram_profile"),
     dependencies.executeInstagramImportJob ? undefined : ne(jobs.type, "import_instagram_profile"),
     dependencies.executeOutboundBrowserJob
       ? undefined
@@ -300,6 +304,12 @@ export async function runWorkerOnce(
             .set({ status: "completed", finishedAt: now, lastError: null })
             .where(eq(jobs.id, job.id));
           return { processed: true as const, alreadyReplied: true as const };
+        } else if (draft.status === "paused") {
+          await db
+            .update(jobs)
+            .set({ status: "waiting_review", finishedAt: now, lastError: null })
+            .where(eq(jobs.id, job.id));
+          return { processed: true as const, paused: true as const };
         } else {
           throw new Error(`Não foi possível criar o rascunho: ${draft.status}`);
         }

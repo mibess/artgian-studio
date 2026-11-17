@@ -81,6 +81,11 @@ CPF, emissor e parcelamento.
 
 ## Fluxo e recuperação
 
+Quando habilitada, a [integração Mibess Notify](mibess-notify.md) registra
+`ORDER_PAID` na mesma transação da primeira aprovação validada. Isso cobre
+resposta da API, webhook e reconciliação, inclusive o checkout redirecionado.
+O pagamento não faz chamadas ao Notify; o publicador recorrente processa a outbox.
+
 1. `/api/checkout` recebe `checkoutMode: "embedded"`, valida catálogo, entrega e
    cupom, salva o pedido e retorna a URL interna. Sem a chave pública, responde
    indisponibilidade antes de reservar o pedido/cupom. Clientes antigos, que não

@@ -1,4 +1,7 @@
 .git/
+.agents/
+.codex/
+.openai/
 .env*
 !.env.example
 .next/
@@ -8,6 +11,7 @@ backups/
 coverage/
 data/
 node_modules/
+outputs/
 playwright-report/
 screenshots/
 test-results/

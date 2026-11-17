@@ -21,10 +21,13 @@
     "db:backup": "tsx scripts/backup-commercial-db.ts",
     "db:backup:production": "node scripts/backup-turso.mjs",
     "worker": "tsx worker/index.ts",
-    "worker:production": "zsh scripts/start-production-worker.zsh"
+    "worker:production": "zsh scripts/start-production-worker.zsh",
+    "notify:outbox": "node --conditions=react-server --import tsx scripts/notify-outbox.ts",
+    "notify:schedule": "node --conditions=react-server --import tsx scripts/schedule-notify.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@upstash/qstash": "^2.11.3",
     "better-auth": "^1.7.3",
     "drizzle-orm": "0.45.2",
@@ -35,6 +38,8 @@
     "playwright-core": "^1.62.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
     "zod": "^4.5.4"
   },
   "devDependencies": {

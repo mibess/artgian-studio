@@ -7,6 +7,7 @@ import { isValidCpf } from "./brazil";
 import { retryTransaction } from "./checkout-orders";
 import { createPayment, getPayment, getPaymentMethods, mapPaymentStatus, MercadoPagoRequestError, searchOrderPayments, type MercadoPagoPayment } from "./mercado-pago";
 import { canRetryPayment, type PaymentDetails, type PaymentMethod, type PaymentState } from "./payment-types";
+import { enqueueOrderPaid } from "./mibess-notify/outbox";
 
 type Database = Awaited<ReturnType<typeof getDb>>;
 type Order = typeof orders.$inferSelect;
@@ -97,6 +98,7 @@ export async function applyEmbeddedPayment(payment: MercadoPagoPayment) {
       mercadoPagoPaymentId: String(payment.id), mercadoPagoStatus: payment.status,
       mercadoPagoStatusDetail: payment.status_detail ?? null, updatedAt: now,
     }).where(eq(orders.id, order.id));
+    if (payment.status === "approved") await enqueueOrderPaid(tx, order, now, ({ pix: "PIX", card: "Cartão", boleto: "Boleto" })[attempt.method as PaymentMethod]);
     if (order.couponId && payment.status === "approved") {
       const redeemed = await tx.update(orders).set({ couponRedeemedAt: now }).where(and(eq(orders.id, order.id), isNull(orders.couponRedeemedAt))).returning({ couponId: orders.couponId });
       if (redeemed[0]?.couponId) await tx.delete(coupons).where(and(eq(coupons.id, redeemed[0].couponId), eq(coupons.source, "game")));
@@ -119,8 +121,8 @@ export async function getPaymentState(orderId: string, userId: string, refresh =
   const attempt = await latestAttempt(db, orderId);
   if (refresh && attempt && !canRetryPayment(attempt.status) && order.status === "pending" && Date.now() - Date.parse(attempt.updatedAt) >= 8_000) {
     // Atomically rate-limit provider lookups across tabs and app instances.
-    const claimed = await db.update(paymentAttempts).set({ updatedAt: new Date().toISOString() })
-      .where(and(eq(paymentAttempts.id, attempt.id), eq(paymentAttempts.updatedAt, attempt.updatedAt))).returning({ id: paymentAttempts.id });
+    const claimed = await retryTransaction(() => db.transaction(async tx => tx.update(paymentAttempts).set({ updatedAt: new Date().toISOString() })
+      .where(and(eq(paymentAttempts.id, attempt.id), eq(paymentAttempts.updatedAt, attempt.updatedAt))).returning({ id: paymentAttempts.id }), { behavior: "immediate" }));
     if (claimed.length) {
       try {
         if (attempt.providerPaymentId) await applyEmbeddedPayment(await getPayment(attempt.providerPaymentId));

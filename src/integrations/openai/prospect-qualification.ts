@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { aiUsage } from "../../../db/schema";
 import { getCommercialDb } from "../../db/commercial";
+import { isAiFeatureEnabled } from "../../features/automation/server";
 import { CircuitBreaker } from "../../features/leads/domain";
 import type { DiscoveryStrategy, PublicInstagramCandidate } from "../../features/outbound/discovery-domain";
 import type { OutboundFunnel } from "../../features/outbound/domain";
@@ -52,6 +53,9 @@ export async function validateProspectCampaignFits(
   input: ProspectCampaignFitInput,
 ): Promise<ProspectCampaignFitResult> {
   if (!input.candidates.length) return { available: true, decisions: [] };
+  if (!(await isAiFeatureEnabled("qualification"))) {
+    return { available: false, reason: "Qualificação por IA pausada na central de Automação e IA.", decisions: [] };
+  }
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   const model = process.env.OPENAI_MODEL_FAST?.trim();
   if (!apiKey || !model) {

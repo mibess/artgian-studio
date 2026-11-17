@@ -24,24 +24,22 @@ import { cancelPendingCampaignDiscovery, enqueueCampaignDiscovery } from "../../
 import { generateOutboundOpening } from "../../../src/integrations/openai/conversation-engine";
 import { requireAdminAccess } from "../../../src/auth/admin";
 import { enqueueInstagramImport } from "../../../src/features/outbound/instagram-import";
+import { AUTOMATION_SETTING_KEYS, type AutomationSettingKey } from "../../../src/features/automation/domain";
 import { saveCampaignDetails } from "../../../src/features/outbound/campaign-settings";
 
 export async function updateAutomationSetting(formData: FormData) {
   await requireAdminAccess();
-  const allowed = new Set([
-    "automation_paused",
-    "discovery_paused",
-    "outbound_paused",
-    "followups_paused",
-    "auto_replies_paused",
-  ]);
+  const allowed = new Set<AutomationSettingKey>(AUTOMATION_SETTING_KEYS);
   const key = String(formData.get("key") || "");
-  const value = String(formData.get("value") || "false");
-  if (!allowed.has(key) || !["true", "false"].includes(value)) {
+  const value = String(formData.get("value") || "");
+  if (!allowed.has(key as AutomationSettingKey) || !["true", "false"].includes(value)) {
     throw new Error("Configuração inválida.");
   }
   await setSystemSetting(key, value);
   revalidatePath("/admin", "layout");
+  if (formData.get("returnTo") === "/admin/automacao") {
+    redirect("/admin/automacao?salvo=1");
+  }
 }
 
 export async function simulateInbound(formData: FormData) {
@@ -979,6 +977,9 @@ export async function createInstagramReplyDraft(formData: FormData) {
   if (!leadId) throw new Error("Lead inválido.");
   const result = await createReplyDraftForLead(leadId);
   revalidatePath(`/admin/leads/${leadId}`);
+  if (result.status === "paused") {
+    redirect(`/admin/leads/${leadId}?erro=Geração+de+respostas+por+IA+pausada`);
+  }
   if (result.status === "blocked") {
     redirect(`/admin/leads/${leadId}?erro=Contato+bloqueado+por+opt-out`);
   }

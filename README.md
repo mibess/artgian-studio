@@ -354,6 +354,15 @@ pela conta do cliente. Antes de publicar, configure `MERCADO_PAGO_PUBLIC_KEY`
 e aplique a migração `0019_sparkling_dust.sql` ao banco do ambiente.
 Consulte [configuração, recuperação de tentativas e homologação](docs/pagamento-integrado.md).
 
+### Notificações internas via Mibess Notify
+
+Aprovações de pagamento e transições de entrega publicam eventos por uma outbox
+transacional. O envio permanece desabilitado por padrão, sem acúmulo retroativo.
+A migração `0021_mibess_notify_outbox.sql`, o agendamento QStash, o diagnóstico,
+o reprocessamento e os cadastros do Notify estão descritos no
+[guia de integração](docs/mibess-notify.md). A Artgian acompanha a aceitação do
+evento; o Notify é responsável pelo WhatsApp e pelo destinatário interno.
+
 ### Ativar a autenticação
 
 1. Aplique a migração aditiva `drizzle/0014_unusual_cassandra_nova.sql` antes de

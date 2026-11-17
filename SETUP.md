@@ -161,9 +161,10 @@ documentação oficial dos comandos de dump e carga está em
 Preencha:
 
 ```text
+AI_REPLY_GENERATION_ENABLED=false
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.6-luna
-OPENAI_MODEL_FAST=gpt-5.6-luna
+OPENAI_MODEL=gpt-6-luna
+OPENAI_MODEL_FAST=gpt-6-luna
 OPENAI_MONTHLY_BUDGET_USD=
 OPENAI_INPUT_COST_PER_1M_USD=0.20
 OPENAI_OUTPUT_COST_PER_1M_USD=1.20
@@ -180,6 +181,22 @@ a validação. A OpenAI apenas produz a decisão estruturada; a política local 
 quem decide entre envio automático e revisão. Somente DMs inbound de baixo
 risco, geradas pela OpenAI, dentro do horário e dos limites configurados podem
 ser enviadas automaticamente. Os demais casos exigem **Aprovar e enviar**.
+
+A central **Automação e IA** (`/admin/automacao`) separa geração de respostas,
+abordagens, qualificação, envios e execução local. Alterações são salvas no banco,
+auditadas e aplicadas nas próximas tarefas, sem uma nova publicação.
+
+A geração de respostas e a permissão do worker começam pausadas. Antes da primeira
+alteração pelo painel, `AI_REPLY_GENERATION_ENABLED` define o estado inicial das
+respostas; mantenha `false` para iniciar pausado. Depois disso, a configuração salva
+no painel prevalece. Abordagens e qualificação preservam a permissão anterior até
+serem alteradas individualmente. Credenciais, modelos e orçamento continuam sendo
+pré-requisitos do servidor ou da estação operacional.
+
+Pausar um recurso impede novas chamadas ou tarefas; uma operação já iniciada pode
+terminar. Pausar somente o envio não impede geração de textos. A classificação por
+regras locais não usa tokens. O estado do worker usa comunicação recente, sem inferir
+que ele está funcionando a partir de uma permissão. Veja [operação local](docs/worker-local.md).
 
 ## 5. Instagram oficial
 
@@ -561,7 +578,10 @@ continuam independentes desse computador.
 
 ## 11. Pausas e falhas
 
-O botão global **Pausar automação** interrompe o worker sem apagar jobs. Há pausas separadas para outbound, follow-ups e respostas automáticas.
+O botão global **Pausar automação** suspende a execução automática de tarefas e envios,
+sem encerrar o processo do worker nem apagar jobs. As permissões de geração por IA
+e as pausas individuais ficam na central **Automação e IA**. Permitir tarefas locais
+no painel não inicia o programa no computador.
 
 Em caso de autenticação perdida, falhas repetidas, custo atingido, opt-outs anormais ou divergência de dados:
 

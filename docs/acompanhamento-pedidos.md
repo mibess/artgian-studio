@@ -26,8 +26,11 @@ Pedidos sem pagamento aprovado não mostram progresso de entrega e não aceitam
 essas atualizações. O status da entrega não altera o pagamento nem os valores.
 
 O rastreio funciona também para entregas locais sem código. Não há consulta
-automática à transportadora, envio de notificações ou mudança de etapa ao gerar
-etiquetas. O botão **Atualizar acompanhamento** busca a informação salva pela equipe.
+automática à transportadora nem mudança de etapa ao gerar etiquetas.
+Com a [integração Mibess Notify](mibess-notify.md) habilitada, as transições para
+Enviado, Saiu para entrega e Entregue geram eventos internos transacionais.
+Alterar apenas observação/rastreio não gera notificação; o comprador não é destinatário.
+O botão **Atualizar acompanhamento** busca a informação salva pela equipe.
 
 ## Banco e publicação
 

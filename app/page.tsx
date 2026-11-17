@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { getPublicProductCatalog } from "../lib/products/repository";
 import Link from "next/link";
+import Image from "next/image";
 import BrandHeader from "./components/BrandHeader";
+import { organizationStructuredData, serializeStructuredData } from "../lib/structured-data";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
@@ -25,6 +27,10 @@ export default async function Home() {
   const projects=Object.values(await getPublicProductCatalog()).filter(p=>p.featured&&p.listed).map((p,i)=>({...p,number:String(i+1).padStart(2,"0"),title:p.name,position:"object-center"}));
   return (
     <main className="min-h-screen overflow-hidden bg-[#f7f3ea] text-[#0b2447]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeStructuredData(organizationStructuredData) }}
+      />
       <BrandHeader fixed />
 
       <section
@@ -50,8 +56,12 @@ export default async function Home() {
         </h1>
 
         <div className="relative mt-10 lg:-mt-12 lg:ml-[8%]">
-          <div className="h-[30rem] overflow-hidden rounded-[2rem] bg-[#e9dfcf] shadow-[0_30px_80px_rgba(11,36,71,0.12)] sm:h-[38rem] lg:h-[42rem]">
-            <img
+          <div className="relative h-[30rem] overflow-hidden rounded-[2rem] bg-[#e9dfcf] shadow-[0_30px_80px_rgba(11,36,71,0.12)] sm:h-[38rem] lg:h-[42rem]">
+            <Image
+              fill
+              sizes="(max-width: 1023px) 100vw, (max-width: 1600px) 85vw, 1355px"
+              loading="eager"
+              fetchPriority="high"
               className="h-full w-full object-cover object-center mix-blend-multiply transition duration-700 hover:scale-[1.015]"
               src="/hero-gallery.png"
               alt="Chaveiro de ursinho, escultura, luminária e miniatura impressos em 3D"
@@ -149,6 +159,8 @@ export default async function Home() {
             <a className="group block" href={project.href} key={project.number}>
               <div className="aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-[#e9dfcf]">
                 <img
+                  loading="lazy"
+                  decoding="async"
                   className={`h-full w-full object-cover ${project.position} transition duration-700 ease-out group-hover:scale-105`}
                   src={project.image}
                   alt={project.alt}
@@ -185,7 +197,9 @@ export default async function Home() {
         id="personalizados"
       >
         <div className="relative min-h-[34rem] overflow-hidden lg:min-h-[48rem]">
-          <img
+          <Image
+            fill
+            sizes="(max-width: 1023px) 100vw, 50vw"
             className="absolute inset-0 h-full w-full object-cover"
             src="/personalized-gifts.png"
             alt="Presentes personalizados produzidos pela Artgian Studio"
@@ -275,7 +289,9 @@ export default async function Home() {
           </div>
         </div>
         <div className="relative min-h-[36rem] overflow-hidden lg:min-h-full">
-          <img
+          <Image
+            fill
+            sizes="(max-width: 1023px) 100vw, 48vw"
             className="absolute inset-0 h-full w-full object-cover"
             src="/process-printing.png"
             alt="Impressora 3D criando uma peça em camadas"
