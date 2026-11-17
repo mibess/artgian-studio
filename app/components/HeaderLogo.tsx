@@ -1,9 +1,12 @@
 "use client";
 import Link from "next/link";
 import { useNavigationBusy } from "../../lib/navigation-progress";
-import PrintingLogo from "./PrintingLogo";
+import PrintingLogo, { LOGO_MARK } from "./PrintingLogo";
 
-/** The header monogram; while a page is loading it turns into the printer. */
+/**
+ * The header monogram. While a page is loading the same mark, at the same size
+ * and place, re-prints itself; the two states cross-fade so nothing jumps.
+ */
 export default function HeaderLogo() {
   const busy = useNavigationBusy();
   return (
@@ -15,12 +18,16 @@ export default function HeaderLogo() {
         href="/"
       >
         <span className="relative grid size-12 place-items-center overflow-hidden rounded-2xl border border-white/80 bg-[#f7f3ea]/80 shadow-sm sm:size-14">
-          <img
-            alt="AS"
-            className={`size-full object-contain transition-opacity duration-200 ${busy ? "opacity-0" : ""}`}
-            src="/artgian-monogram.png"
-          />
-          {busy && <PrintingLogo className="absolute w-[56%]" variant="compact" />}
+          <span className="relative h-[78%] aspect-[507/640]">
+            <img
+              alt="AS"
+              className={`absolute inset-0 size-full object-contain transition-opacity duration-300 ease-out ${
+                busy ? "opacity-0" : "opacity-100"
+              }`}
+              src={LOGO_MARK}
+            />
+            {busy && <PrintingLogo className="absolute inset-0 h-full" />}
+          </span>
         </span>
       </Link>
       <span className="sr-only" role="status">
