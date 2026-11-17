@@ -29,7 +29,11 @@ O rastreio funciona também para entregas locais sem código. Não há consulta
 automática à transportadora nem mudança de etapa ao gerar etiquetas.
 Com a [integração Mibess Notify](mibess-notify.md) habilitada, as transições para
 Enviado, Saiu para entrega e Entregue geram eventos internos transacionais.
-Alterar apenas observação/rastreio não gera notificação; o comprador não é destinatário.
+Alterar apenas observação/rastreio não gera notificação. Com a flag adicional
+`MIBESS_NOTIFY_CUSTOMER_ENABLED`, os mesmos eventos incluem o comprador para
+e-mail e WhatsApp (este exige a adesão opcional registrada no checkout); mudanças
+para Em preparação e Pronto para envio também publicam eventos. A ativação exige
+os canais/regras do Notify e a migração 0024 descritos na documentação da integração.
 O botão **Atualizar acompanhamento** busca a informação salva pela equipe.
 
 ## Banco e publicação

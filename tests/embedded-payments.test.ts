@@ -249,4 +249,20 @@ describe("embedded checkout", () => {
     expect(result).toMatchObject({ kind: "reused", orderId });
     expect(await db.select().from(orders)).toHaveLength(1);
   });
+  it("updates consent on the same pending purchase without creating another payable order", async () => {
+    await db.update(orders).set({ discountCents: 0, totalCents: 11500 }).where(eq(orders.id, orderId));
+    await submitPayment(orderId, "buyer", input("boleto"));
+    const [original] = await db.select().from(orders);
+    const items = await db.select().from(orderItems);
+    const consent = { whatsappOptIn: true, whatsappOptInAt: "2026-11-16T20:10:00.000Z", whatsappOptInSource: "artgian_checkout_v1" };
+    const resume = (values: Partial<typeof original>) => createOrReuseCheckoutOrder(db, { ...original, id: crypto.randomUUID(), ...values }, items);
+    expect(await resume(consent)).toMatchObject({ kind: "reused", orderId });
+    expect((await db.select().from(orders))[0]).toMatchObject(consent);
+    await resume({ ...consent, whatsappOptInAt: "2026-11-16T21:10:00.000Z" });
+    expect((await db.select().from(orders))[0].whatsappOptInAt).toBe(consent.whatsappOptInAt);
+    await resume({ whatsappOptIn: false, whatsappOptInAt: null, whatsappOptInSource: null });
+    expect((await db.select().from(orders))[0]).toMatchObject({ whatsappOptIn: false, whatsappOptInAt: null, whatsappOptInSource: null });
+    expect(await db.select().from(orders)).toHaveLength(1);
+    expect(await db.select().from(paymentAttempts)).toHaveLength(1);
+  });
 });

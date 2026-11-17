@@ -263,6 +263,8 @@ test("invalid CPF is highlighted and focused without submitting checkout, then a
   await page.goto("/comprar?produto=organizador-arco&cor=rosa-marfim&quantidade=1");
   const cpf = page.getByLabel("CPF para emissão da etiqueta");
   const continueButton = page.getByRole("button", { name: "Continuar para pagamento" });
+  const notifications = page.getByRole("checkbox", { name: "Quero receber da Artgian a confirmação de compra" });
+  await expect(notifications).not.toBeChecked();
   const validationAlert = page.locator("form").getByRole("alert");
   await cpf.fill("52998224724");
   await cpf.blur();
@@ -282,8 +284,11 @@ test("invalid CPF is highlighted and focused without submitting checkout, then a
   await expect(cpf).toHaveAttribute("aria-invalid", "true");
   await expect(validationAlert).toHaveText("Informe um CPF válido com 11 dígitos.");
   await cpf.fill("52998224725");
+  expect(submissions[0].whatsappOptIn).toBe(false);
+  await notifications.check();
   await continueButton.click();
   await expect(validationAlert).toHaveText("Pagamento simulado para teste.");
   expect(submissions).toHaveLength(2);
   expect(submissions[1].customerDocument).toBe("529.982.247-25");
+  expect(submissions[1].whatsappOptIn).toBe(true);
 });

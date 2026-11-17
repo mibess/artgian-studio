@@ -94,6 +94,18 @@ beforeEach(() => {
   vi.stubGlobal("fetch", mock.fetch);
 });
 describe("multi-item checkout", () => {
+  it.each([undefined, false, "true", 1])("does not infer WhatsApp consent from a phone or malformed opt-in (%s)", async whatsappOptIn => {
+    expect((await POST(request({ ...payload, whatsappOptIn }))).status).toBe(201);
+    expect(mock.values.mock.calls[0][0]).toMatchObject({ whatsappOptIn: false, whatsappOptInAt: null, whatsappOptInSource: null });
+  });
+  it("records explicit WhatsApp consent using a server date and source", async () => {
+    const before = Date.now();
+    expect((await POST(request({ ...payload, whatsappOptIn: true, whatsappOptInAt: "1999-01-01T00:00:00.000Z", whatsappOptInSource: "forged" }))).status).toBe(201);
+    const saved = mock.values.mock.calls[0][0];
+    expect(saved).toMatchObject({ whatsappOptIn: true, whatsappOptInSource: "artgian_checkout_v1" });
+    expect(Date.parse(saved.whatsappOptInAt)).toBeGreaterThanOrEqual(before);
+    expect(Date.parse(saved.whatsappOptInAt)).toBeLessThanOrEqual(Date.now());
+  });
   it.each(["", "5299822472", "52998224724", "11111111111"])("identifies an invalid CPF before creating an order or requesting shipping: %s", async customerDocument => {
     const response = await POST(request({ ...payload, customerDocument }));
     expect(response.status).toBe(400);

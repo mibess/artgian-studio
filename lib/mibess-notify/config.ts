@@ -4,6 +4,7 @@ const productionOrigin = "https://notify.mibess.com.br";
 const homologationOrigin = "https://notify-hml.mibess.com.br";
 
 export const notifyEnabled = () => process.env.MIBESS_NOTIFY_ENABLED === "true";
+export const notifyCustomerEnabled = () => process.env.MIBESS_NOTIFY_CUSTOMER_ENABLED === "true";
 
 // Bind each snapshot to its environment even when a key/URL is missing or rotated.
 // Preview deployments can never send to production, even with copied variables.

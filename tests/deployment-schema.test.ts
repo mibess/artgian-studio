@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { verifyOrderMessagesSchema, verifyStoreSchema } from "../scripts/verify-store-schema.mjs";
+import { verifyCustomerNotificationsSchema, verifyOrderMessagesSchema, verifyStoreSchema } from "../scripts/verify-store-schema.mjs";
 
 let client: Client;
 let directory: string;
@@ -68,6 +68,9 @@ describe("deployment database schema gate", () => {
     await client.execute("CREATE TABLE order_items (id INTEGER PRIMARY KEY)");
     const chat = await readFile("drizzle/0023_order_item_messages.sql", "utf8");
     for (const sql of chat.split("--> statement-breakpoint")) await client.execute(sql.trim());
+    await expect(verifyStoreSchema(client)).rejects.toThrow("consentimento para notificações");
+    const customerNotify = await readFile("drizzle/0024_customer_notifications.sql", "utf8");
+    for (const sql of customerNotify.split("--> statement-breakpoint")) await client.execute(sql.trim());
     await verifyStoreSchema(client);
     await client.execute("DROP TRIGGER notify_outbox_immutable");
     await expect(verifyStoreSchema(client)).rejects.toThrow("imutabilidade");
@@ -96,6 +99,18 @@ describe("deployment database schema gate", () => {
     await client.execute("DROP TABLE order_item_messages");
     for (const sql of chat.replace(/FOREIGN KEY.*ON DELETE cascade/, "CHECK (order_item_id > 0)").split("--> statement-breakpoint")) await client.execute(sql.trim());
     await expect(verifyOrderMessagesSchema(client)).rejects.toThrow("Referência de mensagens");
+  });
+  it("adds customer notification consent without granting consent or changing existing orders", async () => {
+    await fixture();
+    await client.execute("CREATE TABLE orders (id TEXT PRIMARY KEY, customer_email TEXT, total_cents INTEGER)");
+    await client.execute("INSERT INTO orders VALUES ('legacy', 'buyer@example.com', 12500)");
+    await expect(verifyCustomerNotificationsSchema(client)).rejects.toThrow("consentimento");
+    const migration = await readFile("drizzle/0024_customer_notifications.sql", "utf8");
+    for (const sql of migration.split("--> statement-breakpoint")) await client.execute(sql.trim());
+    await verifyCustomerNotificationsSchema(client);
+    expect((await client.execute("SELECT * FROM orders")).rows).toEqual([{ id: "legacy", customer_email: "buyer@example.com", total_cents: 12500, whatsapp_opt_in: 0, whatsapp_opt_in_at: null, whatsapp_opt_in_source: null }]);
+    await client.execute("INSERT INTO orders (id) VALUES ('new')");
+    expect((await client.execute("SELECT whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_source FROM orders WHERE id='new'")).rows[0]).toEqual({ whatsapp_opt_in: 0, whatsapp_opt_in_at: null, whatsapp_opt_in_source: null });
   });
 });
 

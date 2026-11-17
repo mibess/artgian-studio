@@ -1,15 +1,17 @@
 import "server-only";
 import { notifyOutbox, orders } from "../../db/schema";
 import type { getDb } from "../../db";
-import { notifyEnabled, notifyTargetOrigin } from "./config";
+import { notifyCustomerEnabled, notifyEnabled, notifyTargetOrigin } from "./config";
+import { customerNotification, type NotifyRecipient } from "./customer";
 
 type Database = Awaited<ReturnType<typeof getDb>>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Order = typeof orders.$inferSelect;
 type Event = {
-  type: "ORDER_PAID" | "TRACKING_POSTED" | "TRACKING_STATUS_CHANGED";
+  type: "ORDER_PAID" | "ORDER_STATUS_CHANGED" | "TRACKING_POSTED" | "TRACKING_STATUS_CHANGED";
   occurredAt: string;
   correlationId: string;
+  recipient?: NotifyRecipient;
   data: Record<string, string | number>;
 };
 
@@ -34,24 +36,32 @@ function orderData(order: Order) {
 export async function enqueueOrderPaid(tx: Transaction, order: Order, occurredAt: string, paymentMethod: string) {
   if (["paid", "refunded", "charged_back"].includes(order.status)) return;
   const reais = Math.floor(order.totalCents / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const customer = customerNotification(order);
   await enqueue(tx, `artgian:order:${order.id}:paid:v1`, {
     type: "ORDER_PAID", occurredAt, correlationId: `artgian-order-${order.id}`,
-    data: { ...orderData(order), amount: order.totalCents / 100, amountFormatted: `R$ ${reais},${String(order.totalCents % 100).padStart(2, "0")}`, currency: "BRL", paymentMethod },
+    ...(customer.recipient ? { recipient: customer.recipient } : {}),
+    data: { ...orderData(order), ...customer.data, amount: order.totalCents / 100, amountFormatted: `R$ ${reais},${String(order.totalCents % 100).padStart(2, "0")}`, currency: "BRL", paymentMethod },
   });
 }
 
 export async function enqueueFulfillment(tx: Transaction, order: Order, event: { id: string; status: string; trackingCode: string | null; createdAt: string }) {
   if (event.status === order.fulfillmentStatus) return;
+  const preparation = ["preparing", "ready_to_ship"].includes(event.status);
+  if (preparation && !notifyCustomerEnabled()) return;
   const statuses: Record<string, { status: string; statusLabel: string }> = {
+    preparing: { status: "PREPARING", statusLabel: "Em preparação" },
+    ready_to_ship: { status: "READY_TO_SHIP", statusLabel: "Pronto para envio" },
     shipped: { status: "POSTED", statusLabel: "Enviado" },
     out_for_delivery: { status: "OUT_FOR_DELIVERY", statusLabel: "Saiu para entrega" },
     delivered: { status: "DELIVERED", statusLabel: "Entregue" },
   };
   const status = statuses[event.status];
   if (!status) return;
+  const customer = customerNotification(order);
   await enqueue(tx, `artgian:order:${order.id}:fulfillment:${event.id}:v1`, {
-    type: event.status === "shipped" ? "TRACKING_POSTED" : "TRACKING_STATUS_CHANGED",
+    type: preparation ? "ORDER_STATUS_CHANGED" : event.status === "shipped" ? "TRACKING_POSTED" : "TRACKING_STATUS_CHANGED",
     occurredAt: event.createdAt, correlationId: `artgian-order-${order.id}`,
-    data: { ...orderData(order), ...status, ...(event.trackingCode ? { trackingCode: event.trackingCode } : {}) },
+    ...(customer.recipient ? { recipient: customer.recipient } : {}),
+    data: { ...orderData(order), ...customer.data, ...status, ...(event.trackingCode ? { trackingCode: event.trackingCode } : {}) },
   });
 }

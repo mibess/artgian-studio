@@ -1,8 +1,11 @@
-# Notificações internas da Artgian
+# Notificações da Artgian
 
-A Artgian publica eventos no Mibess Notify. O Notify resolve o contato, template,
-canal e envio pela Evolution. Não há credencial Evolution, destino telefônico,
-`recipient`, texto de mensagem ou chamada administrativa no publicador da loja.
+A Artgian publica um evento de negócio no Mibess Notify. O Notify resolve as regras,
+templates, canais e entregas da operação e do comprador. Não há credencial de
+provedor, texto de mensagem ou chamada administrativa no publicador da loja.
+Com `MIBESS_NOTIFY_CUSTOMER_ENABLED=false` (padrão), o contrato interno permanece
+igual. Quando habilitada, a flag acrescenta `recipient` e `data.orderUrl` aos
+eventos futuros e permite as etapas de preparação descritas abaixo.
 **Aceito pelo Notify (`202`) não significa mensagem enviada ou entregue.**
 
 ## Eventos e origem dos dados
@@ -10,6 +13,8 @@ canal e envio pela Evolution. Não há credencial Evolution, destino telefônico
 | Mudança confirmada | Evento | Identidade persistente |
 | --- | --- | --- |
 | Primeira aprovação validada do pagamento | `ORDER_PAID` | `artgian:order:<id>:paid:v1` |
+| Transição para `preparing` (flag de compradores ativa) | `ORDER_STATUS_CHANGED`, `PREPARING`, Em preparação | `artgian:order:<id>:fulfillment:<historyId>:v1` |
+| Transição para `ready_to_ship` (flag de compradores ativa) | `ORDER_STATUS_CHANGED`, `READY_TO_SHIP`, Pronto para envio | mesma forma, outro ID do histórico |
 | Transição para `shipped` | `TRACKING_POSTED`, `POSTED`, Enviado | `artgian:order:<id>:fulfillment:<historyId>:v1` |
 | Transição para `out_for_delivery` | `TRACKING_STATUS_CHANGED`, `OUT_FOR_DELIVERY`, Saiu para entrega | mesma forma, outro ID do histórico |
 | Transição para `delivered` | `TRACKING_STATUS_CHANGED`, `DELIVERED`, Entregue | mesma forma, outro ID do histórico |
@@ -38,12 +43,89 @@ Código de rastreio é opcional. Não existe evento de exceção estruturado no 
 portanto `TRACKING_EXCEPTION` não foi criado. Gerar etiqueta, consultar pedido,
 retornar do navegador, criar preferência ou emitir Pix/boleto não gera evento.
 
+## Compradores e consentimento
+
+O checkout oferece uma caixa opcional, inicialmente desmarcada, para receber
+confirmação e andamento **deste pedido** pelo WhatsApp. A API só aceita o booleano
+`true` como adesão e grava `whatsapp_opt_in`, data do servidor e origem
+`artgian_checkout_v1` no pedido. Telefone preenchido, conta antiga ou autorização
+de outro pedido não equivalem a consentimento. Datas e fontes enviadas pelo
+navegador são ignoradas. E-mail transacional é independente dessa opção.
+
+Repetir checkout reaproveita o mesmo pedido pendente e atualiza somente a escolha:
+adesão repetida preserva a primeira data; desmarcar remove adesão/data/fonte.
+Alterar a opção não cria outro Pix/boleto nem outro pedido pagável.
+
+`lib/mibess-notify/customer.ts` monta o snapshot mínimo:
+
+```json
+{
+  "recipient": {
+    "externalId": "artgian:customer:<userId>",
+    "name": "Nome do comprador",
+    "phone": "+5516997200212",
+    "email": "comprador@example.com",
+    "whatsappOptIn": true,
+    "whatsappOptInAt": "2026-11-16T20:10:00.000Z",
+    "whatsappOptInSource": "artgian_checkout_v1"
+  },
+  "data": {
+    "orderUrl": "https://www.artgian.com.br/conta/pedidos/<orderId>"
+  }
+}
+```
+
+Exemplo de contrato, não registro de consentimento real. Nome, e-mail e telefone
+vêm do pedido persistido; CPF, endereço e dados de pagamento não são adicionados.
+`externalId` usa `artgian:order:<id>` quando a conta foi removida. O telefone é
+normalizado para E.164; e-mail/telefone inválidos são omitidos individualmente,
+sem impedir a aprovação ou o evento operacional. Sem prova completa de adesão,
+`whatsappOptIn=false` e data/fonte são omitidas; o e-mail continua disponível.
+O link exige a autenticação e a propriedade do pedido, como a página atual.
+
+O Notify deve aplicar regras `EVENT_RECIPIENT` independentes para WhatsApp Artgian
+e e-mail Artgian, preservando as regras `CONTACT` da operação. O remetente
+WhatsApp +5516997432741 depende da instância Artgian conectada; esse número era
+destinatário do canal Mibess e não se transforma em remetente ao adicionar
+`recipient`. Falha de um canal é tratada no Notify, sem repetir a publicação da
+Artgian. O e-mail requer o provider SMTP e roteamento por canal no Notify.
+
+`preparing` já é o estado inicial: a confirmação de compra pode informar que o
+pedido está em preparação. Não é emitido um segundo evento nessa aprovação.
+As etapas pertencem ao pedido inteiro, não a cada item.
+
+### Migração e ativação
+
+1. Publicar primeiro o suporte de e-mail, consentimento e `ORDER_STATUS_CHANGED`
+   no Notify, com canais, templates e regras conferidos em homologação.
+2. Aplicar a migração aditiva `0024_customer_notifications` após
+   `0023_order_item_messages`, com backup/restauração usando:
+
+   ```sh
+   node scripts/migrate-store-with-backup.mjs --customer-notify --env=/caminho/seguro.env
+   node scripts/migrate-store-with-backup.mjs --customer-notify --env=/caminho/seguro.env --apply
+   ```
+
+   O script aceita apenas as três adições revisadas, compara todos os dados das
+   colunas antigas dentro do lote SQLite e verifica que pedidos existentes
+   começam sem consentimento (`false`, `null`, `null`). O gate de deploy valida
+   fisicamente as três colunas. As chaves do backup ficam fora do repositório.
+3. Publicar a Artgian mantendo `MIBESS_NOTIFY_CUSTOMER_ENABLED=false`; ativar
+   posteriormente no ambiente validado junto de `MIBESS_NOTIFY_ENABLED=true`.
+
+Não há backfill, alteração ou republicação dos snapshots históricos. A flag
+controla a criação de novos snapshots; desligá-la não remove destinatários de
+eventos que já estão na fila. Para interromper toda publicação, usar a flag
+global; entregas já aceitas são operadas no Notify. A fila, QStash, publisher e
+chaves idempotentes existentes são compartilhados por todos os canais.
+
 ## Configuração e ambientes
 
 Variáveis somente de servidor, descritas em `.env.example`:
 
 ```dotenv
 MIBESS_NOTIFY_ENABLED=false
+MIBESS_NOTIFY_CUSTOMER_ENABLED=false
 MIBESS_NOTIFY_BASE_URL=https://notify-hml.mibess.com.br
 MIBESS_NOTIFY_API_KEY=
 ```
@@ -102,7 +184,7 @@ Não publique o código antes da migração no mesmo banco usado pelo deployment
 
 ## Execução recorrente na Vercel
 
-Use um schedule QStash que faz `POST /api/tasks/notify` a cada minuto. Isso aproveita
+Use um schedule QStash que faz `POST /api/tasks/notify` a cada dois minutos (`*/2 * * * *`, conforme o script atual). Isso aproveita
 o provedor já instalado sem depender do worker comercial local, de memória,
 `setInterval`, acesso de cliente ou trabalho não aguardado depois da resposta.
 Não se usa o Cron diário existente para esta fila.
@@ -230,7 +312,7 @@ Situação: {{statusLabel}}
 
 ## Validação e arquivos
 
-`tests/mibess-notify.test.ts` executa 37 cenários com SQLite isolado e HTTP simulado,
+`tests/mibess-notify.test.ts` cobre o contrato com SQLite isolado e HTTP simulado,
 sem cobranças ou mensagens reais: aprovação imediata/webhook/reconciliação
 concorrentes, pendência/validação, fluxo antigo, transições/repetições/correções,
 rollback, snapshot e restrição única, lease/conclusão atrasada, flag, isolamento,
@@ -240,7 +322,8 @@ verificam a migração e a proteção física de imutabilidade.
 Arquivos principais:
 
 - `db/schema.ts`, `drizzle/0021_mibess_notify_outbox.sql`, snapshot/journal: persistência.
-- `lib/mibess-notify/{config,outbox,publisher}.ts`: ambiente, eventos e publicação.
+- `lib/mibess-notify/{config,customer,outbox,publisher}.ts`: ambiente, destinatário, eventos e publicação.
+- `drizzle/0024_customer_notifications.sql`, checkout e schema: adesão por pedido.
 - `lib/embedded-payments.ts`, `lib/redirect-payments.ts`, webhook Mercado Pago:
   cobertura dos caminhos de aprovação e repetição das disputas de escrita.
 - `lib/order-fulfillment.ts`: eventos das transições já existentes.
@@ -256,6 +339,17 @@ bancos locais isolados de testes e `data/notify-validation.db`.
 Build com `pnpm exec next build --webpack` concluído com banco isolado e Notify
 desabilitado. O build padrão Turbopack esbarrou na restrição do ambiente à porta
 interna do compilador; o padrão do projeto não foi alterado.
+
+Validação da ampliação para compradores em 16/11/2026: 113 testes focados de
+checkout, pagamentos, fulfillment, outbox e schema passaram; TypeScript e lint
+sem erros (15 avisos de imagens preexistentes). O E2E confirmou opção de WhatsApp
+desmarcada e envio explícito de `false`/`true`. Build webpack concluído em cópia
+temporária com banco isolado e notificações desabilitadas. O fluxo de migração
+0024 também passou pelo backup criptografado, restauração e aplicação atômica
+em banco local fictício (somente o diretório da chave foi adaptado nessa cópia).
+A suíte completa teve 507 aprovações e uma falha em `openai-draft.test.ts`
+(`paused` em vez de `enhanced`), reproduzida em uma cópia limpa de `HEAD` anterior
+à mudança; não é regressão destas notificações.
 
 ## Configuração de produção — 26/09/2026
 

@@ -43,6 +43,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   vi.stubEnv("MIBESS_NOTIFY_ENABLED", "true");
+  vi.stubEnv("MIBESS_NOTIFY_CUSTOMER_ENABLED", "false");
   vi.stubEnv("MIBESS_NOTIFY_BASE_URL", `${hml}/`);
   vi.stubEnv("MIBESS_NOTIFY_API_KEY", "isolated-notify-key");
   vi.stubEnv("APP_URL", "https://store.example");
@@ -184,6 +185,97 @@ describe("transactional business events", () => {
     fetchMock.mockResolvedValueOnce(accepted());
     await runNotifyBatch();
     expect((await row()).status).toBe("accepted");
+  });
+});
+
+describe("buyer notifications share the business event", () => {
+  it("snapshots the buyer and real consent once across payment retries", async () => {
+    vi.stubEnv("MIBESS_NOTIFY_CUSTOMER_ENABLED", "true");
+    const consentAt = "2026-11-16T20:10:00.000Z";
+    await db.update(orders).set({ customerPhone: "16997200212", whatsappOptIn: true, whatsappOptInAt: consentAt, whatsappOptInSource: "artgian_checkout_v1" });
+    await Promise.all([applyEmbeddedPayment(provider()), applyEmbeddedPayment(provider())]);
+    expect(await rows()).toHaveLength(1);
+    const event = await row();
+    const payload = JSON.parse(event.payload);
+    expect(payload.recipient).toEqual({ externalId: "artgian:customer:notify-buyer", name: "Mariana", phone: "+5516997200212", email: "notify@example.com", whatsappOptIn: true, whatsappOptInAt: consentAt, whatsappOptInSource: "artgian_checkout_v1" });
+    expect(payload.data.orderUrl).toBe(`https://www.artgian.com.br/conta/pedidos/${orderId}`);
+    expect(event.idempotencyKey).toBe(`artgian:order:${orderId}:paid:v1`);
+    expect(event.payload).not.toMatch(/52998224725|Praça|access_token|providerPayment/);
+    await db.update(orders).set({ customerPhone: "11988888888", customerEmail: "changed@example.com", whatsappOptIn: false });
+    await applyEmbeddedPayment(provider());
+    expect(await rows()).toHaveLength(1);
+    expect((await row()).payload).toBe(event.payload);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { whatsappOptIn: false, whatsappOptInAt: null, whatsappOptInSource: null },
+    { whatsappOptIn: true, whatsappOptInAt: null, whatsappOptInSource: "artgian_checkout_v1" },
+    { whatsappOptIn: true, whatsappOptInAt: "invalid", whatsappOptInSource: "artgian_checkout_v1" },
+    { whatsappOptIn: true, whatsappOptInAt: "2026-11-16T20:10:00.000Z", whatsappOptInSource: "imported_without_consent" },
+  ])("keeps transactional email available without valid WhatsApp consent: %j", async consent => {
+    vi.stubEnv("MIBESS_NOTIFY_CUSTOMER_ENABLED", "true");
+    await db.update(orders).set(consent);
+    const event = await approve();
+    expect((await order()).status).toBe("paid");
+    expect(JSON.parse(event.payload).recipient).toEqual({ externalId: "artgian:customer:notify-buyer", name: "Mariana", phone: "+5511999999999", email: "notify@example.com", whatsappOptIn: false });
+  });
+
+  it.each([
+    ["invalid-phone", "valid@example.com", { email: "valid@example.com", whatsappOptIn: false }],
+    ["+55 (16) 99720-0212", "invalid-email", { phone: "+5516997200212", whatsappOptIn: true }],
+    ["", "", null],
+  ])("does not block payment when optional channel data is invalid (%s, %s)", async (phone, email, expected) => {
+    vi.stubEnv("MIBESS_NOTIFY_CUSTOMER_ENABLED", "true");
+    await db.update(orders).set({ customerPhone: phone, customerEmail: email, whatsappOptIn: true, whatsappOptInAt: "2026-11-16T20:10:00.000Z", whatsappOptInSource: "artgian_checkout_v1" });
+    const event = await approve();
+    expect((await order()).status).toBe("paid");
+    const recipient = JSON.parse(event.payload).recipient;
+    if (expected) {
+      expect(recipient).toMatchObject(expected);
+      if (!("phone" in expected)) expect(recipient).not.toHaveProperty("phone");
+      if (!("email" in expected)) expect(recipient).not.toHaveProperty("email");
+    } else expect(recipient).toBeUndefined();
+    expect(await rows()).toHaveLength(1);
+  });
+
+  it("supports the legacy checkout and stable order identity for a deleted account", async () => {
+    vi.stubEnv("MIBESS_NOTIFY_CUSTOMER_ENABLED", "true");
+    await db.update(orders).set({ checkoutMode: "redirect", userId: null });
+    await applyRedirectPayment(provider());
+    expect(JSON.parse((await row()).payload).recipient.externalId).toBe(`artgian:order:${orderId}`);
+    expect(await rows()).toHaveLength(1);
+  });
+
+  it("adds preparation transitions and preserves tracking events without duplicate corrections", async () => {
+    vi.stubEnv("MIBESS_NOTIFY_CUSTOMER_ENABLED", "true");
+    await db.update(orders).set({ status: "paid" });
+    await transition("preparing", 0); // already the initial state
+    expect(await rows()).toHaveLength(0);
+    await transition("ready_to_ship", 0);
+    await transition("ready_to_ship", 0);
+    await transition("ready_to_ship", 1, "", "Correção de observação");
+    await transition("preparing", 2);
+    await transition("shipped", 3, "CODE123");
+    await transition("out_for_delivery", 4, "CODE123");
+    await transition("delivered", 5, "CODE123");
+    const events = await rows();
+    expect(events.map(event => event.type)).toEqual(["ORDER_STATUS_CHANGED", "ORDER_STATUS_CHANGED", "TRACKING_POSTED", "TRACKING_STATUS_CHANGED", "TRACKING_STATUS_CHANGED"]);
+    expect(events.map(event => JSON.parse(event.payload).data.status)).toEqual(["READY_TO_SHIP", "PREPARING", "POSTED", "OUT_FOR_DELIVERY", "DELIVERED"]);
+    expect(events.every(event => JSON.parse(event.payload).recipient.email === "notify@example.com")).toBe(true);
+    expect(new Set(events.map(event => event.idempotencyKey)).size).toBe(5);
+  });
+
+  it("enables future events without mutating or backfilling earlier snapshots", async () => {
+    const old = await approve();
+    vi.stubEnv("MIBESS_NOTIFY_CUSTOMER_ENABLED", "true");
+    await applyEmbeddedPayment(provider());
+    expect(await rows()).toHaveLength(1);
+    expect((await row()).payload).toBe(old.payload);
+    await transition("ready_to_ship", 0);
+    const events = await rows();
+    expect(events).toHaveLength(2);
+    expect(JSON.parse(events[1].payload).recipient.email).toBe("notify@example.com");
   });
 });
 

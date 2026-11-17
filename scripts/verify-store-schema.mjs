@@ -5,6 +5,12 @@ import { pathToFileURL } from "node:url";
 
 const digest = value => createHash("sha256").update(value).digest("hex");
 
+export async function verifyCustomerNotificationsSchema(connection) {
+  const columns = (await connection.execute("PRAGMA table_info(orders)")).rows;
+  if (!columns.some(row => row.name === "whatsapp_opt_in" && row.type === "INTEGER" && Number(row.notnull) === 1 && ["0", "false"].includes(String(row.dflt_value).toLowerCase())) ||
+      !["whatsapp_opt_in_at", "whatsapp_opt_in_source"].every(name => columns.some(row => row.name === name && row.type === "TEXT" && Number(row.notnull) === 0))) throw new Error("As colunas de consentimento para notificações do cliente estão ausentes ou inválidas.");
+}
+
 export async function verifyOrderMessagesSchema(connection) {
   const columns = (await connection.execute("PRAGMA table_info(order_item_messages)")).rows;
   const required = { id: "INTEGER", order_item_id: "INTEGER", sender: "TEXT", body: "TEXT", client_id: "TEXT", created_at: "TEXT", read_at: "TEXT" };
@@ -109,6 +115,7 @@ export async function verifyStoreSchema(client, { applyContact = false } = {}) {
     await verifyNotifySchema(tx);
     await verifyMcpSchema(tx);
     await verifyOrderMessagesSchema(tx);
+    await verifyCustomerNotificationsSchema(tx);
     if (applyContact) await tx.commit();
     else await tx.rollback();
     console.log(`Schema do banco verificado: ${expected.tag}.`);

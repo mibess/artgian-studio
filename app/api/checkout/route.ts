@@ -38,6 +38,7 @@ type CheckoutPayload = {
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
+  whatsappOptIn?: unknown;
   customerDocument?: string;
   postalCode?: string;
   streetAddress?: string;
@@ -206,6 +207,8 @@ export async function POST(request: Request) {
     const newOrderId = crypto.randomUUID();
     const db = await getDb();
     const shippingQuotedAt = new Date().toISOString();
+    // Only an explicit checked box grants consent. Dates/sources are server-owned.
+    const whatsappOptIn = payload.whatsappOptIn === true;
 
     const orderValues = {
       id: newOrderId,
@@ -215,6 +218,9 @@ export async function POST(request: Request) {
       customerName,
       customerEmail,
       customerPhone,
+      whatsappOptIn,
+      whatsappOptInAt: whatsappOptIn ? shippingQuotedAt : null,
+      whatsappOptInSource: whatsappOptIn ? "artgian_checkout_v1" : null,
       customerDocument,
       postalCode,
       streetAddress,

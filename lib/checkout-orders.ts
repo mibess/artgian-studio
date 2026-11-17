@@ -78,6 +78,19 @@ export async function createOrReuseCheckoutOrder(
     )).orderBy(desc(orders.createdAt));
     const expectedPurchase = purchaseKey(draft);
     const expectedItems = itemsKey(items);
+    async function reuse(candidate: typeof orders.$inferSelect, result: CheckoutOrderResult) {
+      // Consent is not purchase identity: changing the box must not create a
+      // second payable order. Keep the first consent date on identical retries.
+      const optedIn = draft.whatsappOptIn === true && Boolean(draft.whatsappOptInAt) && draft.whatsappOptInSource === "artgian_checkout_v1";
+      if (candidate.whatsappOptIn !== optedIn || (optedIn && (!candidate.whatsappOptInAt || candidate.whatsappOptInSource !== draft.whatsappOptInSource))) {
+        await tx.update(orders).set({
+          whatsappOptIn: optedIn,
+          whatsappOptInAt: optedIn ? draft.whatsappOptInAt : null,
+          whatsappOptInSource: optedIn ? draft.whatsappOptInSource : null,
+        }).where(eq(orders.id, candidate.id));
+      }
+      return result;
+    }
     for (const candidate of candidates) {
       if ((candidate.couponCode || null) !== couponCode || purchaseKey(candidate) !== expectedPurchase) continue;
       if (candidate.totalCents !== candidate.subtotalCents + candidate.shippingCents - candidate.discountCents) continue;
@@ -87,7 +100,7 @@ export async function createOrReuseCheckoutOrder(
         const [attempt] = await tx.select().from(paymentAttempts).where(eq(paymentAttempts.orderId, candidate.id)).orderBy(desc(paymentAttempts.createdAt), desc(paymentAttempts.id)).limit(1);
         // An issued Pix/boleto or an uncertain charge survives the session/coupon
         // deadline. Always resume it instead of creating a second payable order.
-        if (attempt && !canRetryPayment(attempt.status)) return { kind: "reused", orderId: candidate.id, checkoutUrl: `/comprar/pagamento?pedido=${candidate.id}` };
+        if (attempt && !canRetryPayment(attempt.status)) return reuse(candidate, { kind: "reused", orderId: candidate.id, checkoutUrl: `/comprar/pagamento?pedido=${candidate.id}` });
         if (candidate.paymentExpiresAt && candidate.paymentExpiresAt <= new Date().toISOString()) {
           await tx.update(orders).set({ status: "cancelled", updatedAt: new Date().toISOString() }).where(eq(orders.id, candidate.id));
           if (candidate.couponId && !candidate.couponRedeemedAt) await tx.update(coupons).set({ allocatedUses: sql`max(0, ${coupons.allocatedUses} - 1)` }).where(eq(coupons.id, candidate.couponId));
@@ -110,12 +123,12 @@ export async function createOrReuseCheckoutOrder(
         }
       } else if (candidate.discountCents !== 0) continue;
       if (candidate.checkoutMode === "embedded") {
-        return { kind: "reused", orderId: candidate.id, checkoutUrl: `/comprar/pagamento?pedido=${candidate.id}` };
+        return reuse(candidate, { kind: "reused", orderId: candidate.id, checkoutUrl: `/comprar/pagamento?pedido=${candidate.id}` });
       }
       if (candidate.checkoutUrl && candidate.mercadoPagoPreferenceId) {
-        return { kind: "reused", orderId: candidate.id, checkoutUrl: candidate.checkoutUrl };
+        return reuse(candidate, { kind: "reused", orderId: candidate.id, checkoutUrl: candidate.checkoutUrl });
       }
-      return { kind: "processing", orderId: candidate.id };
+      return reuse(candidate, { kind: "processing", orderId: candidate.id });
     }
 
     const reservation = couponCode ? await reserveCoupon(tx, couponCode, draft.subtotalCents) : null;

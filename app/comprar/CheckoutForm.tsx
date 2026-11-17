@@ -66,6 +66,7 @@ export default function CheckoutForm({
   const [shippingError, setShippingError] = useState("");
   const [customerName, setCustomerName] = useState(customer.name);
   const [customerPhone, setCustomerPhone] = useState(formatPhone(customer.phone || ""));
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [savedContact, setSavedContact] = useState(customer.phone && hasFullName(customer.name) ? { name: customer.name, phone: formatPhone(customer.phone) } : null);
   const [editingContact, setEditingContact] = useState(!savedContact);
   const [savingContact, setSavingContact] = useState(false);
@@ -259,6 +260,7 @@ export default function CheckoutForm({
           ...payload,
           customerName,
           customerPhone,
+          whatsappOptIn,
           postalCode: address.postalCode,
           streetAddress: address.streetAddress,
           addressNumber: address.addressNumber,
@@ -438,6 +440,13 @@ export default function CheckoutForm({
             <p className="text-xs leading-5 text-[#647087] sm:col-span-2">Seu telefone será salvo na conta para facilitar as próximas compras.</p>
             </>}
             {contactError && <p role="alert" className="text-sm text-red-700 sm:col-span-2">{contactError}</p>}
+            <div className="rounded-xl border border-[#0b2447]/10 bg-white/60 p-4 sm:col-span-2">
+              <label className="flex min-h-11 items-start gap-3 text-sm leading-6">
+                <input type="checkbox" name="whatsappOptIn" checked={whatsappOptIn} onChange={event => setWhatsappOptIn(event.target.checked)} disabled={submitting} aria-describedby="checkout-notification-help" className="mt-1 size-5 shrink-0 accent-[#0b2447]" />
+                <span>Quero receber da Artgian a confirmação de compra e as atualizações deste pedido pelo WhatsApp no telefone informado.</span>
+              </label>
+              <p id="checkout-notification-help" className="mt-2 text-xs leading-5 text-[#647087]">Opcional. Você pode comprar sem marcar esta opção. Os avisos do pedido por e-mail são enviados para {customer.email}.</p>
+            </div>
             <label className="sm:col-span-2">
               <span className="mb-2 block text-xs font-semibold">
                 CPF para emissão da etiqueta

@@ -54,6 +54,7 @@ export default defineConfig({
       QSTASH_CURRENT_SIGNING_KEY: "",
       QSTASH_NEXT_SIGNING_KEY: "",
       MIBESS_NOTIFY_ENABLED: "false",
+      MIBESS_NOTIFY_CUSTOMER_ENABLED: "false",
       MIBESS_NOTIFY_API_KEY: "",
       MIBESS_NOTIFY_BASE_URL: "",
     },

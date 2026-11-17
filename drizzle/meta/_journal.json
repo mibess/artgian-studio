@@ -169,6 +169,13 @@
       "when": 1794872406353,
       "tag": "0023_order_item_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1794878700621,
+      "tag": "0024_customer_notifications",
+      "breakpoints": true
     }
   ]
 }

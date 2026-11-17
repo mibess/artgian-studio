@@ -4,7 +4,7 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { parseEnv } from "node:util";
-import { verifyFulfillmentSchema, verifyNotifySchema, verifyMcpSchema, verifyOrderMessagesSchema } from "./verify-store-schema.mjs";
+import { verifyFulfillmentSchema, verifyNotifySchema, verifyMcpSchema, verifyOrderMessagesSchema, verifyCustomerNotificationsSchema } from "./verify-store-schema.mjs";
 
 // Explicit opt-in: a backup and local restore rehearsal always precede remote writes.
 const envFile = process.argv.find(arg => arg.startsWith("--env="))?.slice(6);
@@ -19,10 +19,11 @@ const fulfillmentOnly = process.argv.includes("--fulfillment");
 const notifyOnly = process.argv.includes("--notify");
 const mcpOnly = process.argv.includes("--mcp");
 const chatOnly = process.argv.includes("--chat");
-const additiveOnly = mcpOnly || chatOnly;
-if ([contactOnly, paymentsOnly, fulfillmentOnly, notifyOnly, mcpOnly, chatOnly].filter(Boolean).length > 1) throw new Error("Selecione apenas uma migração: --contact, --payments, --fulfillment, --notify, --mcp ou --chat.");
-const baselineTag = chatOnly ? "0022_omniscient_azazel" : mcpOnly ? "0021_mibess_notify_outbox" : notifyOnly ? "0020_order_fulfillment" : fulfillmentOnly ? "0019_sparkling_dust" : paymentsOnly ? "0018_sticky_phantom_reporter" : contactOnly ? "0017_gorgeous_talon" : "0014_unusual_cassandra_nova";
-const pendingTags = chatOnly ? ["0023_order_item_messages"] : mcpOnly ? ["0022_omniscient_azazel"] : notifyOnly ? ["0021_mibess_notify_outbox"] : fulfillmentOnly ? ["0020_order_fulfillment"] : paymentsOnly ? ["0019_sparkling_dust"] : contactOnly ? ["0018_sticky_phantom_reporter"] : ["0015_gray_manta", "0016_volatile_namor", "0017_gorgeous_talon"];
+const customerNotifyOnly = process.argv.includes("--customer-notify");
+const additiveOnly = mcpOnly || chatOnly || customerNotifyOnly;
+if ([contactOnly, paymentsOnly, fulfillmentOnly, notifyOnly, mcpOnly, chatOnly, customerNotifyOnly].filter(Boolean).length > 1) throw new Error("Selecione apenas uma migração: --contact, --payments, --fulfillment, --notify, --mcp, --chat ou --customer-notify.");
+const baselineTag = customerNotifyOnly ? "0023_order_item_messages" : chatOnly ? "0022_omniscient_azazel" : mcpOnly ? "0021_mibess_notify_outbox" : notifyOnly ? "0020_order_fulfillment" : fulfillmentOnly ? "0019_sparkling_dust" : paymentsOnly ? "0018_sticky_phantom_reporter" : contactOnly ? "0017_gorgeous_talon" : "0014_unusual_cassandra_nova";
+const pendingTags = customerNotifyOnly ? ["0024_customer_notifications"] : chatOnly ? ["0023_order_item_messages"] : mcpOnly ? ["0022_omniscient_azazel"] : notifyOnly ? ["0021_mibess_notify_outbox"] : fulfillmentOnly ? ["0020_order_fulfillment"] : paymentsOnly ? ["0019_sparkling_dust"] : contactOnly ? ["0018_sticky_phantom_reporter"] : ["0015_gray_manta", "0016_volatile_namor", "0017_gorgeous_talon"];
 const migrations = await Promise.all(journal.map(async entry => {
   const sql = await readFile(`drizzle/${entry.tag}.sql`, "utf8");
   return { ...entry, sql, hash: createHash("sha256").update(sql).digest("hex") };
@@ -63,7 +64,9 @@ async function latestMigration(connection) {
 }
 
 async function validateNewSchema(connection) {
-  if (chatOnly) {
+  if (customerNotifyOnly) {
+    await verifyCustomerNotificationsSchema(connection);
+  } else if (chatOnly) {
     await verifyOrderMessagesSchema(connection);
   } else if (mcpOnly) {
     await verifyMcpSchema(connection);
@@ -108,7 +111,14 @@ async function applyPending(connection, latest) {
 async function applyAdditiveAtomic(connection, latest, source) {
   const migration = migrations.find(entry => entry.tag === pendingTags.at(-1));
   const ddl = migration.sql.split("--> statement-breakpoint").map(sql => sql.trim()).filter(Boolean);
-  if (ddl.some(sql => !/^CREATE (TABLE|(?:UNIQUE )?INDEX) /i.test(sql))) throw new Error("A migração selecionada deve ser exclusivamente aditiva.");
+  if (customerNotifyOnly) {
+    const expected = [
+      "ALTER TABLE `orders` ADD `whatsapp_opt_in` integer DEFAULT false NOT NULL;",
+      "ALTER TABLE `orders` ADD `whatsapp_opt_in_at` text;",
+      "ALTER TABLE `orders` ADD `whatsapp_opt_in_source` text;",
+    ];
+    if (JSON.stringify(ddl) !== JSON.stringify(expected)) throw new Error("Migração de consentimento inesperada; somente as três colunas revisadas podem ser adicionadas.");
+  } else if (ddl.some(sql => !/^CREATE (TABLE|(?:UNIQUE )?INDEX) /i.test(sql))) throw new Error("A migração selecionada deve ser exclusivamente aditiva.");
   const prefix = `_migration_check_${randomBytes(8).toString("hex")}`;
   const guard = quote(prefix);
   const tables = source.tables.filter(t => !["__drizzle_migrations", "sqlite_sequence"].includes(t.name));
@@ -117,6 +127,7 @@ async function applyAdditiveAtomic(connection, latest, source) {
     { sql: `INSERT INTO ${guard} SELECT CASE WHEN (SELECT hash FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1)=? AND (SELECT created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1)=? THEN 1 ELSE 0 END`, args: [latest.hash, latest.when] },
     ...tables.map((t, i) => `CREATE TEMP TABLE ${quote(`${prefix}_${i}`)} AS SELECT ${t.columns.map(quote).join(",")} FROM ${quote(t.name)}`),
     ...ddl,
+    ...(customerNotifyOnly ? [`INSERT INTO ${guard} SELECT CASE WHEN EXISTS(SELECT 1 FROM orders WHERE whatsapp_opt_in != 0 OR whatsapp_opt_in_at IS NOT NULL OR whatsapp_opt_in_source IS NOT NULL) THEN 0 ELSE 1 END`] : []),
     { sql: "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)", args: [migration.hash, migration.when] },
     ...tables.map((t, i) => {
       const columns = t.columns.map(quote).join(","), before = quote(`${prefix}_${i}`), after = quote(t.name);
@@ -137,7 +148,7 @@ let writeTx;
 let rehearsal;
 let stage = "read remote snapshot";
 try {
-  // MCP and chat add only tables/indexes. A single read batch avoids holding an
+  // Additive migrations preserve original columns. A single read batch avoids holding an
   // interactive snapshot across several network round trips on a busy store.
   readTx = additiveOnly ? undefined : await client.transaction("read");
   const reader = readTx || client;

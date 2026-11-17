@@ -16,6 +16,7 @@ export default defineConfig({
       OUTBOUND_AUTOMATION_ENABLED: "false",
       BROWSER_SEND_ENABLED: "false",
       MIBESS_NOTIFY_ENABLED: "false",
+      MIBESS_NOTIFY_CUSTOMER_ENABLED: "false",
       MIBESS_NOTIFY_API_KEY: "",
       MIBESS_NOTIFY_BASE_URL: "",
     },
