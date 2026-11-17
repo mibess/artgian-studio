@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import StoreHeaderActions from "./StoreHeaderActions";
 import MobileMenu from "./MobileMenu";
+import HeaderSearch, { HeaderSearchFallback } from "./HeaderSearch";
 
 type BrandHeaderProps = {
   fixed?: boolean;
@@ -8,7 +10,8 @@ type BrandHeaderProps = {
 };
 
 // "Produtos" is the header's primary button, so the desktop nav lists the
-// quote link instead; the mobile menu carries every destination.
+// quote link instead; the menu carries every destination. The search box takes
+// the middle of the bar, so these text links only fit from the xl breakpoint.
 const navigation = [
   ["Personalizados", "/#personalizados"],
   ["Como funciona", "/#como-funciona"],
@@ -25,7 +28,10 @@ export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
         fixed ? "fixed" : "relative"
       }`}
     >
-      <div className="relative mx-auto flex max-w-7xl items-center justify-between overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/55 px-4 py-3 text-[#0b2447] shadow-[0_18px_60px_rgba(11,36,71,0.13),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-[#0b2447]/5 backdrop-blur-2xl sm:px-6">
+      <div
+        data-header-shell
+        className="relative mx-auto flex max-w-7xl items-center justify-between gap-2 overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/55 px-4 py-3 text-[#0b2447] shadow-[0_18px_60px_rgba(11,36,71,0.13),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-[#0b2447]/5 backdrop-blur-2xl sm:gap-4 sm:px-6"
+      >
         <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-white to-transparent" />
         <div className="pointer-events-none absolute -top-16 left-1/4 size-36 rounded-full bg-white/70 blur-3xl" />
 
@@ -43,8 +49,12 @@ export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
           </span>
         </Link>
 
+        <Suspense fallback={<HeaderSearchFallback />}>
+          <HeaderSearch />
+        </Suspense>
+
         <nav
-          className="relative z-10 hidden items-center gap-2 lg:flex"
+          className="relative z-10 hidden shrink-0 items-center gap-1 xl:flex"
           aria-label="Navegação principal"
         >
           {navigation.map(([label, href]) => (
@@ -58,10 +68,10 @@ export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
           ))}
         </nav>
 
-        <div className="flex items-center gap-1 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           <StoreHeaderActions />
           <Link
-            className="relative z-10 inline-flex items-center gap-2 rounded-full bg-[#0b2447] py-2.5 pr-2.5 pl-4 text-xs font-semibold text-[#fffdf8] shadow-lg shadow-[#0b2447]/15 transition hover:-translate-y-0.5 hover:bg-[#143866] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] sm:gap-3 sm:py-3 sm:pr-4 sm:pl-5 sm:text-sm"
+            className="relative z-10 hidden items-center gap-2 rounded-full min-[440px]:inline-flex bg-[#0b2447] py-2.5 pr-2.5 pl-4 text-xs font-semibold text-[#fffdf8] shadow-lg shadow-[#0b2447]/15 transition hover:-translate-y-0.5 hover:bg-[#143866] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] sm:gap-3 sm:py-3 sm:pr-4 sm:pl-5 sm:text-sm"
             href="/produtos"
           >
             Produtos

@@ -29,7 +29,7 @@ export default function MobileMenu({ links }: MobileMenuProps) {
     <>
       <button
         type="button"
-        className="relative z-10 grid size-11 place-items-center rounded-full transition hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] lg:hidden"
+        className="relative z-10 grid size-11 place-items-center rounded-full transition hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] xl:hidden"
         aria-label={open ? "Fechar menu" : "Abrir menu"}
         aria-expanded={open}
         aria-controls="menu-mobile"
@@ -40,7 +40,7 @@ export default function MobileMenu({ links }: MobileMenuProps) {
 
       {open &&
         createPortal(
-        <div className="fixed inset-0 z-40 lg:hidden" id="menu-mobile">
+        <div className="fixed inset-0 z-40 xl:hidden" id="menu-mobile">
           <button
             type="button"
             className="absolute inset-0 bg-[#0b2447]/25 backdrop-blur-sm"

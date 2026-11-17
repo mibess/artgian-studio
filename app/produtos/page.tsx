@@ -1,8 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { getPublicProductCatalog } from "../../lib/products/repository";
-import { formatBrl } from "../../lib/catalog";
+import {
+  normalizeSearch,
+  productSorts,
+  searchProducts,
+  sortProducts,
+  storefrontProducts,
+  type ProductSort,
+} from "../../lib/product-listing";
 import BrandHeader from "../components/BrandHeader";
+import ProductCard from "../components/ProductCard";
+import SortSelect from "./SortSelect";
 
 export const metadata: Metadata = {
   title: "Produtos | Artgian Studio",
@@ -25,145 +35,222 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function ProductsPage() {
-  const products = Object.values(await getPublicProductCatalog()).filter(p => p.listed).map((p,i) => ({...p,number:String(i+1).padStart(2,"0"),accent:p.presentation.accent,feature:p.customizable?"Personalizável":`${p.variants.length} opções`,price:p.pricingType==="quote"?"Sob orçamento":`${p.pricingType==="from"?"A partir de ":""}${formatBrl(p.pricingType==="from"?p.priceFromCents||0:p.basePriceCents||0)}`}));
+type Filters = { busca: string; categoria: string; ordem: ProductSort };
+
+function first(value: string | string[] | undefined) {
+  return (Array.isArray(value) ? value[0] : value) ?? "";
+}
+
+function listingHref({ busca, categoria, ordem }: Filters) {
+  const query = new URLSearchParams();
+  if (busca) query.set("busca", busca);
+  if (categoria) query.set("categoria", categoria);
+  if (ordem !== "destaques") query.set("ordem", ordem);
+  const search = query.toString();
+  return search ? `/produtos?${search}` : "/produtos";
+}
+
+const chip =
+  "inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b]";
+
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const ordemParam = first(params.ordem);
+  const busca = first(params.busca).trim().slice(0, 100);
+  const ordem: ProductSort = ordemParam in productSorts ? (ordemParam as ProductSort) : "destaques";
+
+  const catalog = storefrontProducts(Object.values(await getPublicProductCatalog()));
+  const found = busca ? searchProducts(catalog, busca) : catalog;
+  const categoryNames = [...new Set(catalog.map((p) => p.category).filter(Boolean))];
+  const categoria =
+    categoryNames.find((c) => normalizeSearch(c) === normalizeSearch(first(params.categoria))) ?? "";
+  // Chips refine the current search, so they only offer categories that still have results.
+  const chips = categoryNames.filter((c) => c === categoria || found.some((p) => p.category === c));
+  const products = sortProducts(
+    categoria ? found.filter((p) => p.category === categoria) : found,
+    ordem,
+  );
+  const filters = { busca, categoria, ordem };
+
   return (
-    <main className="min-h-screen overflow-hidden bg-[#f7f3ea] text-[#0b2447]">
-      <section className="relative overflow-hidden bg-[#0b2447] pb-28 text-[#f7f3ea]">
-        <div className="absolute -top-52 right-[-8rem] size-[42rem] rounded-full border-[7rem] border-[#d8bc7b]/10" />
-        <div className="absolute top-40 -left-24 size-72 rounded-full bg-[#b66f56]/15 blur-3xl" />
-        <BrandHeader />
+    <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
+      <BrandHeader fixed />
 
-        <div className="relative mx-auto max-w-[1440px] px-5 pt-20 sm:px-8 lg:px-14 lg:pt-28">
-          <div className="flex items-center gap-4 text-[0.65rem] font-bold uppercase tracking-[0.25em] text-[#d8bc7b]">
-            <span className="grid size-9 place-items-center rounded-full border border-current font-serif text-sm font-normal tracking-normal">
-              01
-            </span>
-            Coleção Artgian
-          </div>
-          <div className="mt-12 grid items-end gap-10 lg:grid-cols-[1.35fr_.65fr]">
-            <h1 className="max-w-5xl font-serif text-[clamp(4.2rem,9vw,9rem)] font-normal leading-[0.8] tracking-[-0.065em]">
-              Objetos com
-              <br />
-              <i className="font-normal text-[#d8bc7b]">algo a dizer.</i>
+      <section className="mx-auto max-w-[1600px] px-5 pt-28 pb-20 sm:px-8 sm:pt-36 lg:px-16 lg:pt-40 lg:pb-28">
+        <nav aria-label="Trilha de navegação" className="text-xs text-[#647087]">
+          <ol className="flex flex-wrap items-center gap-2">
+            <li>
+              <Link className="hover:text-[#0b2447]" href="/">
+                Início
+              </Link>
+            </li>
+            <li aria-hidden="true">/</li>
+            <li>
+              {busca || categoria ? (
+                <Link className="hover:text-[#0b2447]" href="/produtos">
+                  Produtos
+                </Link>
+              ) : (
+                <span aria-current="page" className="font-semibold text-[#0b2447]">
+                  Produtos
+                </span>
+              )}
+            </li>
+            {(busca || categoria) && (
+              <>
+                <li aria-hidden="true">/</li>
+                <li aria-current="page" className="font-semibold text-[#0b2447]">
+                  {busca ? "Busca" : categoria}
+                </li>
+              </>
+            )}
+          </ol>
+        </nav>
+
+        <header className="mt-5 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="font-serif text-[clamp(2.5rem,5vw,4.4rem)] leading-[0.95] font-normal tracking-[-0.05em] break-words">
+              {busca ? (
+                <>
+                  Resultados para{" "}
+                  <i className="font-normal text-[#b88a3b]">“{busca}”</i>
+                </>
+              ) : categoria ? (
+                <>
+                  {categoria}
+                  <i className="font-normal text-[#b88a3b]">.</i>
+                </>
+              ) : (
+                <>
+                  Todas as <i className="font-normal text-[#b88a3b]">peças.</i>
+                </>
+              )}
             </h1>
-            <div className="border-t border-[#d8bc7b]/30 pt-6">
-              <p className="max-w-sm text-sm leading-7 text-white/62">
-                Criações funcionais e decorativas produzidas camada por camada,
-                sempre sob encomenda e com espaço para a sua personalidade.
-              </p>
-              <div className="mt-7 flex gap-6 text-[0.62rem] font-bold uppercase tracking-[0.18em] text-[#d8bc7b]">
-                <span>Produção artesanal</span>
-                <span>Envio nacional</span>
-              </div>
-            </div>
+            <p className="mt-3 text-sm text-[#647087]">
+              {products.length} {products.length === 1 ? "peça" : "peças"} · Produzidas sob
+              encomenda
+              {busca && (
+                <>
+                  {" · "}
+                  <Link
+                    className="inline-flex items-center gap-1 font-semibold text-[#0b2447] underline decoration-[#b88a3b] underline-offset-4"
+                    href={listingHref({ ...filters, busca: "", categoria: "" })}
+                  >
+                    Limpar busca <X size={13} aria-hidden="true" />
+                  </Link>
+                </>
+              )}
+            </p>
           </div>
-        </div>
-      </section>
-
-      <section className="relative mx-auto max-w-[1500px] px-5 py-20 sm:px-8 lg:px-14 lg:py-28">
-        <header className="flex flex-col justify-between gap-8 border-b border-[#0b2447]/15 pb-8 sm:flex-row sm:items-end">
-          <div>
-            <span className="text-[0.65rem] font-bold uppercase tracking-[0.24em] text-[#b88a3b]">
-              Criações disponíveis
-            </span>
-            <h2 className="mt-3 font-serif text-[clamp(3rem,5vw,5rem)] font-normal leading-none tracking-[-0.05em]">
-              Escolha a sua.
-            </h2>
-          </div>
-          <p className="max-w-sm text-sm leading-6 text-[#647087]">
-            Cada produto tem sua própria página, opções e detalhes de
-            personalização.
-          </p>
+          {products.length > 1 && (
+            <SortSelect
+              options={Object.entries(productSorts).map(([value, label]) => ({
+                value,
+                label,
+                href: listingHref({ ...filters, ordem: value as ProductSort }),
+              }))}
+              value={ordem}
+            />
+          )}
         </header>
 
-        <div className="mt-14 grid gap-x-8 gap-y-16 md:grid-cols-2 lg:grid-cols-3">
-          {products.map((product) => (
-            <article className="group flex flex-col" key={product.name}>
+        {chips.length > 1 && (
+          <nav
+            aria-label="Filtrar por categoria"
+            className="-mx-5 mt-8 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+          >
+            <Link
+              aria-current={!categoria ? "page" : undefined}
+              className={`${chip} ${
+                !categoria
+                  ? "border-[#0b2447] bg-[#0b2447] text-[#fffdf8]"
+                  : "border-[#0b2447]/15 bg-white/50 hover:border-[#0b2447]/35 hover:bg-white"
+              }`}
+              href={listingHref({ ...filters, categoria: "" })}
+              scroll={false}
+            >
+              Todas
+            </Link>
+            {chips.map((name) => {
+              const selected = name === categoria;
+              return (
+                <Link
+                  aria-current={selected ? "page" : undefined}
+                  className={`${chip} ${
+                    selected
+                      ? "border-[#0b2447] bg-[#0b2447] text-[#fffdf8]"
+                      : "border-[#0b2447]/15 bg-white/50 hover:border-[#0b2447]/35 hover:bg-white"
+                  }`}
+                  href={listingHref({ ...filters, categoria: selected ? "" : name })}
+                  key={name}
+                  scroll={false}
+                >
+                  {name}
+                  {selected && <X size={14} aria-hidden="true" />}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
+
+        {products.length ? (
+          <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:mt-10 lg:gap-y-12 xl:grid-cols-4">
+            {products.map((product, index) => (
+              <ProductCard eager={index < 4} key={product.id} product={product} />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-10 rounded-[1.75rem] border border-dashed border-[#0b2447]/20 bg-white/40 px-6 py-16 text-center">
+            <p className="font-serif text-3xl leading-tight">Nenhuma peça encontrada.</p>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#647087]">
+              Tente outro termo ou outra categoria. Se a peça ainda não existe,
+              podemos criá-la sob medida para você.
+            </p>
+            <div className="mt-7 flex flex-wrap justify-center gap-3">
               <Link
-                className="relative aspect-[4/5] overflow-hidden rounded-[1.8rem] bg-[#e9dfcf] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b88a3b]"
-                href={product.href}
+                className="inline-flex h-11 items-center rounded-full border border-[#0b2447]/20 bg-white/60 px-5 text-sm font-semibold hover:bg-white"
+                href="/produtos"
               >
-                <img
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-[1.025]"
-                  src={product.image}
-                  alt={product.alt}
-                />
-                <span className="absolute top-4 left-4 rounded-full border border-white/45 bg-white/65 px-3 py-2 text-[0.58rem] font-bold uppercase tracking-[0.16em] shadow-sm backdrop-blur-xl">
-                  {product.feature}
-                </span>
-                <span className="absolute right-4 bottom-4 grid size-12 translate-y-2 place-items-center rounded-full bg-[#0b2447] text-xl text-white opacity-0 shadow-xl transition group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                  ↗
+                Ver todas as peças
+              </Link>
+              <Link
+                className="inline-flex h-11 items-center gap-3 rounded-full bg-[#0b2447] pr-2 pl-5 text-sm font-semibold text-white hover:bg-[#143866]"
+                href="/#personalizados"
+              >
+                Pedir peça personalizada
+                <span className="grid size-7 place-items-center rounded-full bg-[#d8bc7b] text-[#0b2447]" aria-hidden="true">
+                  →
                 </span>
               </Link>
-
-              <div className="mt-6 flex items-center justify-between gap-4">
-                <span
-                  className="text-[0.62rem] font-bold uppercase tracking-[0.18em]"
-                  style={{ color: product.accent }}
-                >
-                  {product.number} / {product.category}
-                </span>
-                <span className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-[#647087]">
-                  Sob encomenda
-                </span>
-              </div>
-              <h2 className="mt-3 font-serif text-3xl font-normal tracking-[-0.03em]">
-                <Link href={product.href}>{product.name}</Link>
-              </h2>
-              <p className="mt-3 min-h-18 text-sm leading-6 text-[#647087]">
-                {product.description}
-              </p>
-              <div className="mt-6 flex items-end justify-between border-t border-[#0b2447]/12 pt-5">
-                <div>
-                  <span className="text-[0.55rem] font-bold uppercase tracking-[0.18em] text-[#647087]">
-                    A partir de
-                  </span>
-                  <strong className="mt-1 block font-serif text-2xl font-normal">
-                    {product.price}
-                  </strong>
-                </div>
-                <Link
-                  className="inline-flex items-center gap-3 border-b border-[#b88a3b] pb-1 text-xs font-semibold"
-                  href={product.href}
-                >
-                  Ver produto <span className="text-lg text-[#b88a3b]">→</span>
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
+            </div>
+          </div>
+        )}
       </section>
 
-      <section className="mx-3 mb-3 overflow-hidden rounded-[2.2rem] bg-[#d8bc7b] px-6 py-16 sm:px-12 lg:px-[7vw] lg:py-24">
-        <div className="grid items-end gap-10 lg:grid-cols-[1.25fr_.75fr]">
+      <section className="mx-3 sm:mx-5">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-6 rounded-[2rem] bg-[#ebe4d8] px-6 py-10 sm:px-12 lg:flex-row lg:items-center lg:justify-between lg:px-16">
           <div>
-            <span className="text-[0.65rem] font-bold uppercase tracking-[0.24em]">
-              Não encontrou o que imaginou?
+            <span className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-[#b88a3b]">
+              Sob medida
             </span>
-            <h2 className="mt-5 font-serif text-[clamp(3.2rem,6vw,6.5rem)] font-normal leading-[.88] tracking-[-0.055em]">
-              Então criamos
-              <br />
-              <i className="font-normal text-[#fffaf4]">algo só seu.</i>
+            <h2 className="mt-3 font-serif text-[clamp(1.9rem,3vw,2.8rem)] leading-[1.02] font-normal tracking-[-0.04em]">
+              Não encontrou o que imaginou?{" "}
+              <i className="font-normal text-[#b88a3b]">Criamos algo só seu.</i>
             </h2>
           </div>
-          <div className="rounded-[1.5rem] border border-white/45 bg-white/35 p-6 backdrop-blur-xl sm:p-8">
-            <p className="text-sm leading-6">
-              Conte a sua ideia, escolha as dimensões e participe das decisões
-              até a peça ficar do seu jeito.
-            </p>
-            <Link
-              className="mt-7 flex items-center justify-between rounded-full bg-[#0b2447] py-2 pr-2 pl-5 text-sm font-semibold text-white"
-              href="/#orcamento"
-            >
-              Pedir um projeto personalizado
-              <span className="grid size-10 place-items-center rounded-full bg-[#d8bc7b] text-xl text-[#0b2447]">
-                →
-              </span>
-            </Link>
-          </div>
+          <Link
+            className="inline-flex w-fit shrink-0 items-center gap-4 rounded-full bg-[#0b2447] py-2 pr-2 pl-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#143866]"
+            href="/#personalizados"
+          >
+            Pedir peça personalizada
+            <span className="grid size-9 place-items-center rounded-full bg-[#d8bc7b] text-lg text-[#0b2447]" aria-hidden="true">
+              →
+            </span>
+          </Link>
         </div>
       </section>
 
