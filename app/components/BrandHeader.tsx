@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import StoreHeaderActions from "./StoreHeaderActions";
-import MobileMenu from "./MobileMenu";
+import MobileMenu, { type MenuLink } from "./MobileMenu";
 import HeaderSearch, { HeaderSearchFallback } from "./HeaderSearch";
 
 type BrandHeaderProps = {
@@ -19,7 +19,13 @@ const navigation = [
   ["Orçamento", "/#orcamento"],
 ] as const;
 
-const mobileNavigation = [["Produtos", "/produtos"], ...navigation] as const;
+const menuLinks: MenuLink[] = [
+  { label: "Produtos", href: "/produtos", description: "Todas as peças da loja", icon: "loja" },
+  { label: "Personalizados", href: "/#personalizados", description: "Peças criadas sob medida", icon: "personalizados" },
+  { label: "Como funciona", href: "/#como-funciona", description: "Da ideia à entrega", icon: "processo" },
+  { label: "Sobre", href: "/#sobre", description: "Nossa essência", icon: "essencia" },
+  { label: "Orçamento", href: "/#orcamento", description: "Conte a sua ideia", icon: "contato" },
+];
 
 export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
   return (
@@ -82,7 +88,7 @@ export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
               ↗
             </span>
           </Link>
-          <MobileMenu links={mobileNavigation} />
+          <MobileMenu links={menuLinks} />
         </div>
       </div>
     </header>
