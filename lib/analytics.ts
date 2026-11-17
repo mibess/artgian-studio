@@ -22,6 +22,7 @@ declare global {
 const PUBLIC_PAGES: Record<string, string> = {
   "/": "Artgian Studio",
   "/produtos": "Produtos | Artgian Studio",
+  "/personalizados": "Personalizados | Artgian Studio",
   "/carrinho": "Carrinho | Artgian Studio",
   "/politica-de-privacidade": "Política de Privacidade | Artgian Studio",
   "/exclusao-de-dados": "Exclusão de dados | Artgian Studio",

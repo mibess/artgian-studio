@@ -91,3 +91,110 @@ select {
   border-radius: 999px;
   background: rgba(117, 133, 140, 0.35);
 }
+
+/* Printing logo: the monogram fills in from the bottom like a 3D print.
+   A faint copy shows the model; a thin gold print line rises with the fill,
+   and the nozzle glint glides along it. Everything eases, nothing jumps. */
+.print-logo {
+  --print-cycle: 3.2s;
+  --print-ease: cubic-bezier(0.45, 0.05, 0.3, 1);
+  position: relative;
+  display: inline-block;
+  aspect-ratio: 507 / 640;
+  pointer-events: none;
+  user-select: none;
+}
+
+.print-logo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.print-ghost {
+  opacity: 0.14;
+  filter: grayscale(0.5);
+}
+
+/* Reveal 0–62%, hold the finished mark, then let it fade before the next pass. */
+.print-printed {
+  clip-path: inset(100% 0 0 0);
+  animation:
+    print-reveal var(--print-cycle) var(--print-ease) infinite,
+    print-fade var(--print-cycle) ease-in-out infinite;
+}
+
+.print-front {
+  position: absolute;
+  inset: 0 -10%;
+  display: block;
+  animation:
+    print-rise var(--print-cycle) var(--print-ease) infinite,
+    print-front-fade var(--print-cycle) ease-in-out infinite;
+}
+
+.print-line {
+  position: absolute;
+  inset: 0 0 auto;
+  display: block;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(216 188 123 / 0.85) 18%, #f0c568 50%, rgb(216 188 123 / 0.85) 82%, transparent);
+  box-shadow: 0 0 4px rgb(240 197 104 / 0.55);
+}
+
+.print-nozzle {
+  position: absolute;
+  top: -1.5px;
+  left: 8%;
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #fff3cf;
+  box-shadow: 0 0 4px 1px rgb(240 197 104 / 0.6);
+  animation: print-glide 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes print-reveal {
+  0% { clip-path: inset(100% 0 0 0); }
+  62%, 100% { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes print-rise {
+  0% { transform: translateY(100%); }
+  62%, 100% { transform: translateY(0); }
+}
+
+@keyframes print-fade {
+  0%, 82% { opacity: 1; }
+  96%, 100% { opacity: 0; }
+}
+
+@keyframes print-front-fade {
+  0% { opacity: 0; }
+  8%, 56% { opacity: 1; }
+  66%, 100% { opacity: 0; }
+}
+
+@keyframes print-glide {
+  from { left: 8%; }
+  to { left: calc(92% - 4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .print-printed {
+    clip-path: none;
+    animation: print-breathe 1.6s ease-in-out infinite alternate;
+  }
+
+  .print-front {
+    display: none;
+  }
+
+  @keyframes print-breathe {
+    from { opacity: 0.45; }
+    to { opacity: 1; }
+  }
+}

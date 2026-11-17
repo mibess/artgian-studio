@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
-import { getPublicProductCatalog } from "../lib/products/repository";
-import { formatBrl } from "../lib/catalog";
 import Link from "next/link";
 import Image from "next/image";
+import { Layers, PenLine, ShieldCheck, Truck } from "lucide-react";
+import { getPublicProductCatalog } from "../lib/products/repository";
+import { formatBrl } from "../lib/catalog";
+import { productPrice, storefrontProducts } from "../lib/product-listing";
 import BrandHeader from "./components/BrandHeader";
+import ProductCard from "./components/ProductCard";
+import ScrollToHash from "./components/ScrollToHash";
 import { organizationStructuredData, serializeStructuredData } from "../lib/structured-data";
 
 export const metadata: Metadata = {
@@ -17,364 +21,313 @@ const sectionNumber =
 const serifTitle =
   "font-serif font-normal leading-[0.92] tracking-[-0.055em]";
 
-const steps = [
-  ["01", "Você imagina", "Sua ideia, seu propósito."],
-  ["02", "Projetamos juntos", "Do conceito ao detalhe."],
-  ["03", "Produzimos com precisão", "Impressão 3D de alta fidelidade."],
-  ["04", "Entregamos memórias", "Peças únicas, feitas para durar."],
-];
+const assurances = [
+  [Layers, "Feito sob encomenda", "Impresso camada por camada"],
+  [PenLine, "Peças personalizadas", "Projetos sob medida"],
+  [Truck, "Envio para todo o Brasil", "Frete calculado ao finalizar"],
+  [ShieldCheck, "Pagamento seguro", "Pix, cartão ou boleto"],
+] as const;
+
+const customSteps = [
+  ["Conte a sua ideia", "Envie uma referência, um desenho ou explique o que imaginou."],
+  ["Ajustamos o projeto", "Definimos medidas, cores e acabamento antes de produzir."],
+  ["Produzimos e enviamos", "Sua peça é impressa, revisada e embalada com cuidado."],
+] as const;
+
+const values = [
+  ["◇", "Criação próxima", "Você participa das escolhas para que o resultado tenha a sua identidade."],
+  ["✦", "Detalhe visível", "Cada camada faz parte da estética e recebe atenção até o acabamento."],
+  ["○", "Feito para durar", "Materiais selecionados e produção consciente, sem excessos."],
+] as const;
+
+// The shelf fills whole rows: on phones an odd count widens the first card, and on
+// the four-column desktop grid the first cards grow so the last row is never short.
+function cardLayout(index: number, count: number) {
+  const mobileWide = index === 0 && count % 2 === 1;
+  const remainder = count % 4;
+  const desktop =
+    index === 0 && remainder === 1 && count > 1
+      ? "feature"
+      : (index === 0 && remainder === 3) || (index < 2 && remainder === 2)
+        ? "wide"
+        : "regular";
+  const span = [
+    mobileWide && "col-span-2",
+    desktop === "feature" && "lg:col-span-2 lg:row-span-2",
+    desktop === "wide" && "lg:col-span-2",
+  ];
+  // Wide and featured tiles stretch to the row height set by the regular cards.
+  const frame = [
+    mobileWide ? "aspect-[5/4] sm:aspect-[16/10]" : "aspect-[4/5]",
+    desktop === "feature" && "lg:aspect-auto lg:min-h-[30rem] lg:flex-1",
+    desktop === "wide" && "lg:aspect-auto lg:min-h-[22rem] lg:flex-1",
+    desktop === "regular" && mobileWide && "lg:aspect-[4/5]",
+  ];
+  return {
+    span: span.filter(Boolean).join(" "),
+    frame: frame.filter(Boolean).join(" "),
+    // Stretched tiles give the spare height to the photo, not to the caption.
+    caption: desktop === "regular" ? "flex-1" : "flex-1 lg:flex-none",
+    feature: desktop === "feature",
+  };
+}
 
 export default async function Home() {
-  const projects=Object.values(await getPublicProductCatalog()).filter(p=>p.featured&&p.listed).map((p,i)=>({...p,number:String(i+1).padStart(2,"0"),title:p.name,position:"object-center",price:p.pricingType==="quote"?"Sob orçamento":`${p.pricingType==="from"?"A partir de ":""}${formatBrl(p.pricingType==="from"?p.priceFromCents||0:p.basePriceCents||0)}`}));
+  const products = storefrontProducts(Object.values(await getPublicProductCatalog()));
+  const startingCents = products
+    .map((p) => productPrice(p).cents)
+    .filter((cents): cents is number => typeof cents === "number" && cents > 0);
+  const startingPrice = startingCents.length ? formatBrl(Math.min(...startingCents)) : null;
+
   return (
     <main className="min-h-screen overflow-hidden bg-[#f7f3ea] text-[#0b2447]">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeStructuredData(organizationStructuredData) }}
       />
+      <ScrollToHash />
       <BrandHeader fixed />
 
       <section
-        className="relative mx-auto min-h-screen max-w-[1600px] px-5 pt-32 pb-12 sm:px-8 sm:pt-44 lg:px-16"
+        className="mx-auto max-w-[1600px] px-5 pt-28 sm:px-8 sm:pt-36 lg:px-16 lg:pt-40"
         id="inicio"
       >
-        <div className="relative z-10 inline-flex items-center gap-3 rounded-full border border-[#b88a3b]/70 bg-[#fffdf8]/60 px-4 py-2 text-xs font-semibold text-[#9b702a] backdrop-blur-sm sm:ml-[3%] sm:text-sm">
-          Impressão 3D <i className="size-1 rounded-full bg-[#b88a3b]" /> Feito
-          sob medida
-        </div>
-
-        <h1
-          className={`${serifTitle} relative z-10 mt-7 max-w-6xl text-[clamp(3rem,8.5vw,8.4rem)]`}
-        >
-          Ideias ganham{" "}
-          <span className="text-transparent [-webkit-text-stroke:1.2px_#0b2447]">
-            forma.
-          </span>{" "}
-          Detalhes
-          <strong className="block font-normal sm:ml-[18%]">
-            viram memória.
-          </strong>
-        </h1>
-
-        <div className="relative mt-10 lg:-mt-12 lg:ml-[8%]">
-          <div className="relative h-[24rem] overflow-hidden rounded-[2rem] bg-[#e9dfcf] shadow-[0_30px_80px_rgba(11,36,71,0.12)] sm:h-[38rem] lg:h-[42rem]">
-            <Image
-              fill
-              sizes="(max-width: 1023px) 100vw, (max-width: 1600px) 85vw, 1355px"
-              loading="eager"
-              fetchPriority="high"
-              className="h-full w-full object-cover object-center mix-blend-multiply transition duration-700 hover:scale-[1.015]"
-              src="/hero-gallery.png"
-              alt="Chaveiro de ursinho, escultura, luminária e miniatura impressos em 3D"
-            />
+        <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,.92fr)_minmax(0,1.08fr)] lg:gap-14">
+          <div>
+            <div className="inline-flex items-center gap-3 rounded-full border border-[#b88a3b]/70 bg-[#fffdf8]/60 px-4 py-2 text-xs font-semibold text-[#9b702a] sm:text-sm">
+              Impressão 3D <i className="size-1 rounded-full bg-[#b88a3b]" /> Feito
+              sob medida
+            </div>
+            <h1 className={`${serifTitle} mt-6 text-[clamp(2.9rem,5.6vw,5.6rem)]`}>
+              Ideias ganham{" "}
+              <span className="text-transparent [-webkit-text-stroke:1.2px_#0b2447]">
+                forma.
+              </span>
+              <span className="block">
+                Detalhes{" "}
+                <i className="font-normal text-[#b88a3b]">viram memória.</i>
+              </span>
+            </h1>
+            <p className="mt-6 max-w-md text-[0.95rem] leading-7 text-[#647087]">
+              Decoração, organização e presentes impressos em 3D. Escolha uma
+              peça da loja ou crie algo só seu.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-4">
+              <a
+                className="inline-flex items-center gap-5 rounded-full bg-[#0b2447] py-3 pr-3 pl-6 text-sm font-semibold text-[#fffdf8] shadow-lg shadow-[#0b2447]/15 transition hover:-translate-y-0.5 hover:bg-[#143866] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b88a3b]"
+                href="#produtos"
+              >
+                Comprar agora
+                <span className="grid size-9 place-items-center rounded-full bg-[#d8bc7b] text-lg text-[#0b2447]" aria-hidden="true">
+                  →
+                </span>
+              </a>
+              <Link
+                className="inline-flex items-center gap-3 border-b border-[#b88a3b]/70 pb-1 text-sm font-semibold transition hover:text-[#9b702a]"
+                href="/personalizados"
+              >
+                Criar peça personalizada <b className="text-[#b88a3b]">→</b>
+              </Link>
+            </div>
           </div>
 
-          <a
-            className="absolute -bottom-6 left-5 grid size-32 place-content-center rounded-full border border-white/50 bg-[linear-gradient(145deg,rgba(216,188,123,.96),rgba(184,135,50,.92))] text-center font-serif text-lg leading-tight shadow-[0_18px_50px_rgba(87,59,18,.25)] backdrop-blur-xl transition hover:-rotate-3 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0b2447] sm:left-[38%] sm:size-40 sm:text-xl"
-            href="#produtos"
-          >
-            <span className="text-2xl" aria-hidden="true">
-              ◇
-            </span>
-            Ver
-            <br />
-            produtos
-          </a>
-          <div className="absolute top-1/2 right-5 hidden flex-col items-center gap-2 rounded-full border border-white/60 bg-white/45 px-3 py-5 font-serif text-lg backdrop-blur-xl sm:flex">
-            <b className="font-normal">01</b>
-            <i className="h-8 w-px rotate-[35deg] bg-[#b88a3b]" />
-            <span>03</span>
+          <div className="relative">
+            <div className="relative h-[17rem] overflow-hidden rounded-[2rem] bg-[#e9dfcf] shadow-[0_30px_80px_rgba(11,36,71,0.12)] sm:h-[30rem] lg:h-[36rem]">
+              <Image
+                fill
+                sizes="(max-width: 1023px) 100vw, 55vw"
+                loading="eager"
+                fetchPriority="high"
+                className="object-cover object-center mix-blend-multiply"
+                src="/hero-gallery.png"
+                alt="Chaveiro de ursinho, escultura, luminária e miniatura impressos em 3D"
+              />
+            </div>
+            <a
+              className="absolute -bottom-5 left-5 grid size-28 place-content-center rounded-full border border-white/50 bg-[linear-gradient(145deg,rgba(216,188,123,.96),rgba(184,135,50,.92))] text-center font-serif text-base leading-tight shadow-[0_18px_50px_rgba(87,59,18,.25)] backdrop-blur-xl transition hover:-rotate-3 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0b2447] sm:left-8 sm:size-36 sm:text-lg"
+              href="#produtos"
+            >
+              <span className="text-xl" aria-hidden="true">
+                ◇
+              </span>
+              Ver
+              <br />
+              produtos
+            </a>
+            {startingPrice && (
+              <span className="absolute top-4 right-4 rounded-2xl border border-white/60 bg-white/55 px-4 py-3 text-right shadow-lg backdrop-blur-xl sm:top-6 sm:right-6">
+                <span className="block text-[0.55rem] font-bold uppercase tracking-[0.18em] text-[#647087]">
+                  Peças a partir de
+                </span>
+                <b className="font-serif text-xl font-normal sm:text-2xl">{startingPrice}</b>
+              </span>
+            )}
           </div>
         </div>
 
-        <div
-          className="mt-20 grid gap-7 border-t border-[#b88a3b]/40 pt-8 sm:grid-cols-2 lg:grid-cols-4"
-          aria-label="Etapas do processo"
+        <ul
+          className="mt-12 grid grid-cols-2 gap-x-4 gap-y-4 border-y border-[#b88a3b]/30 py-5 sm:gap-x-5 sm:gap-y-6 sm:py-6 lg:mt-16 lg:grid-cols-4"
+          aria-label="Por que comprar na Artgian"
         >
-          {steps.map(([number, title, description]) => (
-            <article className="flex gap-4" key={number}>
-              <b className="font-serif text-lg font-normal text-[#b88a3b]">
-                {number}
-              </b>
-              <div>
-                <strong className="text-xs">{title}</strong>
-                <span className="mt-1 block text-[0.68rem] text-[#657086]">
+          {assurances.map(([Icon, title, description]) => (
+            <li className="flex items-center gap-2.5 sm:items-start sm:gap-3" key={title}>
+              <Icon className="shrink-0 text-[#b88a3b] sm:mt-0.5" size={20} strokeWidth={1.6} aria-hidden="true" />
+              <span>
+                <strong className="block text-xs leading-snug sm:text-sm">{title}</strong>
+                <span className="mt-0.5 hidden text-xs text-[#647087] sm:block">
                   {description}
                 </span>
-              </div>
-            </article>
+              </span>
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
 
       <section
-        className="mx-auto max-w-[1600px] scroll-mt-28 px-5 py-20 sm:px-8 lg:px-16 lg:py-32"
+        className="mx-auto max-w-[1600px] scroll-mt-28 px-5 pt-12 pb-20 sm:px-8 sm:pt-16 lg:px-16 lg:pt-20 lg:pb-28"
         id="produtos"
       >
-        <header className="grid items-end gap-8 lg:grid-cols-[.8fr_1.25fr_.7fr]">
-          <div className={sectionLabel}>
-            <span className={sectionNumber}>02</span> Criações em destaque
+        <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className={sectionLabel}>
+              <span className={sectionNumber}>01</span> Loja Artgian
+            </div>
+            <h2 className={`${serifTitle} mt-6 text-[clamp(2.7rem,5vw,4.8rem)]`}>
+              Escolha a <i className="font-normal text-[#b88a3b]">sua peça.</i>
+            </h2>
           </div>
-          <h2 className={`${serifTitle} text-[clamp(3.2rem,6vw,6rem)]`}>
-            Uma galeria de
-            <br />
-            <i className="font-normal text-[#b88a3b]">possibilidades.</i>
-          </h2>
-          <p className="max-w-sm text-sm leading-7 text-[#647087]">
-            Peças decorativas, presentes, miniaturas e soluções funcionais
-            feitas camada por camada.
-          </p>
-        </header>
-
-        <div className="mt-12 grid grid-cols-2 gap-x-4 gap-y-10 sm:mt-16 sm:gap-8 md:grid-cols-3">
-          {projects.map((project, index) => {
-            // On the two-column phone grid, an odd count would leave one card alone,
-            // so the first product spans the full width instead.
-            const wide = index === 0 && projects.length % 2 === 1;
-            return (
-            <a className={`group block ${wide ? "col-span-2 md:col-span-1" : ""}`} href={project.href} key={project.number}>
-              <div className={`${wide ? "aspect-[5/4] md:aspect-[4/5]" : "aspect-[4/5]"} overflow-hidden rounded-[1.5rem] bg-[#e9dfcf]`}>
-                <img
-                  loading="lazy"
-                  decoding="async"
-                  className={`h-full w-full object-cover ${project.position} transition duration-700 ease-out group-hover:scale-105`}
-                  src={project.image}
-                  alt={project.alt}
-                />
-              </div>
-              <span className="mt-4 block text-[0.6rem] font-bold uppercase tracking-[0.18em] text-[#b88a3b] sm:mt-5 sm:text-[0.65rem]">
-                {project.number} / {project.category}
-              </span>
-              <h3 className="mt-2 max-w-sm font-serif text-lg leading-tight font-normal sm:text-2xl">
-                {project.title}
-              </h3>
-              <strong className="mt-2 block text-sm font-semibold sm:text-base">
-                {project.price}
-              </strong>
-              <span className="mt-3 inline-flex items-center gap-3 border-b border-[#b88a3b]/60 pb-1 text-xs font-semibold transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-visible:opacity-100">
-                Ver produto{" "}
-                <b className="text-[#b88a3b]">→</b>
-              </span>
-            </a>
-            );
-          })}
-        </div>
-        <div className="mt-14 flex justify-center">
           <Link
-            className="inline-flex items-center gap-5 rounded-full border border-[#0b2447]/20 bg-white/45 py-3 pr-3 pl-6 text-sm font-semibold transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg"
+            className="inline-flex w-fit items-center gap-4 rounded-full border border-[#0b2447]/20 bg-white/45 py-2 pr-2 pl-5 text-sm font-semibold transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg"
             href="/produtos"
           >
-            Ver catálogo completo
-            <span className="grid size-9 place-items-center rounded-full bg-[#0b2447] text-lg text-white">
+            Ver todos os produtos
+            <span className="grid size-8 place-items-center rounded-full bg-[#0b2447] text-white" aria-hidden="true">
               →
             </span>
           </Link>
+        </header>
+
+        {products.length ? (
+          <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 lg:mt-12 lg:grid-cols-4 lg:gap-y-12">
+            {products.map((product, index) => {
+              const layout = cardLayout(index, products.length);
+              return (
+                <ProductCard
+                  caption={layout.caption}
+                  className={layout.span}
+                  eager={index < 3}
+                  feature={layout.feature}
+                  frame={layout.frame}
+                  key={product.id}
+                  product={product}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-10 rounded-[1.5rem] border border-[#0b2447]/10 bg-white/50 p-8 text-sm text-[#647087]">
+            Novas criações chegam em breve. Enquanto isso, conte para nós o que
+            você imaginou.
+          </p>
+        )}
+      </section>
+
+      <section className="mx-3 scroll-mt-24 sm:mx-5" id="personalizados">
+        <div className="mx-auto grid max-w-[1600px] overflow-hidden rounded-[2rem] bg-[#ebe4d8] lg:grid-cols-[.85fr_1.15fr]">
+          <div className="relative min-h-[22rem] sm:min-h-[30rem] lg:min-h-full">
+            <Image
+              fill
+              sizes="(max-width: 1023px) 100vw, 42vw"
+              className="object-cover"
+              src="/personalized-gifts.png"
+              alt="Presentes personalizados produzidos pela Artgian Studio"
+            />
+            <span className="absolute right-5 bottom-5 rounded-2xl border border-white/50 bg-white/45 px-5 py-4 font-serif text-lg leading-snug shadow-lg backdrop-blur-xl">
+              Feito especialmente
+              <br />
+              para alguém.
+            </span>
+          </div>
+
+          <div className="px-6 py-14 sm:px-12 lg:px-[5vw] lg:py-20">
+            <div className={sectionLabel}>
+              <span className={sectionNumber}>02</span> Sob medida
+            </div>
+            <h2 className={`${serifTitle} mt-8 text-[clamp(2.7rem,4.6vw,4.8rem)]`}>
+              Não encontrou?{" "}
+              <i className="font-normal text-[#b88a3b]">Criamos algo só seu.</i>
+            </h2>
+            <p className="mt-6 max-w-xl text-sm leading-7 text-[#647087]">
+              Lembranças para eventos, presentes com nomes e frases, protótipos
+              e decoração sob medida. Cada projeto começa com uma conversa.
+            </p>
+
+            <ol
+              className="mt-10 grid scroll-mt-32 gap-6 border-t border-[#0b2447]/15 pt-8 sm:grid-cols-3"
+              id="como-funciona"
+              aria-label="Como funciona"
+            >
+              {customSteps.map(([title, description], index) => (
+                <li key={title}>
+                  <span className="font-serif text-lg text-[#b88a3b]">0{index + 1}</span>
+                  <h3 className="mt-2 font-serif text-xl leading-tight">{title}</h3>
+                  <p className="mt-2 text-xs leading-5 text-[#647087]">{description}</p>
+                </li>
+              ))}
+            </ol>
+
+            {/* The full story, ideas and quote form live on /personalizados. */}
+            <div className="mt-10 flex scroll-mt-40 flex-wrap items-center gap-x-7 gap-y-4" id="orcamento">
+              <Link
+                href="/personalizados#orcamento"
+                className="inline-flex w-fit items-center gap-5 rounded-full bg-[#0b2447] py-3 pr-3 pl-6 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b88a3b]"
+              >
+                Montar meu pedido
+                <span className="grid size-9 place-items-center rounded-full bg-[#d8bc7b] text-lg text-[#0b2447]" aria-hidden="true">
+                  →
+                </span>
+              </Link>
+              <Link
+                className="inline-flex items-center gap-3 border-b border-[#b88a3b]/70 pb-1 text-sm font-semibold transition hover:text-[#9b702a]"
+                href="/personalizados"
+              >
+                Ver ideias e dúvidas <b className="text-[#b88a3b]">→</b>
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
       <section
-        className="bg-[#0b2447] px-5 py-24 text-[#f7f3ea] sm:px-10 lg:px-[8vw] lg:py-32"
+        className="mt-20 bg-[#0b2447] px-5 py-20 text-[#f7f3ea] sm:px-10 lg:mt-28 lg:px-[8vw] lg:py-24"
         id="sobre"
       >
-        <div className={`${sectionLabel} text-[#d8bc7b]`}>
-          <span className={sectionNumber}>03</span> Nossa essência
-        </div>
-        <p className="mt-16 ml-auto max-w-sm text-sm leading-7 text-[#b8c1cf]">
-          Entre o que você imagina e o que pode tocar, existe um processo.
-        </p>
-        <h2
-          className={`${serifTitle} mt-4 max-w-6xl text-[clamp(3.5rem,8vw,8rem)]`}
-        >
-          Transformamos o extraordinário em{" "}
-          <em className="font-normal text-[#d8bc7b]">forma.</em>
-        </h2>
-        <div className="mt-16 flex flex-col justify-between gap-8 border-t border-[#d8bc7b]/30 pt-8 sm:flex-row">
-          <p className="max-w-md text-base leading-7">
-            Unimos desenho, tecnologia e acabamento cuidadoso para criar objetos
-            que carregam significado.
-          </p>
-          <span className="font-serif text-lg leading-7 text-[#d8bc7b] sm:text-right">
-            Precisão no processo.
-            <br />
-            Personalidade no resultado.
-          </span>
-        </div>
-      </section>
-
-      <section
-        className="grid bg-[#ebe4d8] lg:grid-cols-2"
-        id="personalizados"
-      >
-        <div className="relative min-h-[34rem] overflow-hidden lg:min-h-[48rem]">
-          <Image
-            fill
-            sizes="(max-width: 1023px) 100vw, 50vw"
-            className="absolute inset-0 h-full w-full object-cover"
-            src="/personalized-gifts.png"
-            alt="Presentes personalizados produzidos pela Artgian Studio"
-          />
-          <span className="absolute right-5 bottom-5 rounded-2xl border border-white/50 bg-white/45 px-5 py-4 font-serif text-lg shadow-lg backdrop-blur-xl sm:right-8 sm:bottom-8">
-            Feito especialmente
-            <br />
-            para alguém.
-          </span>
-        </div>
-        <div className="flex flex-col justify-center px-5 py-20 sm:px-12 lg:px-[7vw]">
-          <div className={sectionLabel}>
-            <span className={sectionNumber}>04</span> Personalizados
+        <div className="mx-auto grid max-w-[1600px] items-end gap-12 lg:grid-cols-[1.15fr_1fr]">
+          <div>
+            <div className={`${sectionLabel} text-[#d8bc7b]`}>
+              <span className={sectionNumber}>03</span> Nossa essência
+            </div>
+            <h2 className={`${serifTitle} mt-8 text-[clamp(2.8rem,5.4vw,5.6rem)]`}>
+              Transformamos o extraordinário em{" "}
+              <em className="font-normal text-[#d8bc7b]">forma.</em>
+            </h2>
+            <p className="mt-6 max-w-md font-serif text-lg leading-7 text-[#d8bc7b]">
+              Precisão no processo. Personalidade no resultado.
+            </p>
           </div>
-          <h2 className={`${serifTitle} mt-10 text-[clamp(3.1rem,5vw,5.8rem)]`}>
-            Não é apenas um objeto.{" "}
-            <i className="font-normal text-[#b88a3b]">É a sua ideia.</i>
-          </h2>
-          <p className="mt-8 max-w-xl text-sm leading-7 text-[#647087]">
-            Do nome na peça à criação de um formato exclusivo, cada projeto
-            começa com uma conversa e termina com algo que só poderia ser seu.
-          </p>
-          <ul className="mt-10 divide-y divide-[#0b2447]/15 border-y border-[#0b2447]/15">
-            {[
-              "Lembranças para eventos e celebrações",
-              "Presentes com nomes, frases e símbolos",
-              "Protótipos e pequenas séries",
-              "Decoração e organização sob medida",
-            ].map((item, index) => (
-              <li className="flex gap-5 py-4 text-sm" key={item}>
-                <span className="font-serif text-[#b88a3b]">
-                  0{index + 1}
+          <ul className="divide-y divide-[#d8bc7b]/25 border-y border-[#d8bc7b]/25">
+            {values.map(([icon, title, description]) => (
+              <li className="grid grid-cols-[2.5rem_1fr] gap-3 py-5" key={title}>
+                <b className="font-serif text-2xl font-normal text-[#d8bc7b]" aria-hidden="true">
+                  {icon}
+                </b>
+                <span>
+                  <strong className="font-serif text-xl font-normal">{title}</strong>
+                  <span className="mt-1 block text-sm leading-6 text-[#b8c1cf]">{description}</span>
                 </span>
-                {item}
               </li>
             ))}
           </ul>
-          <a
-            className="mt-9 inline-flex w-fit items-center gap-5 border-b border-[#b88a3b] pb-2 text-sm font-semibold"
-            href="#orcamento"
-          >
-            Criar uma peça personalizada{" "}
-            <b className="text-xl text-[#b88a3b]">→</b>
-          </a>
-        </div>
-      </section>
-
-      <section
-        className="grid bg-[#0b2447] text-[#f7f3ea] lg:grid-cols-[1.05fr_.95fr]"
-        id="como-funciona"
-      >
-        <div className="px-5 py-24 sm:px-12 lg:px-[8vw] lg:py-32">
-          <div className={`${sectionLabel} text-[#d8bc7b]`}>
-            <span className={sectionNumber}>05</span> Como funciona
-          </div>
-          <h2 className={`${serifTitle} mt-10 text-[clamp(3.2rem,5.6vw,6rem)]`}>
-            Da primeira conversa à{" "}
-            <i className="font-normal text-[#d8bc7b]">última camada.</i>
-          </h2>
-          <div className="mt-14 divide-y divide-[#d8bc7b]/25 border-y border-[#d8bc7b]/25">
-            {[
-              [
-                "Conte a sua ideia",
-                "Envie uma referência, um desenho ou simplesmente explique o que você imaginou.",
-              ],
-              [
-                "Ajustamos o projeto",
-                "Definimos dimensões, cores, material e acabamento antes da produção.",
-              ],
-              [
-                "Produzimos e entregamos",
-                "Sua peça é impressa, revisada e preparada com todo o cuidado.",
-              ],
-            ].map(([title, description], index) => (
-              <article className="grid grid-cols-[3rem_1fr] gap-3 py-7" key={title}>
-                <span className="font-serif text-[#d8bc7b]">
-                  0{index + 1}
-                </span>
-                <div>
-                  <h3 className="font-serif text-xl">{title}</h3>
-                  <p className="mt-2 max-w-lg text-sm leading-6 text-[#b8c1cf]">
-                    {description}
-                  </p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-        <div className="relative min-h-[36rem] overflow-hidden lg:min-h-full">
-          <Image
-            fill
-            sizes="(max-width: 1023px) 100vw, 48vw"
-            className="absolute inset-0 h-full w-full object-cover"
-            src="/process-printing.png"
-            alt="Impressora 3D criando uma peça em camadas"
-          />
-          <span className="absolute right-6 bottom-6 rounded-2xl border border-white/40 bg-[#0b2447]/45 px-5 py-4 font-serif text-lg text-white shadow-xl backdrop-blur-xl">
-            Precisão
-            <br />
-            camada a camada
-          </span>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-[1600px] px-5 py-24 sm:px-8 lg:px-16 lg:py-32">
-        <div className={sectionLabel}>
-          <span className={sectionNumber}>06</span> Por que Artgian
-        </div>
-        <div className="mt-12 grid gap-10 border-t border-[#0b2447]/15 pt-12 lg:grid-cols-[1.4fr_repeat(3,1fr)]">
-          <h2 className={`${serifTitle} text-[clamp(3rem,4.5vw,5rem)]`}>
-            Design com propósito.
-            <br />
-            <i className="font-normal text-[#b88a3b]">Produção com cuidado.</i>
-          </h2>
-          {[
-            ["◇", "Criação próxima", "Você participa das escolhas para que o resultado tenha a sua identidade."],
-            ["✦", "Detalhe visível", "Cada camada faz parte da estética e recebe atenção do início ao acabamento."],
-            ["○", "Feito para durar", "Materiais selecionados e produção consciente, sem excessos ou desperdícios."],
-          ].map(([icon, title, description]) => (
-            <article key={title}>
-              <b className="font-serif text-3xl font-normal text-[#b88a3b]">
-                {icon}
-              </b>
-              <h3 className="mt-5 font-serif text-xl">{title}</h3>
-              <p className="mt-3 text-sm leading-6 text-[#647087]">
-                {description}
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section
-        className="mx-3 mb-3 grid overflow-hidden rounded-[2rem] bg-[#d8bc7b] lg:grid-cols-[1.25fr_.75fr]"
-        id="orcamento"
-      >
-        <div className="px-6 py-20 sm:px-12 lg:px-[7vw] lg:py-28">
-          <div className={sectionLabel}>
-            <span className={sectionNumber}>07</span> Comece um projeto
-          </div>
-          <h2 className={`${serifTitle} mt-10 text-[clamp(3.2rem,6vw,6.8rem)]`}>
-            Qual ideia você quer
-            <br />
-            <i className="font-normal text-[#fffdf8]">tirar do papel?</i>
-          </h2>
-        </div>
-        <div className="m-3 flex flex-col justify-center rounded-[1.5rem] border border-white/50 bg-white/40 p-7 shadow-[inset_0_1px_0_rgba(255,255,255,.8)] backdrop-blur-xl sm:p-10">
-          <p className="text-sm leading-7">
-            Conte um pouco sobre o que deseja criar. Quanto mais detalhes,
-            melhor será o primeiro orçamento.
-          </p>
-          <a
-            href="https://wa.me/5516997432741"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-8 flex items-center justify-between rounded-full bg-[#0b2447] py-3 pr-3 pl-6 font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-xl"
-          >
-            Pedir orçamento{" "}
-            <span className="grid size-10 place-items-center rounded-full bg-[#d8bc7b] text-xl text-[#0b2447]">
-              →
-            </span>
-          </a>
-          <small className="mt-5 text-[0.65rem] leading-5 text-[#0b2447]/65">
-            Atendimento personalizado · Projetos únicos · Envio para todo o
-            Brasil
-          </small>
         </div>
       </section>
 
@@ -396,15 +349,15 @@ export default async function Home() {
           <Link className="hover:text-[#b88a3b]" href="/produtos">
             Produtos
           </Link>
-          <a className="hover:text-[#b88a3b]" href="#personalizados">
+          <Link className="hover:text-[#b88a3b]" href="/personalizados">
             Personalizados
-          </a>
-          <a className="hover:text-[#b88a3b]" href="#como-funciona">
-            Processo
-          </a>
-          <a className="hover:text-[#b88a3b]" href="#orcamento">
+          </Link>
+          <Link className="hover:text-[#b88a3b]" href="/personalizados#como-funciona">
+            Como funciona
+          </Link>
+          <Link className="hover:text-[#b88a3b]" href="/personalizados#orcamento">
             Contato
-          </a>
+          </Link>
           <Link className="hover:text-[#b88a3b]" href="/politica-de-privacidade">
             Privacidade
           </Link>
