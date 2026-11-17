@@ -219,7 +219,7 @@ export default async function ProductsPage({
               </Link>
               <Link
                 className="inline-flex h-11 items-center gap-3 rounded-full bg-[#0b2447] pr-2 pl-5 text-sm font-semibold text-white hover:bg-[#143866]"
-                href="/#personalizados"
+                href={busca ? `/personalizados?ideia=${encodeURIComponent(busca)}#orcamento` : "/personalizados"}
               >
                 Pedir peça personalizada
                 <span className="grid size-7 place-items-center rounded-full bg-[#d8bc7b] text-[#0b2447]" aria-hidden="true">
@@ -244,7 +244,7 @@ export default async function ProductsPage({
           </div>
           <Link
             className="inline-flex w-fit shrink-0 items-center gap-4 rounded-full bg-[#0b2447] py-2 pr-2 pl-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#143866]"
-            href="/#personalizados"
+            href="/personalizados"
           >
             Pedir peça personalizada
             <span className="grid size-9 place-items-center rounded-full bg-[#d8bc7b] text-lg text-[#0b2447]" aria-hidden="true">

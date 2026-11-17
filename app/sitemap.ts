@@ -16,6 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: new URL("/", SITE_URL).href },
     { url: new URL("/produtos", SITE_URL).href },
+    { url: new URL("/personalizados", SITE_URL).href },
     ...products.map((product) => ({
       url: new URL(product.href, SITE_URL).href,
       images: productImages(product),

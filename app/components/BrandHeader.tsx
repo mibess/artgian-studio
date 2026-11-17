@@ -13,18 +13,18 @@ type BrandHeaderProps = {
 // quote link instead; the menu carries every destination. The search box takes
 // the middle of the bar, so these text links only fit from the xl breakpoint.
 const navigation = [
-  ["Personalizados", "/#personalizados"],
-  ["Como funciona", "/#como-funciona"],
+  ["Personalizados", "/personalizados"],
+  ["Como funciona", "/personalizados#como-funciona"],
   ["Sobre", "/#sobre"],
-  ["Orçamento", "/#orcamento"],
+  ["Orçamento", "/personalizados#orcamento"],
 ] as const;
 
 const menuLinks: MenuLink[] = [
   { label: "Produtos", href: "/produtos", description: "Todas as peças da loja", icon: "loja" },
-  { label: "Personalizados", href: "/#personalizados", description: "Peças criadas sob medida", icon: "personalizados" },
-  { label: "Como funciona", href: "/#como-funciona", description: "Da ideia à entrega", icon: "processo" },
+  { label: "Personalizados", href: "/personalizados", description: "Peças criadas sob medida", icon: "personalizados" },
+  { label: "Como funciona", href: "/personalizados#como-funciona", description: "Da ideia à entrega", icon: "processo" },
   { label: "Sobre", href: "/#sobre", description: "Nossa essência", icon: "essencia" },
-  { label: "Orçamento", href: "/#orcamento", description: "Conte a sua ideia", icon: "contato" },
+  { label: "Orçamento", href: "/personalizados#orcamento", description: "Conte a sua ideia", icon: "contato" },
 ];
 
 export default function BrandHeader({ fixed = false }: BrandHeaderProps) {

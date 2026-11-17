@@ -106,6 +106,20 @@ export default function HeaderSearch() {
     }
     return [...seen.values()];
   }, [products]);
+  // Category tiles, plus a way into custom work for ideas the shop doesn't sell yet.
+  const tiles = useMemo(
+    () => [
+      ...categories.map((c) => ({
+        name: c.name,
+        meta: `${c.count} ${c.count === 1 ? "peça" : "peças"}`,
+        image: c.image,
+        href: categoryHref(c.name),
+        custom: false,
+      })),
+      { name: "Sob medida", meta: "Crie a sua peça", image: "/personalized-gifts.png", href: "/personalizados", custom: true },
+    ],
+    [categories],
+  );
   const suggestions = useMemo(
     () => (trimmed ? searchSuggestions(products, trimmed, 6) : []),
     [products, trimmed],
@@ -121,7 +135,7 @@ export default function HeaderSearch() {
       ]
     : [
         ...recent.map((term, i) => ({ id: `${baseId}-r${i}`, href: searchHref(term), term })),
-        ...categories.map((c, i) => ({ id: `${baseId}-c${i}`, href: categoryHref(c.name) })),
+        ...tiles.map((t, i) => ({ id: `${baseId}-c${i}`, href: t.href })),
       ];
   const activeId = open && active >= 0 ? options[active]?.id : undefined;
 
@@ -382,7 +396,7 @@ export default function HeaderSearch() {
                       </p>
                       <Link
                         className="mt-4 inline-flex items-center gap-2 border-b border-[#b88a3b] pb-1 text-sm font-semibold"
-                        href="/#personalizados"
+                        href={`/personalizados?ideia=${encodeURIComponent(trimmed)}#orcamento`}
                         onClick={() => setOpen(false)}
                       >
                         Pedir uma peça personalizada <span className="text-[#b88a3b]">→</span>
@@ -473,17 +487,17 @@ export default function HeaderSearch() {
                   </section>
                 )}
 
-                {categories.length > 0 && (
+                {tiles.length > 0 && (
                   <section aria-labelledby={`${baseId}-categorias`}>
                     <h2 className={sectionTitle} id={`${baseId}-categorias`}>
-                      Explore por categoria
+                      Explore
                     </h2>
                     <div
                       className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"
                       role="listbox"
                       aria-labelledby={`${baseId}-categorias`}
                     >
-                      {categories.map((category, i) => {
+                      {tiles.map((tile, i) => {
                         const id = `${baseId}-c${i}`;
                         return (
                           <Link
@@ -491,24 +505,32 @@ export default function HeaderSearch() {
                             className={`group relative aspect-[4/3] overflow-hidden rounded-2xl bg-[#e9dfcf] outline-none ${
                               activeId === id ? "ring-2 ring-[#b88a3b] ring-offset-2 ring-offset-[#fffdf8]" : ""
                             }`}
-                            href={categoryHref(category.name)}
+                            href={tile.href}
                             id={id}
-                            key={category.name}
+                            key={tile.href}
                             onClick={() => setOpen(false)}
                             role="option"
                             tabIndex={-1}
                           >
                             <img
                               className="absolute inset-0 size-full object-cover transition duration-500 group-hover:scale-105"
-                              src={category.image}
+                              src={tile.image}
                               alt=""
                               loading="lazy"
                             />
-                            <span className="absolute inset-0 bg-linear-to-t from-[#0b2447]/75 via-[#0b2447]/10 to-transparent" />
+                            <span
+                              className={`absolute inset-0 bg-linear-to-t ${
+                                tile.custom
+                                  ? "from-[#0b2447]/90 via-[#0b2447]/45 to-[#0b2447]/10"
+                                  : "from-[#0b2447]/75 via-[#0b2447]/10 to-transparent"
+                              }`}
+                            />
                             <span className="absolute inset-x-3 bottom-3 text-white">
-                              <span className="block font-serif text-lg leading-tight">{category.name}</span>
+                              <span className="block font-serif text-lg leading-tight">
+                                {tile.custom ? <i className="font-normal text-[#d8bc7b]">{tile.name}</i> : tile.name}
+                              </span>
                               <span className="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-white/75">
-                                {category.count} {category.count === 1 ? "peça" : "peças"}
+                                {tile.meta}
                               </span>
                             </span>
                           </Link>

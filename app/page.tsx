@@ -7,13 +7,12 @@ import { formatBrl } from "../lib/catalog";
 import { productPrice, storefrontProducts } from "../lib/product-listing";
 import BrandHeader from "./components/BrandHeader";
 import ProductCard from "./components/ProductCard";
+import ScrollToHash from "./components/ScrollToHash";
 import { organizationStructuredData, serializeStructuredData } from "../lib/structured-data";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
-
-const WHATSAPP_URL = "https://wa.me/5516997432741";
 
 const sectionLabel =
   "flex items-center gap-3 text-[0.68rem] font-bold uppercase tracking-[0.2em]";
@@ -86,6 +85,7 @@ export default async function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeStructuredData(organizationStructuredData) }}
       />
+      <ScrollToHash />
       <BrandHeader fixed />
 
       <section
@@ -122,12 +122,12 @@ export default async function Home() {
                   →
                 </span>
               </a>
-              <a
+              <Link
                 className="inline-flex items-center gap-3 border-b border-[#b88a3b]/70 pb-1 text-sm font-semibold transition hover:text-[#9b702a]"
-                href="#personalizados"
+                href="/personalizados"
               >
                 Criar peça personalizada <b className="text-[#b88a3b]">→</b>
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -276,21 +276,23 @@ export default async function Home() {
               ))}
             </ol>
 
-            <div className="mt-10 flex scroll-mt-40 flex-col gap-4 sm:flex-row sm:items-center" id="orcamento">
-              <a
-                href={WHATSAPP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+            {/* The full story, ideas and quote form live on /personalizados. */}
+            <div className="mt-10 flex scroll-mt-40 flex-wrap items-center gap-x-7 gap-y-4" id="orcamento">
+              <Link
+                href="/personalizados#orcamento"
                 className="inline-flex w-fit items-center gap-5 rounded-full bg-[#0b2447] py-3 pr-3 pl-6 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#b88a3b]"
               >
-                Pedir orçamento
+                Montar meu pedido
                 <span className="grid size-9 place-items-center rounded-full bg-[#d8bc7b] text-lg text-[#0b2447]" aria-hidden="true">
                   →
                 </span>
-              </a>
-              <small className="text-[0.68rem] leading-5 text-[#0b2447]/65">
-                Atendimento pelo WhatsApp · Envio para todo o Brasil
-              </small>
+              </Link>
+              <Link
+                className="inline-flex items-center gap-3 border-b border-[#b88a3b]/70 pb-1 text-sm font-semibold transition hover:text-[#9b702a]"
+                href="/personalizados"
+              >
+                Ver ideias e dúvidas <b className="text-[#b88a3b]">→</b>
+              </Link>
             </div>
           </div>
         </div>
@@ -347,15 +349,15 @@ export default async function Home() {
           <Link className="hover:text-[#b88a3b]" href="/produtos">
             Produtos
           </Link>
-          <a className="hover:text-[#b88a3b]" href="#personalizados">
+          <Link className="hover:text-[#b88a3b]" href="/personalizados">
             Personalizados
-          </a>
-          <a className="hover:text-[#b88a3b]" href="#como-funciona">
+          </Link>
+          <Link className="hover:text-[#b88a3b]" href="/personalizados#como-funciona">
             Como funciona
-          </a>
-          <a className="hover:text-[#b88a3b]" href="#orcamento">
+          </Link>
+          <Link className="hover:text-[#b88a3b]" href="/personalizados#orcamento">
             Contato
-          </a>
+          </Link>
           <Link className="hover:text-[#b88a3b]" href="/politica-de-privacidade">
             Privacidade
           </Link>
