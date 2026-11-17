@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getPublicProductCatalog } from "../lib/products/repository";
+import { formatBrl } from "../lib/catalog";
 import Link from "next/link";
 import Image from "next/image";
 import BrandHeader from "./components/BrandHeader";
@@ -24,7 +25,7 @@ const steps = [
 ];
 
 export default async function Home() {
-  const projects=Object.values(await getPublicProductCatalog()).filter(p=>p.featured&&p.listed).map((p,i)=>({...p,number:String(i+1).padStart(2,"0"),title:p.name,position:"object-center"}));
+  const projects=Object.values(await getPublicProductCatalog()).filter(p=>p.featured&&p.listed).map((p,i)=>({...p,number:String(i+1).padStart(2,"0"),title:p.name,position:"object-center",price:p.pricingType==="quote"?"Sob orçamento":`${p.pricingType==="from"?"A partir de ":""}${formatBrl(p.pricingType==="from"?p.priceFromCents||0:p.basePriceCents||0)}`}));
   return (
     <main className="min-h-screen overflow-hidden bg-[#f7f3ea] text-[#0b2447]">
       <script
@@ -34,7 +35,7 @@ export default async function Home() {
       <BrandHeader fixed />
 
       <section
-        className="relative mx-auto min-h-screen max-w-[1600px] px-5 pt-36 pb-12 sm:px-8 sm:pt-44 lg:px-16"
+        className="relative mx-auto min-h-screen max-w-[1600px] px-5 pt-32 pb-12 sm:px-8 sm:pt-44 lg:px-16"
         id="inicio"
       >
         <div className="relative z-10 inline-flex items-center gap-3 rounded-full border border-[#b88a3b]/70 bg-[#fffdf8]/60 px-4 py-2 text-xs font-semibold text-[#9b702a] backdrop-blur-sm sm:ml-[3%] sm:text-sm">
@@ -43,7 +44,7 @@ export default async function Home() {
         </div>
 
         <h1
-          className={`${serifTitle} relative z-10 mt-7 max-w-6xl text-[clamp(3.9rem,8.5vw,8.4rem)]`}
+          className={`${serifTitle} relative z-10 mt-7 max-w-6xl text-[clamp(3rem,8.5vw,8.4rem)]`}
         >
           Ideias ganham{" "}
           <span className="text-transparent [-webkit-text-stroke:1.2px_#0b2447]">
@@ -56,7 +57,7 @@ export default async function Home() {
         </h1>
 
         <div className="relative mt-10 lg:-mt-12 lg:ml-[8%]">
-          <div className="relative h-[30rem] overflow-hidden rounded-[2rem] bg-[#e9dfcf] shadow-[0_30px_80px_rgba(11,36,71,0.12)] sm:h-[38rem] lg:h-[42rem]">
+          <div className="relative h-[24rem] overflow-hidden rounded-[2rem] bg-[#e9dfcf] shadow-[0_30px_80px_rgba(11,36,71,0.12)] sm:h-[38rem] lg:h-[42rem]">
             <Image
               fill
               sizes="(max-width: 1023px) 100vw, (max-width: 1600px) 85vw, 1355px"
@@ -70,14 +71,14 @@ export default async function Home() {
 
           <a
             className="absolute -bottom-6 left-5 grid size-32 place-content-center rounded-full border border-white/50 bg-[linear-gradient(145deg,rgba(216,188,123,.96),rgba(184,135,50,.92))] text-center font-serif text-lg leading-tight shadow-[0_18px_50px_rgba(87,59,18,.25)] backdrop-blur-xl transition hover:-rotate-3 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0b2447] sm:left-[38%] sm:size-40 sm:text-xl"
-            href="#orcamento"
+            href="#produtos"
           >
             <span className="text-2xl" aria-hidden="true">
               ◇
             </span>
-            Pedir
+            Ver
             <br />
-            orçamento
+            produtos
           </a>
           <div className="absolute top-1/2 right-5 hidden flex-col items-center gap-2 rounded-full border border-white/60 bg-white/45 px-3 py-5 font-serif text-lg backdrop-blur-xl sm:flex">
             <b className="font-normal">01</b>
@@ -107,11 +108,76 @@ export default async function Home() {
       </section>
 
       <section
+        className="mx-auto max-w-[1600px] scroll-mt-28 px-5 py-20 sm:px-8 lg:px-16 lg:py-32"
+        id="produtos"
+      >
+        <header className="grid items-end gap-8 lg:grid-cols-[.8fr_1.25fr_.7fr]">
+          <div className={sectionLabel}>
+            <span className={sectionNumber}>02</span> Criações em destaque
+          </div>
+          <h2 className={`${serifTitle} text-[clamp(3.2rem,6vw,6rem)]`}>
+            Uma galeria de
+            <br />
+            <i className="font-normal text-[#b88a3b]">possibilidades.</i>
+          </h2>
+          <p className="max-w-sm text-sm leading-7 text-[#647087]">
+            Peças decorativas, presentes, miniaturas e soluções funcionais
+            feitas camada por camada.
+          </p>
+        </header>
+
+        <div className="mt-12 grid grid-cols-2 gap-x-4 gap-y-10 sm:mt-16 sm:gap-8 md:grid-cols-3">
+          {projects.map((project, index) => {
+            // On the two-column phone grid, an odd count would leave one card alone,
+            // so the first product spans the full width instead.
+            const wide = index === 0 && projects.length % 2 === 1;
+            return (
+            <a className={`group block ${wide ? "col-span-2 md:col-span-1" : ""}`} href={project.href} key={project.number}>
+              <div className={`${wide ? "aspect-[5/4] md:aspect-[4/5]" : "aspect-[4/5]"} overflow-hidden rounded-[1.5rem] bg-[#e9dfcf]`}>
+                <img
+                  loading="lazy"
+                  decoding="async"
+                  className={`h-full w-full object-cover ${project.position} transition duration-700 ease-out group-hover:scale-105`}
+                  src={project.image}
+                  alt={project.alt}
+                />
+              </div>
+              <span className="mt-4 block text-[0.6rem] font-bold uppercase tracking-[0.18em] text-[#b88a3b] sm:mt-5 sm:text-[0.65rem]">
+                {project.number} / {project.category}
+              </span>
+              <h3 className="mt-2 max-w-sm font-serif text-lg leading-tight font-normal sm:text-2xl">
+                {project.title}
+              </h3>
+              <strong className="mt-2 block text-sm font-semibold sm:text-base">
+                {project.price}
+              </strong>
+              <span className="mt-3 inline-flex items-center gap-3 border-b border-[#b88a3b]/60 pb-1 text-xs font-semibold transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-visible:opacity-100">
+                Ver produto{" "}
+                <b className="text-[#b88a3b]">→</b>
+              </span>
+            </a>
+            );
+          })}
+        </div>
+        <div className="mt-14 flex justify-center">
+          <Link
+            className="inline-flex items-center gap-5 rounded-full border border-[#0b2447]/20 bg-white/45 py-3 pr-3 pl-6 text-sm font-semibold transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg"
+            href="/produtos"
+          >
+            Ver catálogo completo
+            <span className="grid size-9 place-items-center rounded-full bg-[#0b2447] text-lg text-white">
+              →
+            </span>
+          </Link>
+        </div>
+      </section>
+
+      <section
         className="bg-[#0b2447] px-5 py-24 text-[#f7f3ea] sm:px-10 lg:px-[8vw] lg:py-32"
         id="sobre"
       >
         <div className={`${sectionLabel} text-[#d8bc7b]`}>
-          <span className={sectionNumber}>02</span> Nossa essência
+          <span className={sectionNumber}>03</span> Nossa essência
         </div>
         <p className="mt-16 ml-auto max-w-sm text-sm leading-7 text-[#b8c1cf]">
           Entre o que você imagina e o que pode tocar, existe um processo.
@@ -132,63 +198,6 @@ export default async function Home() {
             <br />
             Personalidade no resultado.
           </span>
-        </div>
-      </section>
-
-      <section
-        className="mx-auto max-w-[1600px] px-5 py-24 sm:px-8 lg:px-16 lg:py-32"
-        id="produtos"
-      >
-        <header className="grid items-end gap-8 lg:grid-cols-[.8fr_1.25fr_.7fr]">
-          <div className={sectionLabel}>
-            <span className={sectionNumber}>03</span> Criações em destaque
-          </div>
-          <h2 className={`${serifTitle} text-[clamp(3.2rem,6vw,6rem)]`}>
-            Uma galeria de
-            <br />
-            <i className="font-normal text-[#b88a3b]">possibilidades.</i>
-          </h2>
-          <p className="max-w-sm text-sm leading-7 text-[#647087]">
-            Peças decorativas, presentes, miniaturas e soluções funcionais
-            feitas camada por camada.
-          </p>
-        </header>
-
-        <div className="mt-16 grid gap-8 md:grid-cols-3">
-          {projects.map((project) => (
-            <a className="group block" href={project.href} key={project.number}>
-              <div className="aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-[#e9dfcf]">
-                <img
-                  loading="lazy"
-                  decoding="async"
-                  className={`h-full w-full object-cover ${project.position} transition duration-700 ease-out group-hover:scale-105`}
-                  src={project.image}
-                  alt={project.alt}
-                />
-              </div>
-              <span className="mt-5 block text-[0.65rem] font-bold uppercase tracking-[0.18em] text-[#b88a3b]">
-                {project.number} / {project.category}
-              </span>
-              <h3 className="mt-2 max-w-sm font-serif text-2xl font-normal">
-                {project.title}
-              </h3>
-              <span className="mt-4 inline-flex items-center gap-3 border-b border-[#b88a3b]/60 pb-1 text-xs font-semibold opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
-                Conhecer a peça{" "}
-                <b className="text-[#b88a3b]">→</b>
-              </span>
-            </a>
-          ))}
-        </div>
-        <div className="mt-14 flex justify-center">
-          <Link
-            className="inline-flex items-center gap-5 rounded-full border border-[#0b2447]/20 bg-white/45 py-3 pr-3 pl-6 text-sm font-semibold transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg"
-            href="/produtos"
-          >
-            Ver catálogo completo
-            <span className="grid size-9 place-items-center rounded-full bg-[#0b2447] text-lg text-white">
-              →
-            </span>
-          </Link>
         </div>
       </section>
 

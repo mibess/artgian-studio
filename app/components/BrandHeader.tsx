@@ -1,17 +1,22 @@
 import Link from "next/link";
 import StoreHeaderActions from "./StoreHeaderActions";
+import MobileMenu from "./MobileMenu";
 
 type BrandHeaderProps = {
   fixed?: boolean;
   tone?: "light" | "clay";
 };
 
+// "Produtos" is the header's primary button, so the desktop nav lists the
+// quote link instead; the mobile menu carries every destination.
 const navigation = [
-  ["Produtos", "/produtos"],
   ["Personalizados", "/#personalizados"],
   ["Como funciona", "/#como-funciona"],
   ["Sobre", "/#sobre"],
-];
+  ["Orçamento", "/#orcamento"],
+] as const;
+
+const mobileNavigation = [["Produtos", "/produtos"], ...navigation] as const;
 
 export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
   return (
@@ -56,18 +61,18 @@ export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
         <div className="flex items-center gap-1 sm:gap-3">
           <StoreHeaderActions />
           <Link
-            className="relative z-10 inline-flex items-center gap-2 rounded-full bg-[#0b2447] py-2.5 pr-3 pl-4 text-xs font-semibold text-[#fffdf8] shadow-lg shadow-[#0b2447]/15 transition hover:-translate-y-0.5 hover:bg-[#143866] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] sm:gap-3 sm:py-3 sm:pr-4 sm:pl-5 sm:text-sm"
-            href="/#orcamento"
+            className="relative z-10 inline-flex items-center gap-2 rounded-full bg-[#0b2447] py-2.5 pr-2.5 pl-4 text-xs font-semibold text-[#fffdf8] shadow-lg shadow-[#0b2447]/15 transition hover:-translate-y-0.5 hover:bg-[#143866] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] sm:gap-3 sm:py-3 sm:pr-4 sm:pl-5 sm:text-sm"
+            href="/produtos"
           >
-            <span className="hidden sm:inline">Pedir orçamento</span>
-            <span className="sm:hidden">Orçamento</span>
+            Produtos
             <span
-              className="grid size-7 place-items-center rounded-full bg-[#d8bc7b] text-base text-[#0b2447]"
+              className="hidden size-7 place-items-center rounded-full bg-[#d8bc7b] text-base text-[#0b2447] min-[400px]:grid"
               aria-hidden="true"
             >
               ↗
             </span>
           </Link>
+          <MobileMenu links={mobileNavigation} />
         </div>
       </div>
     </header>
