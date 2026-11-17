@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SITE_URL } from "../lib/site-url";
@@ -5,6 +6,7 @@ import "./globals.css";
 import { getPublicProductCatalog } from "../lib/products/repository";
 import { ProductCatalogProvider } from "../lib/products/context";
 import StoreAnalytics from "./components/StoreAnalytics";
+import NavigationProgress from "./components/NavigationProgress";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
         type: "image/png",
       },
       shortcut: "/favicon.png",
-      apple: "/artgian-monogram.png",
+      apple: "/apple-touch-icon.png",
     },
     openGraph: {
       title,
@@ -76,6 +78,9 @@ export default async function RootLayout({
         <ProductCatalogProvider catalog={await getPublicProductCatalog()}>
           {children}
           <StoreAnalytics />
+          <Suspense fallback={null}>
+            <NavigationProgress />
+          </Suspense>
         </ProductCatalogProvider>
       </body>
     </html>

@@ -91,3 +91,251 @@ select {
   border-radius: 999px;
   background: rgba(117, 133, 140, 0.35);
 }
+
+/* Printing logo: a 3D printer laying down the monogram in 14 layers.
+   One cycle = 14 layer passes + 5 passes showing the finished piece, so every
+   loop restarts in step with the head sweep. 73.684% = 14 / 19. */
+.print-logo {
+  --print-t: 0.14s;
+  --print-cycle: calc(var(--print-t) * 19);
+  --print-head: 15cqw;
+  --print-mark: url("/artgian-logo-mark.png");
+  container-type: inline-size;
+  display: inline-block;
+  pointer-events: none;
+  user-select: none;
+}
+
+.print-logo--compact {
+  --print-t: 0.09s;
+  --print-head: 34cqw;
+}
+
+.print-machine {
+  display: block;
+  position: relative;
+}
+
+.print-logo--page .print-machine {
+  padding: 18cqw 16cqw 0;
+}
+
+.print-logo--compact .print-machine {
+  padding-top: 30cqw;
+}
+
+.print-frame {
+  position: absolute;
+  inset: 2cqw 3cqw 3cqw;
+  border: max(1px, 1.2cqw) solid rgb(11 36 71 / 0.16);
+  border-bottom: 0;
+  border-radius: 5cqw 5cqw 0 0;
+}
+
+.print-area {
+  position: relative;
+  display: block;
+  aspect-ratio: 507 / 640;
+}
+
+.print-cycle,
+.print-done,
+.print-lines,
+.print-shine,
+.print-sweep {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.print-mark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.print-cycle {
+  animation: print-cycle var(--print-cycle) linear infinite;
+}
+
+/* Finished layers: revealed from the bed upwards, one layer per pass. */
+.print-done {
+  clip-path: inset(100% 0 0 0);
+  animation: print-reveal var(--print-cycle) linear infinite;
+}
+
+.print-lines,
+.print-shine {
+  -webkit-mask: var(--print-mark) center / contain no-repeat;
+  mask: var(--print-mark) center / contain no-repeat;
+}
+
+.print-lines {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 calc(100% / 14 - 1px), rgb(255 253 248 / 0.22) calc(100% / 14 - 1px) calc(100% / 14)),
+    repeating-linear-gradient(to bottom, transparent 0 2px, rgb(255 255 255 / 0.04) 2px 3px);
+}
+
+.print-shine {
+  background: linear-gradient(105deg, transparent 45%, rgb(255 250 235 / 0.55) 50%, transparent 55%) no-repeat;
+  background-size: 300% 100%;
+  background-position: 150% 0;
+  animation: print-shine var(--print-cycle) ease-in-out infinite;
+}
+
+.print-logo--compact .print-lines,
+.print-logo--compact .print-shine {
+  display: none;
+}
+
+/* The layer being printed: a one-layer window that climbs, with the logo
+   counter-shifted inside it so it stays aligned, revealed left to right. */
+.print-layer,
+.print-gantry {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: block;
+  height: calc(100% / 14);
+  animation: print-climb var(--print-cycle) linear infinite;
+}
+
+.print-layer {
+  overflow: hidden;
+}
+
+.print-sweep {
+  clip-path: inset(0 100% 0 0);
+  animation: print-sweep var(--print-t) linear infinite;
+}
+
+.print-layer-image {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: block;
+  height: 1400%;
+  animation: print-counter var(--print-cycle) linear infinite;
+}
+
+/* Freshly extruded filament reads warmer than the cooled layers below. */
+.print-layer-image .print-mark {
+  filter: brightness(1.22) saturate(1.3);
+}
+
+.print-rail {
+  position: absolute;
+  left: -13cqw;
+  right: -13cqw;
+  bottom: calc(100% + var(--print-head) * 0.86);
+  display: block;
+  height: max(1px, 0.9cqw);
+  border-radius: 999px;
+  background: rgb(11 36 71 / 0.28);
+  animation: print-head-on var(--print-cycle) linear infinite;
+}
+
+.print-head {
+  position: absolute;
+  bottom: 100%;
+  left: calc(var(--print-head) / -2);
+  display: block;
+  width: var(--print-head);
+  animation:
+    print-head-x var(--print-t) linear infinite,
+    print-head-on var(--print-cycle) linear infinite;
+}
+
+.print-head svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 1.5px 2px rgb(11 36 71 / 0.25));
+}
+
+.print-nozzle-glow {
+  filter: drop-shadow(0 0 2px #f0c568);
+  animation: print-glow var(--print-t) ease-in-out infinite;
+}
+
+.print-bed {
+  position: relative;
+  display: block;
+  height: 3.4cqw;
+  margin: 1.6cqw -4cqw 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #b88a3b, #f0d58f 50%, #b88a3b);
+  box-shadow: 0 2.4cqw 4cqw -1.6cqw rgb(11 36 71 / 0.35);
+}
+
+@keyframes print-cycle {
+  0%, 86% { opacity: 1; }
+  96%, 100% { opacity: 0; }
+}
+
+@keyframes print-reveal {
+  0% { clip-path: inset(100% 0 0 0); animation-timing-function: steps(14, end); }
+  73.684%, 100% { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes print-climb {
+  0% { transform: translateY(0); animation-timing-function: steps(14, end); }
+  73.684%, 100% { transform: translateY(-1400%); }
+}
+
+@keyframes print-counter {
+  0% { transform: translateY(0); animation-timing-function: steps(14, end); }
+  73.684%, 100% { transform: translateY(100%); }
+}
+
+@keyframes print-sweep {
+  0% { clip-path: inset(0 100% 0 0); }
+  85%, 100% { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes print-head-x {
+  0% { left: calc(var(--print-head) / -2); }
+  85% { left: calc(100% - var(--print-head) / 2); }
+  100% { left: calc(var(--print-head) / -2); }
+}
+
+@keyframes print-head-on {
+  0%, 73.684% { opacity: 1; }
+  77%, 100% { opacity: 0; }
+}
+
+@keyframes print-shine {
+  0%, 74% { background-position: 150% 0; }
+  88%, 100% { background-position: -50% 0; }
+}
+
+@keyframes print-glow {
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .print-done {
+    clip-path: none;
+    animation: none;
+  }
+
+  .print-layer,
+  .print-gantry,
+  .print-shine {
+    display: none;
+  }
+
+  .print-cycle {
+    animation: print-breathe 1.6s ease-in-out infinite alternate;
+  }
+
+  @keyframes print-breathe {
+    from { opacity: 0.55; }
+    to { opacity: 1; }
+  }
+}

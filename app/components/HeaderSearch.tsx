@@ -5,6 +5,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowUpRight, Clock3, Search, X } from "lucide-react";
 import { useProductCatalog } from "../../lib/products/context";
+import { beginNavigation } from "../../lib/navigation-progress";
 import {
   highlightParts,
   productPrice,
@@ -186,6 +187,8 @@ export default function HeaderSearch() {
     if (option.term) remember(option.term);
     setOpen(false);
     inlineRef.current?.blur();
+    const target = new URL(option.href, window.location.href);
+    if (target.pathname + target.search !== window.location.pathname + window.location.search) beginNavigation();
     router.push(option.href);
   }
 

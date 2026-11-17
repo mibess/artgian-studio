@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { beginNavigation } from "../../lib/navigation-progress";
 import {
   ArrowDownAZ,
   ArrowDownWideNarrow,
@@ -66,6 +67,7 @@ export default function SortSelect({ value, options }: SortSelectProps) {
     buttonRef.current?.focus();
     if (option.value === selected) return;
     setSelected(option.value);
+    beginNavigation();
     startTransition(() => router.push(option.href, { scroll: false }));
   }
 

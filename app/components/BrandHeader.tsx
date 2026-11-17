@@ -3,6 +3,7 @@ import Link from "next/link";
 import StoreHeaderActions from "./StoreHeaderActions";
 import MobileMenu, { type MenuLink } from "./MobileMenu";
 import HeaderSearch, { HeaderSearchFallback } from "./HeaderSearch";
+import HeaderLogo from "./HeaderLogo";
 
 type BrandHeaderProps = {
   fixed?: boolean;
@@ -41,19 +42,7 @@ export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
         <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-white to-transparent" />
         <div className="pointer-events-none absolute -top-16 left-1/4 size-36 rounded-full bg-white/70 blur-3xl" />
 
-        <Link
-          className="relative z-10 flex shrink-0 items-center"
-          href="/"
-          aria-label="Artgian Studio — página inicial"
-        >
-          <span className="grid size-12 place-items-center overflow-hidden rounded-2xl border border-white/80 bg-[#f7f3ea]/80 shadow-sm sm:size-14">
-            <img
-              className="size-full object-cover mix-blend-multiply"
-              src="/artgian-monogram.png"
-              alt="AS"
-            />
-          </span>
-        </Link>
+        <HeaderLogo />
 
         <Suspense fallback={<HeaderSearchFallback />}>
           <HeaderSearch />
