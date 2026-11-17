@@ -424,3 +424,51 @@ O teste não criou pedido, cobrança ou evento de negócio fictício na Artgian.
 Testes automatizados permanecem isolados, sem mensagens reais. A entrega acima
 valida o caminho manual Notify → Evolution → WhatsApp; a aceitação de um evento
 de negócio originado pela outbox deve ser acompanhada na primeira transição real.
+
+## Compradores em produção — 16/11/2026
+
+Código Studio `9e67ad2` e Notify `851dca8773912221e8b1e61273ae5c1f70a2166d`
+publicados. O Notify passou pelos pipelines [HML](https://github.com/mibess/mibess-notify/actions/runs/43996978077)
+e [PRD](https://github.com/mibess/mibess-notify/actions/runs/43997819300), com aceite
+fake completo em HML antes da promoção. A loja publicou primeiro com o envio ao
+comprador desabilitado; após o teste real, `MIBESS_NOTIFY_CUSTOMER_ENABLED=true`
+foi aplicado em Production. O [deployment de ativação](https://vercel.com/claudemir-custodios-projects/artgian-studio/GdhVSfayP11sUVSazaZ2eZEv8tz4)
+(`dpl_GdhVSfayP11sUVSazaZ2eZEv8tz4`) está READY e associado a `www.artgian.com.br`.
+
+A migração aditiva 0024 foi aplicada ao Turso com backup criptografado,
+restauração validada e preservação dos 10.519 registros das 50 tabelas anteriores.
+Backup: `backups/store-before-migrations-2026-11-17T01-36-49-128Z.json.aes`;
+chave fora do repositório em `/Users/mibess/.codex/backup-keys/artgian-studio/`.
+Não houve backfill de pedidos ou alteração de eventos históricos.
+
+Configuração dos compradores no Notify:
+
+- Canal WhatsApp `ARTGIAN_CUSTOMERS`, remetente conectado **+5516997432741**.
+- Canal SMTP `ARTGIAN_EMAIL`, Zoho com TLS, remetente e Reply-To
+  **contato@artgian.com.br**, reutilizando a conta já configurada para a loja.
+  Credenciais permanecem criptografadas no Notify, fora do payload dos eventos.
+- Quatro regras `ARTGIAN_CUSTOMER_{PAID,STATUS}_{WHATSAPP,EMAIL}` ativas,
+  com destino `EVENT_RECIPIENT` na aplicação ARTGIAN. As regras internas existentes
+  foram preservadas; os eventos CRM não disparam este fluxo para compradores.
+- Confirmação de pagamento, preparação, pronto para envio, postagem, saída para
+  entrega e entrega usam a outbox, fila, idempotência e histórico existentes.
+  WhatsApp exige a opção explícita do checkout; e-mail funciona independentemente
+  dessa opção. Eventos antigos sem destinatário não geram mensagens retroativas.
+
+### Aceite real dos dois canais
+
+Um único evento de compra simulado, `50eab02c-dae6-4108-934b-7e38fb3aeeef`,
+passou por ingresso, fila, roteamento e envio do Notify em aplicação temporária
+isolada. Não foi criado pedido nem cobrança; o conteúdo identificava o teste.
+
+- WhatsApp `9bd057c6-ee3b-4e58-ae22-0b770290a546`: **DELIVERED** para
+  **+5516997200212**, em 16/11/2026 às 22:48:02 (America/Sao_Paulo).
+- E-mail `8cb3e9a1-8ade-43b4-8070-904c5df6effc`: **SENT** para
+  **c.silverio@live.com**, às 22:48:05. O responsável confirmou o recebimento
+  na caixa de entrada. O status técnico continua SENT, pois SMTP não comprova
+  entrega na caixa postal por si só.
+
+Ambos tiveram uma tentativa e zero retries. A chave temporária foi revogada,
+e a aplicação/regras do teste foram desativadas, preservando o histórico.
+O teste real validou o caminho Notify → provedores; checkout → outbox e transições
+de pedido foram cobertos pelos testes automatizados descritos acima, sem venda real.
