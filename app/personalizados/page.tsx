@@ -140,7 +140,7 @@ export default async function CustomPage({
       <ScrollToHash />
       <BrandHeader fixed />
 
-      <section className="mx-auto max-w-[1600px] px-5 pt-28 sm:px-8 sm:pt-36 lg:px-16 lg:pt-40">
+      <section className="site-container pt-28 sm:pt-36 lg:pt-40">
         <nav aria-label="Trilha de navegação" className="text-xs text-[#647087]">
           <ol className="flex items-center gap-2">
             <li>
@@ -218,7 +218,7 @@ export default async function CustomPage({
         </div>
       </section>
 
-      <section className="mx-auto max-w-[1600px] scroll-mt-28 px-5 pt-20 sm:px-8 lg:px-16 lg:pt-28" id="ideias">
+      <section className="site-container scroll-mt-28 pt-20 lg:pt-28" id="ideias">
         <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className={sectionLabel}>
@@ -265,10 +265,10 @@ export default async function CustomPage({
       </section>
 
       <section
-        className="mt-20 scroll-mt-24 bg-[#0b2447] px-5 py-20 text-[#f7f3ea] sm:px-10 lg:mt-28 lg:px-[8vw] lg:py-24"
+        className="mt-20 scroll-mt-24 bg-[#0b2447] py-20 text-[#f7f3ea] lg:mt-28 lg:py-24"
         id="como-funciona"
       >
-        <div className="mx-auto max-w-[1600px]">
+        <div className="site-container">
           <div className={`${sectionLabel} text-[#d8bc7b]`}>
             <span className={sectionNumber}>02</span> Como funciona
           </div>
@@ -303,8 +303,8 @@ export default async function CustomPage({
         </div>
       </section>
 
-      <section className="mx-3 mt-3 scroll-mt-24 sm:mx-5" id="orcamento">
-        <div className="mx-auto grid max-w-[1600px] overflow-hidden rounded-[2rem] bg-[#ebe4d8] lg:grid-cols-[.8fr_1.2fr]">
+      <section className="site-container mt-3 scroll-mt-24 sm:mt-6" id="orcamento">
+        <div className="grid overflow-hidden rounded-[2rem] bg-[#ebe4d8] lg:grid-cols-[.8fr_1.2fr]">
           <div className="px-6 pt-14 pb-6 sm:px-12 lg:px-[4.5vw] lg:py-20">
             <div className={sectionLabel}>
               <span className={sectionNumber}>03</span> Orçamento
@@ -347,7 +347,7 @@ export default async function CustomPage({
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-[1600px] scroll-mt-28 gap-10 px-5 py-20 sm:px-8 lg:grid-cols-[.8fr_1.2fr] lg:px-16 lg:py-28" id="duvidas">
+      <section className="site-container grid scroll-mt-28 gap-10 py-20 lg:grid-cols-[.8fr_1.2fr] lg:py-28" id="duvidas">
         <div>
           <div className={sectionLabel}>
             <span className={sectionNumber}>04</span> Dúvidas
@@ -371,11 +371,13 @@ export default async function CustomPage({
         </div>
       </section>
 
-      <footer className="flex flex-col justify-between gap-5 border-t border-[#0b2447]/10 px-7 py-10 text-xs text-[#0b2447]/60 sm:flex-row sm:items-center">
-        <span>Artgian Studio · Elegância impressa em cada detalhe.</span>
-        <div className="flex gap-6 font-semibold text-[#0b2447]">
-          <Link href="/produtos">Ver produtos →</Link>
-          <Link href="/">Voltar ao início →</Link>
+      <footer className="border-t border-[#0b2447]/10 text-xs text-[#0b2447]/60">
+        <div className="site-container flex flex-col justify-between gap-5 py-10 sm:flex-row sm:items-center">
+          <span>Artgian Studio · Elegância impressa em cada detalhe.</span>
+          <div className="flex gap-6 font-semibold text-[#0b2447]">
+            <Link href="/produtos">Ver produtos →</Link>
+            <Link href="/">Voltar ao início →</Link>
+          </div>
         </div>
       </footer>
       <FloatingWhatsApp />

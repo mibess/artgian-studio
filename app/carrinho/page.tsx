@@ -9,7 +9,7 @@ export default function CartPage() {
   return (
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
       <BrandHeader />
-      <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8 lg:py-20">
+      <div className="site-container py-12 lg:py-20">
         <p className="text-xs font-bold uppercase tracking-[.2em] text-[#b88a3b]">
           Suas próximas criações
         </p>

@@ -12,8 +12,8 @@ export default function AccountEmailLayout({
   return (
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
       <BrandHeader />
-      <div className="mx-auto max-w-lg px-5 py-12 sm:py-20">
-        <section className="rounded-[2rem] border border-white bg-white/80 p-6 shadow-[0_20px_60px_rgba(11,36,71,.07)] sm:p-9">
+      <div className="site-container py-12 sm:py-20">
+        <section className="mx-auto max-w-lg rounded-[2rem] border border-white bg-white/80 p-6 shadow-[0_20px_60px_rgba(11,36,71,.07)] sm:p-9">
           <p className="mb-4 text-xs font-bold uppercase tracking-[.2em] text-[#b88a3b]">
             Sua conta Artgian
           </p>

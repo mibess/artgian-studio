@@ -81,7 +81,7 @@ export default async function ProductsPage({
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
       <BrandHeader fixed />
 
-      <section className="mx-auto max-w-[1600px] px-5 pt-28 pb-20 sm:px-8 sm:pt-36 lg:px-16 lg:pt-40 lg:pb-28">
+      <section className="site-container pt-28 pb-20 sm:pt-36 lg:pt-40 lg:pb-28">
         <nav aria-label="Trilha de navegação" className="text-xs text-[#647087]">
           <ol className="flex flex-wrap items-center gap-2">
             <li>
@@ -161,7 +161,7 @@ export default async function ProductsPage({
         {chips.length > 1 && (
           <nav
             aria-label="Filtrar por categoria"
-            className="-mx-5 mt-8 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+            className="-mx-3 mt-8 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
           >
             <Link
               aria-current={!categoria ? "page" : undefined}
@@ -231,8 +231,8 @@ export default async function ProductsPage({
         )}
       </section>
 
-      <section className="mx-3 sm:mx-5">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-6 rounded-[2rem] bg-[#ebe4d8] px-6 py-10 sm:px-12 lg:flex-row lg:items-center lg:justify-between lg:px-16">
+      <section className="site-container">
+        <div className="flex flex-col gap-6 rounded-[2rem] bg-[#ebe4d8] px-6 py-10 sm:px-12 lg:flex-row lg:items-center lg:justify-between lg:px-16">
           <div>
             <span className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-[#b88a3b]">
               Sob medida
@@ -254,7 +254,7 @@ export default async function ProductsPage({
         </div>
       </section>
 
-      <footer className="flex flex-col justify-between gap-5 px-7 py-10 text-xs text-[#0b2447]/60 sm:flex-row sm:items-center">
+      <footer className="site-container flex flex-col justify-between gap-5 py-10 text-xs text-[#0b2447]/60 sm:flex-row sm:items-center">
         <span>Artgian Studio · Elegância impressa em cada detalhe.</span>
         <Link className="font-semibold text-[#0b2447]" href="/">
           Voltar ao início →

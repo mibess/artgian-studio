@@ -32,7 +32,7 @@ export default function ProductTemplate({
 
       <BrandHeader tone="clay" />
 
-      <section className="relative mx-auto grid min-h-[calc(100vh-6rem)] max-w-[1440px] items-center gap-12 px-5 py-14 sm:px-8 lg:grid-cols-[.9fr_1.1fr] lg:px-14 lg:py-20">
+      <section className="site-container relative grid min-h-[calc(100vh-6rem)] items-center gap-12 py-14 lg:grid-cols-[.9fr_1.1fr] lg:py-20">
         <div className="relative z-10 lg:py-10">
           <div className="flex items-center gap-4 text-[0.65rem] font-bold uppercase tracking-[0.25em] text-[#6d501d]">
             <span className="h-px w-10 bg-current" />
@@ -89,8 +89,8 @@ export default function ProductTemplate({
         </div>
       </section>
 
-      <section className="relative mx-3 overflow-hidden rounded-[2.3rem] bg-[#fffaf4] px-5 py-20 sm:px-10 lg:px-[7vw] lg:py-28">
-        <div className="grid gap-12 lg:grid-cols-[.72fr_1.28fr]">
+      <section className="relative mx-3 overflow-hidden rounded-[2.3rem] bg-[#fffaf4] px-5 py-20 sm:px-10 lg:py-28">
+        <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[.72fr_1.28fr]">
           <div>
             <span className="text-[0.65rem] font-bold uppercase tracking-[0.24em] text-[#b17a2d]">
               {product.presentation.copy.text009?.value}
@@ -123,7 +123,7 @@ export default function ProductTemplate({
           </div>
         </div>
 
-        <div className="mt-20 grid overflow-hidden rounded-[2rem] bg-[#0b2447] text-[#fffaf4] lg:grid-cols-[1.02fr_.98fr]">
+        <div className="mx-auto mt-20 grid max-w-7xl overflow-hidden rounded-[2rem] bg-[#0b2447] text-[#fffaf4] lg:grid-cols-[1.02fr_.98fr]">
           <div className="min-h-[30rem] overflow-hidden bg-white">
             <img
               className="h-full w-full object-cover object-center"
@@ -159,7 +159,7 @@ export default function ProductTemplate({
       </section>
 
       {children}
-      <footer className="flex flex-col justify-between gap-5 px-7 py-10 text-xs text-[#0b2447]/65 sm:flex-row sm:items-center">
+      <footer className="site-container flex flex-col justify-between gap-5 py-10 text-xs text-[#0b2447]/65 sm:flex-row sm:items-center">
         <span>{product.presentation.copy.text018?.value}</span>
         <Link className="font-semibold text-[#0b2447]" href="/produtos">
           {product.presentation.copy.text019?.value}

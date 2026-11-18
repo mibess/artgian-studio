@@ -76,9 +76,9 @@ export default function StoreFaq() {
     <section
       id="perguntas-frequentes"
       aria-labelledby="store-faq-title"
-      className="scroll-mt-28 border-b border-[#0b2447]/10 px-5 py-16 sm:px-10 lg:px-[8vw] lg:py-24"
+      className="scroll-mt-28 border-b border-[#0b2447]/10 py-16 lg:py-24"
     >
-      <div className="mx-auto grid max-w-[1600px] gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:grid-rows-[auto_1fr] lg:gap-x-16 lg:gap-y-8">
+      <div className="site-container grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:grid-rows-[auto_1fr] lg:gap-x-16 lg:gap-y-8">
         <h2
           id="store-faq-title"
           className="font-serif text-[clamp(2.5rem,5vw,4.8rem)] leading-none tracking-[-0.055em]"

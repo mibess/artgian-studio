@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+/*
+ * Store-wide page width. The header bar and every page section share it, so the
+ * content edges always line up with the header: at most 80rem wide, with the
+ * header's 0.75rem side gutters on phones and 1.5rem from the sm breakpoint.
+ * Full-width colored sections keep their background on the outer element and
+ * use this on the inner wrapper.
+ */
+@utility site-container {
+  width: 100%;
+  max-width: calc(80rem + 2 * 1.5rem);
+  margin-inline: auto;
+  padding-inline: 0.75rem;
+
+  @media (width >= 40rem) {
+    padding-inline: 1.5rem;
+  }
+}
+
 :root {
   color-scheme: light;
 }

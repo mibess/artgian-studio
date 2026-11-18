@@ -75,7 +75,7 @@ export default async function PaymentResult({
     }
   }
 
-  if (!order) return <main className="min-h-screen bg-[#f7f3ea] p-8 text-[#0b2447]"><BrandHeader /><div className="mx-auto mt-12 max-w-xl"><p>Pedido não encontrado nesta conta.</p><Link href="/conta" className="mt-4 inline-flex underline">Ver meus pedidos</Link></div></main>;
+  if (!order) return <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]"><BrandHeader /><div className="site-container py-12"><div className="mx-auto max-w-xl"><p>Pedido não encontrado nesta conta.</p><Link href="/conta" className="mt-4 inline-flex underline">Ver meus pedidos</Link></div></div></main>;
   if (order?.checkoutMode === "embedded") redirect(`/comprar/pagamento?pedido=${order.id}`);
 
   const failureStatuses = new Set([
@@ -97,8 +97,8 @@ export default async function PaymentResult({
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
       <BrandHeader />
       {order?.status === "paid" && <ClearPurchasedCart orderId={order.id} />}
-      <div className="mx-auto max-w-3xl px-5 py-16 sm:px-8 lg:py-24">
-        <section className="rounded-[2rem] border border-white bg-white/75 p-7 text-center shadow-[0_20px_60px_rgba(11,36,71,.07)] sm:p-12">
+      <div className="site-container py-16 lg:py-24">
+        <section className="mx-auto max-w-3xl rounded-[2rem] border border-white bg-white/75 p-7 text-center shadow-[0_20px_60px_rgba(11,36,71,.07)] sm:p-12">
           <span className="mx-auto grid size-16 place-items-center rounded-full bg-[#0b2447] font-serif text-3xl text-[#d8bc7b]">
             {pageContent.symbol}
           </span>

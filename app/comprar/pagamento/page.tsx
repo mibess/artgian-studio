@@ -28,7 +28,7 @@ export default async function PaymentPage({ searchParams }: { searchParams: Prom
   const publicKey = process.env.MERCADO_PAGO_PUBLIC_KEY?.trim() ?? "";
   return <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
     <BrandHeader />
-    <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8 lg:py-16">
+    <div className="site-container py-10 lg:py-16">
       <div className="mb-8 flex flex-col justify-between gap-5 border-b border-[#0b2447]/15 pb-8 sm:flex-row sm:items-end">
         <div><span className="text-[0.65rem] font-bold uppercase tracking-[0.24em] text-[#b88a3b]">Checkout seguro</span><h1 className="mt-3 font-serif text-[clamp(2.7rem,5vw,4.5rem)] font-normal leading-none tracking-[-0.045em]">Seu pagamento.</h1></div>
         <div className="flex items-center gap-3 text-xs text-[#647087]"><span className="inline-flex items-center gap-1.5"><Check size={14} className="text-[#b88a3b]" /> Dados e entrega</span><span className="h-px w-6 bg-[#b88a3b]/40" /><span className="font-semibold text-[#0b2447]">Pagamento</span></div>

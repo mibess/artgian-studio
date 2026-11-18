@@ -57,7 +57,7 @@ export default async function CheckoutPage({
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
       <BrandHeader />
 
-      <div className="mx-auto max-w-7xl px-5 py-12 sm:px-8 lg:py-20">
+      <div className="site-container py-12 lg:py-20">
         <div className="mb-10 flex flex-col justify-between gap-5 border-b border-[#0b2447]/15 pb-8 sm:flex-row sm:items-end">
           <div>
             <span className="text-[0.65rem] font-bold uppercase tracking-[0.24em] text-[#b88a3b]">

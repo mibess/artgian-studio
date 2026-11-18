@@ -27,15 +27,17 @@ const menuLinks: MenuLink[] = [
 ];
 
 export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
+  // site-container is the width every page section uses too, so the bar and the
+  // content below it always share the same side edges.
   return (
     <header
-      className={`inset-x-0 top-0 z-50 px-3 pt-3 sm:px-6 sm:pt-5 ${
+      className={`site-container inset-x-0 top-0 z-50 pt-3 sm:pt-5 ${
         fixed ? "fixed" : "relative"
       }`}
     >
       <div
         data-header-shell
-        className="relative mx-auto flex max-w-7xl items-center justify-between gap-2 overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/55 px-4 py-3 text-[#0b2447] shadow-[0_18px_60px_rgba(11,36,71,0.13),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-[#0b2447]/5 backdrop-blur-2xl sm:gap-4 sm:px-6"
+        className="relative flex items-center justify-between gap-2 overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/55 px-4 py-3 text-[#0b2447] shadow-[0_18px_60px_rgba(11,36,71,0.13),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-[#0b2447]/5 backdrop-blur-2xl sm:gap-4 sm:px-6"
       >
         <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-white to-transparent" />
         <div className="pointer-events-none absolute -top-16 left-1/4 size-36 rounded-full bg-white/70 blur-3xl" />

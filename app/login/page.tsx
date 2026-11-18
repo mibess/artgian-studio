@@ -20,30 +20,32 @@ export default async function LoginPage({
   return (
     <main className="min-h-screen bg-[#f7f3ea] text-[#0b2447]">
       <BrandHeader />
-      <div className="mx-auto grid max-w-5xl items-center gap-12 px-5 py-12 sm:px-8 lg:grid-cols-2 lg:py-20">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[.2em] text-[#b88a3b]">
-            Bem-vindo à Artgian
-          </p>
-          <h1 className="mt-4 font-serif text-5xl leading-tight tracking-tight sm:text-6xl">
-            Um espaço
-            <br />
-            com a sua cara.
-          </h1>
-          <p className="mt-6 max-w-sm text-sm leading-7 text-[#647087]">
-            Entre ou crie sua conta para finalizar compras, acompanhar pedidos e
-            preencher seus dados com mais facilidade.
-          </p>
-          <p className="mt-5 text-xs leading-6 text-[#647087]">
-            Seu carrinho e a seleção do produto continuam aqui enquanto você
-            acessa sua conta.
-          </p>
+      <div className="site-container py-12 lg:py-20">
+        <div className="mx-auto grid max-w-5xl items-center gap-12 lg:grid-cols-2">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[.2em] text-[#b88a3b]">
+              Bem-vindo à Artgian
+            </p>
+            <h1 className="mt-4 font-serif text-5xl leading-tight tracking-tight sm:text-6xl">
+              Um espaço
+              <br />
+              com a sua cara.
+            </h1>
+            <p className="mt-6 max-w-sm text-sm leading-7 text-[#647087]">
+              Entre ou crie sua conta para finalizar compras, acompanhar pedidos e
+              preencher seus dados com mais facilidade.
+            </p>
+            <p className="mt-5 text-xs leading-6 text-[#647087]">
+              Seu carrinho e a seleção do produto continuam aqui enquanto você
+              acessa sua conta.
+            </p>
+          </div>
+          <LoginForm
+            next={next}
+            googleEnabled={googleLoginEnabled()}
+            oauthError={params.error}
+          />
         </div>
-        <LoginForm
-          next={next}
-          googleEnabled={googleLoginEnabled()}
-          oauthError={params.error}
-        />
       </div>
     </main>
   );

@@ -78,12 +78,12 @@ function ExtraSections({ product }: { product: Product }) {
   return product.presentation.sections.length ? (
     <section
       style={{ backgroundColor: product.presentation.background }}
-      className="px-5 py-16 text-[#193244]"
+      className="py-16 text-[#193244]"
     >
       {product.presentation.sections.map((s, i) => (
         <article
           key={i}
-          className="mx-auto mb-12 grid max-w-6xl gap-8 md:grid-cols-2"
+          className="site-container mb-12 grid gap-8 md:grid-cols-2"
         >
           {s.image && (
             <img
@@ -116,7 +116,7 @@ function StandardProduct({
       className="min-h-screen text-[#193244]"
     >
       <BrandHeader />
-      <section className="mx-auto grid max-w-7xl gap-12 px-5 py-16 lg:grid-cols-2">
+      <section className="site-container grid gap-12 py-16 lg:grid-cols-2">
         <div>
           <p
             style={{ color: p.presentation.accent }}
@@ -143,7 +143,7 @@ function StandardProduct({
         </div>
       </section>
       {p.presentation.features.length > 0 && (
-        <section className="mx-auto grid max-w-7xl gap-6 px-5 pb-16 md:grid-cols-3">
+        <section className="site-container grid gap-6 pb-16 md:grid-cols-3">
           {p.presentation.features.map(([n, title, text], i) => (
             <article key={i} className="rounded-2xl bg-white/70 p-6">
               <span>{n}</span>
@@ -154,7 +154,7 @@ function StandardProduct({
         </section>
       )}
       {p.presentation.specifications.length > 0 && (
-        <dl className="mx-auto grid max-w-7xl grid-cols-2 gap-5 px-5 pb-16">
+        <dl className="site-container grid grid-cols-2 gap-5 pb-16">
           {p.presentation.specifications.map(([key, value], i) => (
             <div key={i}>
               <dt className="text-xs uppercase">{key}</dt>

@@ -95,7 +95,7 @@ export default async function Home() {
       <BrandHeader fixed />
 
       <section
-        className="mx-auto max-w-[1600px] px-5 pt-28 sm:px-8 sm:pt-36 lg:px-16 lg:pt-40"
+        className="site-container pt-28 sm:pt-36 lg:pt-40"
         id="inicio"
       >
         <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,.92fr)_minmax(0,1.08fr)] lg:gap-14">
@@ -192,7 +192,7 @@ export default async function Home() {
       {highlightedKit && <HomeKitHighlight product={highlightedKit} />}
 
       <section
-        className="mx-auto max-w-[1600px] scroll-mt-28 px-5 pt-12 pb-20 sm:px-8 sm:pt-16 lg:px-16 lg:pt-20 lg:pb-28"
+        className="site-container scroll-mt-28 pt-12 pb-20 sm:pt-16 lg:pt-20 lg:pb-28"
         id="produtos"
       >
         <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
@@ -240,8 +240,8 @@ export default async function Home() {
         )}
       </section>
 
-      <section className="mx-3 scroll-mt-24 sm:mx-5" id="personalizados">
-        <div className="mx-auto grid max-w-[1600px] overflow-hidden rounded-[2rem] bg-[#ebe4d8] lg:grid-cols-[.85fr_1.15fr]">
+      <section className="site-container scroll-mt-24" id="personalizados">
+        <div className="grid overflow-hidden rounded-[2rem] bg-[#ebe4d8] lg:grid-cols-[.85fr_1.15fr]">
           <div className="relative min-h-[22rem] sm:min-h-[30rem] lg:min-h-full">
             <Image
               fill
@@ -307,10 +307,10 @@ export default async function Home() {
       </section>
 
       <section
-        className="mt-20 bg-[#0b2447] px-5 py-20 text-[#f7f3ea] sm:px-10 lg:mt-28 lg:px-[8vw] lg:py-24"
+        className="mt-20 bg-[#0b2447] py-20 text-[#f7f3ea] lg:mt-28 lg:py-24"
         id="sobre"
       >
-        <div className="mx-auto grid max-w-[1600px] items-end gap-12 lg:grid-cols-[1.15fr_1fr]">
+        <div className="site-container grid items-end gap-12 lg:grid-cols-[1.15fr_1fr]">
           <div>
             <div className={`${sectionLabel} text-[#d8bc7b]`}>
               <span className={sectionNumber}>03</span> Nossa essência
@@ -341,7 +341,7 @@ export default async function Home() {
 
       <StoreFaq />
 
-      <footer className="flex flex-col items-start justify-between gap-8 px-6 py-12 text-sm sm:px-10 lg:flex-row lg:items-end">
+      <footer className="site-container flex flex-col items-start justify-between gap-8 py-12 text-sm lg:flex-row lg:items-end">
         <div>
           <a className="flex flex-col leading-none" href="#inicio">
             <b className="font-serif text-3xl font-normal tracking-[0.08em]">

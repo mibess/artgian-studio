@@ -9,7 +9,7 @@ export default function SeasonalHighlight({
   campaign,
 }: SeasonalHighlightProps) {
   return (
-    <section className="mx-auto max-w-[1600px] px-3 pb-3 sm:px-5">
+    <section className="site-container pb-3">
       <div className="relative grid overflow-hidden rounded-[2.2rem] bg-[#132746] text-[#fffaf3] lg:grid-cols-[.88fr_1.12fr]">
         <div className="relative z-10 flex flex-col justify-center px-6 py-16 sm:px-12 lg:px-[6vw] lg:py-24">
           <div className="flex items-center gap-3 text-[0.65rem] font-bold uppercase tracking-[0.22em] text-[#d8bc7b]">
