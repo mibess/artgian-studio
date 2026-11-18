@@ -115,8 +115,8 @@ function StandardProduct({
       style={{ backgroundColor: p.presentation.background }}
       className="min-h-screen text-[#193244]"
     >
-      <BrandHeader />
-      <section className="site-container grid gap-12 py-16 lg:grid-cols-2">
+      <BrandHeader fixed />
+      <section className="site-container grid gap-12 pt-38 pb-16 sm:pt-42 lg:grid-cols-2">
         <div>
           <p
             style={{ color: p.presentation.accent }}

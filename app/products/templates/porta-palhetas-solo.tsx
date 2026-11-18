@@ -31,9 +31,9 @@ export default function ProductTemplate({
         <div className="absolute top-52 left-[48%] h-px w-[42%] bg-[#b88a3b]/55" />
       </div>
 
-      <BrandHeader tone="clay" />
+      <BrandHeader fixed />
 
-      <section className="site-container relative grid min-h-[calc(100vh-6rem)] items-center gap-12 py-14 lg:grid-cols-[.92fr_1.08fr] lg:py-20">
+      <section className="site-container relative grid min-h-screen items-center gap-12 pt-36 pb-14 sm:pt-40 lg:grid-cols-[.92fr_1.08fr] lg:pt-46 lg:pb-20">
         <div className="relative z-10 lg:py-10">
           <div className="flex items-center gap-4 text-[0.65rem] font-bold uppercase tracking-[0.25em] text-[#8d442d]">
             <span className="h-px w-10 bg-current" />
