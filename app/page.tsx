@@ -7,6 +7,7 @@ import { formatBrl } from "../lib/catalog";
 import { productPrice, storefrontProducts } from "../lib/product-listing";
 import BrandHeader from "./components/BrandHeader";
 import FloatingWhatsApp from "./components/FloatingWhatsApp";
+import HomeKitHighlight from "./components/HomeKitHighlight";
 import ProductCard from "./components/ProductCard";
 import ScrollToHash from "./components/ScrollToHash";
 import StoreFaq from "./components/StoreFaq";
@@ -76,6 +77,9 @@ function cardLayout(index: number, count: number) {
 
 export default async function Home() {
   const products = storefrontProducts(Object.values(await getPublicProductCatalog()));
+  const highlightedKit = products.find(
+    (product) => product.href === "/produtos/kit-natalino-trico" && product.featured,
+  );
   const startingCents = products
     .map((p) => productPrice(p).cents)
     .filter((cents): cents is number => typeof cents === "number" && cents > 0);
@@ -184,6 +188,8 @@ export default async function Home() {
           ))}
         </ul>
       </section>
+
+      {highlightedKit && <HomeKitHighlight product={highlightedKit} />}
 
       <section
         className="mx-auto max-w-[1600px] scroll-mt-28 px-5 pt-12 pb-20 sm:px-8 sm:pt-16 lg:px-16 lg:pt-20 lg:pb-28"
