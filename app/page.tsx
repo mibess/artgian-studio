@@ -8,6 +8,8 @@ import { productPrice, storefrontProducts } from "../lib/product-listing";
 import BrandHeader from "./components/BrandHeader";
 import FloatingWhatsApp from "./components/FloatingWhatsApp";
 import HomeKitHighlight from "./components/HomeKitHighlight";
+import HomeReviews from "./components/HomeReviews";
+import HomeStories from "./components/HomeStories";
 import ProductCard from "./components/ProductCard";
 import ScrollToHash from "./components/ScrollToHash";
 import StoreFaq from "./components/StoreFaq";
@@ -306,8 +308,11 @@ export default async function Home() {
         </div>
       </section>
 
+      <HomeStories />
+      <HomeReviews />
+
       <section
-        className="mt-20 bg-[#0b2447] py-20 text-[#f7f3ea] lg:mt-28 lg:py-24"
+        className="bg-[#0b2447] py-20 text-[#f7f3ea] lg:py-24"
         id="sobre"
       >
         <div className="site-container grid items-end gap-12 lg:grid-cols-[1.15fr_1fr]">
