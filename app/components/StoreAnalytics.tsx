@@ -59,6 +59,7 @@ export default function StoreAnalytics() {
       {consent === null || settingsOpen ? (
         <aside
           aria-label="Preferências de cookies"
+          data-cookie-consent-panel=""
           className="fixed inset-x-4 bottom-4 z-[60] mx-auto max-w-xl rounded-2xl border border-[#193244]/15 bg-[#f7f3ea] p-5 text-[#193244] shadow-xl sm:inset-x-auto sm:left-5 sm:mx-0"
         >
           <p className="font-semibold">Sua privacidade importa</p>

@@ -6,8 +6,10 @@ import { getPublicProductCatalog } from "../lib/products/repository";
 import { formatBrl } from "../lib/catalog";
 import { productPrice, storefrontProducts } from "../lib/product-listing";
 import BrandHeader from "./components/BrandHeader";
+import FloatingWhatsApp from "./components/FloatingWhatsApp";
 import ProductCard from "./components/ProductCard";
 import ScrollToHash from "./components/ScrollToHash";
+import StoreFaq from "./components/StoreFaq";
 import { organizationStructuredData, serializeStructuredData } from "../lib/structured-data";
 
 export const metadata: Metadata = {
@@ -331,6 +333,8 @@ export default async function Home() {
         </div>
       </section>
 
+      <StoreFaq />
+
       <footer className="flex flex-col items-start justify-between gap-8 px-6 py-12 text-sm sm:px-10 lg:flex-row lg:items-end">
         <div>
           <a className="flex flex-col leading-none" href="#inicio">
@@ -358,6 +362,9 @@ export default async function Home() {
           <Link className="hover:text-[#b88a3b]" href="/personalizados#orcamento">
             Contato
           </Link>
+          <Link className="hover:text-[#b88a3b]" href="#perguntas-frequentes">
+            Perguntas frequentes
+          </Link>
           <Link className="hover:text-[#b88a3b]" href="/politica-de-privacidade">
             Privacidade
           </Link>
@@ -367,6 +374,7 @@ export default async function Home() {
         </nav>
         <small className="text-[#647087]">© 2026 Artgian Studio</small>
       </footer>
+      <FloatingWhatsApp />
     </main>
   );
 }

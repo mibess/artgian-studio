@@ -18,6 +18,7 @@ const navigation = [
   ["Como funciona", "/personalizados#como-funciona"],
   ["Sobre", "/#sobre"],
   ["Orçamento", "/personalizados#orcamento"],
+  ["Dúvidas", "/#perguntas-frequentes"],
 ] as const;
 
 const menuLinks: MenuLink[] = [
@@ -26,6 +27,7 @@ const menuLinks: MenuLink[] = [
   { label: "Como funciona", href: "/personalizados#como-funciona", description: "Da ideia à entrega", icon: "processo" },
   { label: "Sobre", href: "/#sobre", description: "Nossa essência", icon: "essencia" },
   { label: "Orçamento", href: "/personalizados#orcamento", description: "Conte a sua ideia", icon: "contato" },
+  { label: "Perguntas frequentes", href: "/#perguntas-frequentes", description: "Compras, entregas e personalização", icon: "duvidas" },
 ];
 
 export default function BrandHeader({ fixed = false }: BrandHeaderProps) {

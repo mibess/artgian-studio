@@ -6,6 +6,7 @@ import { getPublicProductCatalog } from "../../lib/products/repository";
 import { customizationChoices, CUSTOM_IDEA_MAX, WHATSAPP_URL } from "../../lib/custom-order";
 import { productPrice, storefrontProducts } from "../../lib/product-listing";
 import BrandHeader from "../components/BrandHeader";
+import FloatingWhatsApp from "../components/FloatingWhatsApp";
 import ScrollToHash from "../components/ScrollToHash";
 import CustomQuoteForm from "./CustomQuoteForm";
 import IdeaCard from "./IdeaCard";
@@ -377,6 +378,7 @@ export default async function CustomPage({
           <Link href="/">Voltar ao início →</Link>
         </div>
       </footer>
+      <FloatingWhatsApp />
     </main>
   );
 }

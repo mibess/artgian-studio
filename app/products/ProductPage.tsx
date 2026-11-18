@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import BrandHeader from "../components/BrandHeader";
+import FloatingWhatsApp from "../components/FloatingWhatsApp";
 import { getProductCatalog } from "../../lib/products/repository";
 import type { Product } from "../../lib/catalog";
 import ProductPurchase from "./ProductPurchase";
@@ -69,6 +70,7 @@ export async function ProductPage({ id }: { id: string }) {
           <ExtraSections product={product} />
         </StandardProduct>
       )}
+      <FloatingWhatsApp />
     </>
   );
 }

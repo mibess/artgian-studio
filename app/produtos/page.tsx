@@ -11,6 +11,7 @@ import {
   type ProductSort,
 } from "../../lib/product-listing";
 import BrandHeader from "../components/BrandHeader";
+import FloatingWhatsApp from "../components/FloatingWhatsApp";
 import ProductCard from "../components/ProductCard";
 import SortSelect from "./SortSelect";
 
@@ -259,6 +260,7 @@ export default async function ProductsPage({
           Voltar ao início →
         </Link>
       </footer>
+      <FloatingWhatsApp />
     </main>
   );
 }

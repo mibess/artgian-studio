@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  CircleHelp,
   Gem,
   Layers,
   Menu,
@@ -20,6 +21,7 @@ const icons = {
   processo: Layers,
   essencia: Gem,
   contato: MessageCircle,
+  duvidas: CircleHelp,
 } satisfies Record<string, LucideIcon>;
 
 export type MenuLink = {
@@ -81,7 +83,7 @@ export default function MobileMenu({ links }: MobileMenuProps) {
             onClick={() => setOpen(false)}
           />
           <nav
-            className="absolute inset-x-3 top-[5.75rem] rounded-[1.75rem] border border-white/70 bg-[#fffdf8]/95 p-3 text-[#0b2447] shadow-[0_18px_60px_rgba(11,36,71,0.2)] backdrop-blur-2xl sm:inset-x-6 sm:top-[6.75rem] lg:right-6 lg:left-auto lg:w-[23rem] lg:rounded-[1.4rem] lg:p-2 lg:transition lg:duration-150 lg:ease-out lg:starting:-translate-y-1 lg:starting:scale-95 lg:starting:opacity-0 lg:origin-top-right"
+            className="absolute inset-x-3 top-[5.75rem] max-h-[calc(100dvh-6.5rem)] overflow-y-auto overscroll-contain rounded-[1.75rem] border border-white/70 bg-[#fffdf8]/95 p-3 text-[#0b2447] shadow-[0_18px_60px_rgba(11,36,71,0.2)] backdrop-blur-2xl sm:inset-x-6 sm:top-[6.75rem] sm:max-h-[calc(100dvh-8.25rem)] lg:right-6 lg:left-auto lg:w-[23rem] lg:rounded-[1.4rem] lg:p-2 lg:transition lg:duration-150 lg:ease-out lg:starting:-translate-y-1 lg:starting:scale-95 lg:starting:opacity-0 lg:origin-top-right"
             aria-label="Menu"
           >
             <p className="hidden px-3 pt-2 pb-2 text-[0.6rem] font-bold uppercase tracking-[0.2em] text-[#b88a3b] lg:block">
