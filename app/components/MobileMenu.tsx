@@ -4,8 +4,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  CircleHelp,
-  Gem,
   Layers,
   Menu,
   MessageCircle,
@@ -19,9 +17,7 @@ const icons = {
   loja: ShoppingBag,
   personalizados: PenLine,
   processo: Layers,
-  essencia: Gem,
   contato: MessageCircle,
-  duvidas: CircleHelp,
 } satisfies Record<string, LucideIcon>;
 
 export type MenuLink = {

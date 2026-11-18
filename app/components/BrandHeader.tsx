@@ -16,18 +16,14 @@ type BrandHeaderProps = {
 const navigation = [
   ["Personalizados", "/personalizados"],
   ["Como funciona", "/personalizados#como-funciona"],
-  ["Sobre", "/#sobre"],
   ["Orçamento", "/personalizados#orcamento"],
-  ["Dúvidas", "/#perguntas-frequentes"],
 ] as const;
 
 const menuLinks: MenuLink[] = [
   { label: "Produtos", href: "/produtos", description: "Todas as peças da loja", icon: "loja" },
   { label: "Personalizados", href: "/personalizados", description: "Peças criadas sob medida", icon: "personalizados" },
   { label: "Como funciona", href: "/personalizados#como-funciona", description: "Da ideia à entrega", icon: "processo" },
-  { label: "Sobre", href: "/#sobre", description: "Nossa essência", icon: "essencia" },
   { label: "Orçamento", href: "/personalizados#orcamento", description: "Conte a sua ideia", icon: "contato" },
-  { label: "Perguntas frequentes", href: "/#perguntas-frequentes", description: "Compras, entregas e personalização", icon: "duvidas" },
 ];
 
 export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
