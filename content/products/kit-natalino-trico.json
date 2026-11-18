@@ -10,7 +10,7 @@
   "productionTime": "",
   "minimumQuantity": 1,
   "maximumQuantity": 9,
-  "availableColors": ["Combinação natalina"],
+  "availableColors": ["Bandeja branca", "Bandeja areia"],
   "availableSizes": ["Bandeja: 18 × 18 × 2 cm"],
   "customizationOptions": [],
   "aliases": ["kit natalino tricô", "kit natalino trico", "kit natalino", "kit de Natal", "kit natal 6 peças"],
@@ -31,9 +31,16 @@
     "variants": [
       {
         "key": "natalina",
-        "name": "Combinação natalina",
-        "swatches": ["#bd2635", "#36533d"],
+        "name": "Bandeja branca",
+        "swatches": ["#F5F1EA"],
         "image": "/kit-natalino-trico-capa.png",
+        "priceCents": null
+      },
+      {
+        "key": "bandeja-areia",
+        "name": "Bandeja areia",
+        "swatches": ["#C5A888"],
+        "image": "/kit-natalino-trico-bandeja-areia.webp",
         "priceCents": null
       }
     ],
@@ -75,8 +82,9 @@
         "text019": {"label": "Link do rodapé", "value": "Conheça o estúdio →"}
       },
       "media": [
-        {"src": "/kit-natalino-trico-capa.png", "alt": "Kit Natalino Tricô com cinco figuras natalinas e bandeja branca em cenário creme e verde"},
-        {"src": "/kit-natalino-trico-referencia.png", "alt": "Referência do Kit Natalino Tricô com árvore de Natal, Papai Noel, rena, urso e figura branca de gorro vermelho sobre bandeja"}
+        {"src": "/kit-natalino-trico-capa.png", "alt": "Kit Natalino Tricô com cinco figuras natalinas sobre uma bandeja redonda canelada em cenário creme e verde"},
+        {"src": "/kit-natalino-trico-referencia.png", "alt": "Referência do Kit Natalino Tricô com árvore de Natal, Papai Noel, rena, urso e figura branca de gorro vermelho sobre bandeja"},
+        {"src": "/kit-natalino-trico-bandeja-areia.webp", "alt": "Kit Natalino Tricô com as cinco figuras sobre a bandeja na cor areia"}
       ],
       "features": [
         ["01", "Seis peças em harmonia", "Cinco figuras natalinas e uma bandeja para compor a decoração."],

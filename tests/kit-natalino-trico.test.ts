@@ -43,7 +43,14 @@ it("cadastra o kit na mesma fonte da loja, frete e atendimento, sem duplicar", a
   expect(product.image).toBe("/kit-natalino-trico-capa.png");
   expect(product.shippingPackage).toEqual({ widthCm: 20, heightCm: 8, lengthCm: 20, weightKg: 0.27 });
   expect(getProductSelection({ productId: product.id, quantity: 2 }, catalog)?.subtotalCents).toBe(11000);
-  expect(parseCart([{ productId: product.id, color: "natalina", quantity: 1 }], catalog)).toHaveLength(1);
+  const sand = getProductSelection({ productId: product.id, color: "bandeja-areia", quantity: 1 }, catalog);
+  expect(sand).toMatchObject({
+    color: "Bandeja areia",
+    subtotalCents: 5500,
+    product: { image: "/kit-natalino-trico-bandeja-areia.webp" },
+  });
+  const bothTrays = ["natalina", "bandeja-areia"].map(color => ({ productId: product.id, color, quantity: 1 }));
+  expect(parseCart(bothTrays, catalog)?.map(item => item.color)).toEqual(["natalina", "bandeja-areia"]);
   const row = await findConversationProduct("Quanto custa o kit natalino?");
   expect(row?.storeId).toBe(product.id);
   expect(productConversationContext(row!).basePriceCents).toBe(5500);
