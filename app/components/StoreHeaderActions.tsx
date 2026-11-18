@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ShoppingBag, UserRound } from "lucide-react";
 import { authClient } from "../../lib/auth-client";
 import { useCart } from "../../lib/cart-store";
+import { headerButtonInteraction } from "./header-styles";
 
 export default function StoreHeaderActions() {
   const { count } = useCart();
@@ -11,7 +12,7 @@ export default function StoreHeaderActions() {
     <div className="relative z-10 flex items-center gap-1 sm:gap-2">
       <Link
         href={data ? "/conta" : "/login"}
-        className="flex min-h-11 items-center gap-2 rounded-full px-3 text-xs font-semibold transition hover:bg-white/70"
+        className={`flex min-h-11 items-center gap-2 rounded-full px-3 text-xs font-semibold ${headerButtonInteraction}`}
         aria-label={data ? "Minha conta" : "Entrar"}
       >
         <UserRound size={19} aria-hidden="true" />
@@ -21,7 +22,7 @@ export default function StoreHeaderActions() {
       </Link>
       <Link
         href="/carrinho"
-        className="flex min-h-11 items-center gap-2 rounded-full px-3 text-xs font-semibold transition hover:bg-white/70"
+        className={`flex min-h-11 items-center gap-2 rounded-full px-3 text-xs font-semibold ${headerButtonInteraction}`}
         aria-label={`Carrinho, ${count} ${count === 1 ? "item" : "itens"}`}
       >
         <ShoppingBag size={19} aria-hidden="true" />

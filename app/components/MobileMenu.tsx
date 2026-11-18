@@ -12,6 +12,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { headerButtonInteraction } from "./header-styles";
 
 const icons = {
   loja: ShoppingBag,
@@ -57,7 +58,7 @@ export default function MobileMenu({ links }: MobileMenuProps) {
     <>
       <button
         type="button"
-        className={`relative z-10 grid size-11 place-items-center rounded-full transition hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] xl:hidden ${
+        className={`relative z-10 grid size-11 place-items-center rounded-full ${headerButtonInteraction} xl:hidden ${
           open ? "lg:bg-white lg:ring-2 lg:ring-[#b88a3b]/40" : ""
         }`}
         aria-label={open ? "Fechar menu" : "Abrir menu"}

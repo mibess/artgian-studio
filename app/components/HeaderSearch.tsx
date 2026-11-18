@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowUpRight, Clock3, Search, X } from "lucide-react";
 import { useProductCatalog } from "../../lib/products/context";
 import { beginNavigation } from "../../lib/navigation-progress";
+import { headerButtonInteraction } from "./header-styles";
 import {
   highlightParts,
   productPrice,
@@ -575,7 +576,7 @@ export default function HeaderSearch() {
       </form>
       <button
         type="button"
-        className="grid size-11 place-items-center rounded-full transition hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b88a3b] sm:hidden"
+        className={`grid size-11 place-items-center rounded-full ${headerButtonInteraction} sm:hidden`}
         aria-label="Buscar produtos"
         aria-expanded={open === "sheet"}
         onClick={() => openPanel("sheet")}
