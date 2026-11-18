@@ -10,16 +10,17 @@ export default function HomeKitHighlight({ product }: { product: Product }) {
   return (
     <section
       aria-labelledby="kit-natalino-destaque"
-      className="mx-auto mt-8 max-w-[1600px] px-5 sm:mt-10 sm:px-8 lg:mt-14 lg:px-16"
+      className="mx-auto mt-10 max-w-[1600px] px-5 sm:mt-14 sm:px-8 md:mt-16 lg:mt-20 lg:px-16"
     >
-      <div className="grid grid-cols-[minmax(0,.82fr)_minmax(0,1.18fr)] items-center gap-x-3.5 gap-y-2.5 rounded-3xl border border-[#d8bc7b]/20 bg-[linear-gradient(105deg,#193556,#0b2447_72%)] p-3.5 text-[#f7f3ea] shadow-[0_16px_40px_rgba(11,36,71,.13)] sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-x-5 sm:p-5 md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-x-6 md:py-4 lg:gap-x-9 lg:px-7">
-        <div className="relative row-span-2 aspect-square overflow-hidden rounded-[1.1rem] border border-[#f7f3ea]/30 bg-[#e9dfcf] shadow-lg shadow-[#06172e]/35 sm:rounded-[1.3rem] md:-mt-9 md:row-span-1 md:aspect-auto md:h-44 md:w-52 md:self-end lg:-mt-11 lg:h-48 lg:w-64">
+      <div className="grid grid-cols-[minmax(0,.82fr)_minmax(0,1.18fr)] items-center gap-x-3.5 gap-y-2.5 rounded-3xl border border-[#d8bc7b]/20 bg-[linear-gradient(105deg,#193556,#0b2447_72%)] p-3.5 text-[#f7f3ea] shadow-[0_16px_40px_rgba(11,36,71,.13)] sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-x-5 sm:p-5 md:min-h-36 md:grid-cols-[12rem_minmax(0,1fr)_auto] md:gap-x-6 md:py-4 lg:min-h-40 lg:grid-cols-[15rem_minmax(0,1fr)_auto] lg:gap-x-8 lg:px-7">
+        <div className="relative row-span-2 self-stretch md:row-span-1">
           <Image
-            src="/kit-natalino-trico-referencia.png"
+            src="/kit-natalino-trico-recorte.webp"
             alt="Cinco miniaturas de Natal com textura de tricô em uma bandeja branca"
-            fill
-            sizes="(min-width: 1024px) 256px, (min-width: 768px) 208px, (min-width: 640px) 160px, 42vw"
-            className="object-cover"
+            width={640}
+            height={560}
+            sizes="(min-width: 1024px) 240px, (min-width: 768px) 192px, (min-width: 640px) 160px, 42vw"
+            className="absolute inset-x-0 -top-8 h-auto w-full drop-shadow-[0_8px_12px_rgba(6,23,46,.32)] sm:-top-10 md:top-auto md:-bottom-1"
           />
         </div>
 
