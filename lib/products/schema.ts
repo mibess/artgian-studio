@@ -10,6 +10,13 @@ const cents = z.number().int().min(0).max(100_000_000);
 const color = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, "Informe uma cor hexadecimal.");
+export const productFulfillmentSchema = z.object({
+  readyToShip: z.boolean(),
+  preparationDays: z.number().int("Informe um número inteiro de dias úteis.").min(0).max(365),
+}).refine(value => value.readyToShip || value.preparationDays >= 1, {
+  path: ["preparationDays"],
+  message: "Produtos sob encomenda precisam de pelo menos 1 dia útil para envio.",
+});
 export const presentationSchema = z.object({
   template: z.enum([
     "standard",
@@ -53,6 +60,7 @@ export const storefrontSchema = z
     listed: z.boolean(),
     featured: z.boolean(),
     purchasable: z.boolean(),
+    fulfillment: productFulfillmentSchema.nullable().optional(),
     variants: z
       .array(
         z.object({

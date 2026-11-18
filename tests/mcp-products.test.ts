@@ -223,6 +223,24 @@ describe("MCP remoto de produtos", () => {
     expect(updateProductSchema.safeParse({ id: created.id, version: 1, changes: { presentation: { media: [] } } }).success).toBe(false);
     expect((await findEditableProducts(created.id, identity)).product?.version).toBe(created.version);
   });
+  it("cria e edita prazos confirmados, preserva omissões e permite remover a informação", async () => {
+    const fulfillment = { readyToShip: true, preparationDays: 2 };
+    const input = createProductSchema.parse({ ...product("fulfillment-product"), fulfillment });
+    const created = await createProduct(input, identity);
+    expect((await findEditableProducts(created.id, identity)).product?.fulfillment).toEqual(fulfillment);
+    const { getProductCatalog } = await import("../lib/products/repository");
+    expect((await getProductCatalog())[input.slug].fulfillment).toEqual(fulfillment);
+    const edited = await updateProduct({ ...created, changes: { description: "Descrição revisada sem alterar o envio." } }, identity);
+    expect((await findEditableProducts(created.id, identity)).product?.fulfillment).toEqual(fulfillment);
+    const madeToOrder = { readyToShip: false, preparationDays: 7 };
+    await expect(updateProduct({ ...created, changes: { fulfillment: madeToOrder } }, identity)).rejects.toThrow("versão");
+    const changed = await updateProduct({ id: created.id, version: edited.version, changes: { fulfillment: madeToOrder } }, identity);
+    expect((await findEditableProducts(created.id, identity)).product?.fulfillment).toEqual(madeToOrder);
+    await updateProduct({ id: created.id, version: changed.version, changes: { fulfillment: null } }, identity);
+    expect((await findEditableProducts(created.id, identity)).product?.fulfillment).toBeNull();
+    expect(createProductSchema.safeParse({ ...input, fulfillment: { readyToShip: false, preparationDays: 0 } }).success).toBe(false);
+    expect(updateProductSchema.safeParse({ id: created.id, version: changed.version, changes: { fulfillment: { readyToShip: true, preparationDays: -1 } } }).success).toBe(false);
+  });
   it("publica diretamente somente com permissão, imagens próprias e embalagem", async () => {
     const other = await connect(["products:write", "images:write"]);
     const limited = await authenticate(new Request(origin, { headers: { authorization: `Bearer ${other.access}` } }));

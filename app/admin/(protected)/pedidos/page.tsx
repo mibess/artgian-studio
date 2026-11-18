@@ -176,7 +176,7 @@ export default async function AdminOrdersPage({
                       Pedido: {order.status}
                     </span>
                     <span className="mt-1 block text-[#647087]">
-                      Etiqueta: {order.shippingLabelStatus || "não iniciada"}
+                      Etiqueta: {order.shippingLabelStatus === "canceled" ? "cancelada" : order.shippingLabelStatus || "não iniciada"}
                     </span>
                     {order.shippingLabelError && (
                       <span className="mt-2 block text-red-700">
@@ -238,6 +238,17 @@ export default async function AdminOrdersPage({
                       >
                         Abrir etiqueta
                       </a>
+                    )}
+                    {order.status === "paid" && orderProvider === "super_frete" && order.shippingLabelId && (
+                      <form action={`/api/admin/orders/${order.id}/label`} method="post">
+                        <input type="hidden" name="action" value="sync" />
+                        <NativeSubmitButton
+                          pendingLabel="Consultando…"
+                          className="rounded-full border border-[#0b2447]/20 px-4 py-2 text-xs font-semibold"
+                        >
+                          Consultar cancelamento
+                        </NativeSubmitButton>
+                      </form>
                     )}
                     {!order.customerDocument && order.status === "paid" && (
                       <span className="rounded-full bg-[#f7f3ea] px-4 py-2 text-xs text-[#647087]">

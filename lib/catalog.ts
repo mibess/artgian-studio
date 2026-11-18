@@ -4,6 +4,11 @@ export type ShippingPackage = {
   lengthCm: number;
   weightKg: number;
 };
+export type ProductFulfillment = {
+  readyToShip: boolean;
+  /** Maximum business days between payment confirmation and dispatch. */
+  preparationDays: number;
+};
 export type ProductVariant = {
   key: string;
   name: string;
@@ -37,6 +42,7 @@ export type Storefront = {
   purchasable: boolean;
   variants: ProductVariant[];
   shippingPackage: ShippingPackage | null;
+  fulfillment?: ProductFulfillment | null;
   personalization: {
     enabled: boolean;
     required: boolean;
@@ -62,6 +68,7 @@ export type Product = {
   pricingType: string;
   active: boolean;
   productionTime: string | null;
+  fulfillment?: ProductFulfillment | null;
   variants: ProductVariant[];
   shippingPackage: ShippingPackage | null;
   customizable: boolean;

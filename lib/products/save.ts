@@ -43,6 +43,10 @@ export async function saveProduct(raw: string, actor = "admin", transaction?: Pr
         { status: 404 },
       );
     const previous = parseStorefront(existing?.storefront || null);
+    // Older clients do not send fulfillment. Preserve the confirmed promise;
+    // an explicit null is the only way to clear it while keeping the storefront.
+    if (p.storefront && p.storefront.fulfillment === undefined && previous?.fulfillment !== undefined)
+      p.storefront.fulfillment = previous.fulfillment;
     if (previous && p.storefront?.slug !== previous.slug)
       return Response.json(
         { error: "O endereço de produtos existentes deve ser preservado." },

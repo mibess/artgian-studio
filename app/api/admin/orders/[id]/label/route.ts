@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { orderItems, orders } from "@/db/schema";
 import { hasFullName } from "@/lib/brazil";
@@ -6,6 +6,7 @@ import { hasAdminAccess } from "@/lib/admin-access";
 import { requestOrigin as getRequestOrigin } from "@/lib/request-origin";
 import { getProductCatalog } from "@/lib/products/repository";
 import type { ShippingPackage } from "@/lib/catalog";
+import { syncSuperFreteLabelCancellation } from "@/lib/super-frete-label-sync";
 import {
   calculateProviderCartShipping,
   createAndPurchaseShippingLabel,
@@ -61,6 +62,23 @@ export async function POST(request: Request, context: LabelRouteContext) {
 
   try {
     const provider = resolveShippingProvider(order.shippingProvider);
+    if (action === "sync") {
+      if (provider !== "super_frete" || !order.shippingLabelId) {
+        return adminRedirect(request, "error", "Este pedido não tem etiqueta da SuperFrete para consultar.");
+      }
+      try {
+        const result = await syncSuperFreteLabelCancellation(order.shippingLabelId, order.id);
+        if (result === "canceled") {
+          return adminRedirect(request, "message", "Cancelamento confirmado. Você pode comprar outra etiqueta.");
+        }
+        if (result === "unlinked") {
+          return adminRedirect(request, "message", "O vínculo da etiqueta já foi atualizado.");
+        }
+        return adminRedirect(request, "message", "A SuperFrete ainda não confirmou o cancelamento.");
+      } catch {
+        return adminRedirect(request, "error", "Não foi possível consultar a etiqueta na SuperFrete. Tente novamente.");
+      }
+    }
     if (action === "create") {
       const submittedRecipientName = String(form.get("recipientName") || "")
         .trim()
@@ -188,7 +206,7 @@ export async function POST(request: Request, context: LabelRouteContext) {
         provider,
         order.shippingLabelId,
       );
-      await db
+      const updated = await db
         .update(orders)
         .set({
           shippingLabelStatus: "generated",
@@ -197,7 +215,11 @@ export async function POST(request: Request, context: LabelRouteContext) {
           shippingLabelUpdatedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })
-        .where(eq(orders.id, order.id));
+        .where(and(eq(orders.id, order.id), eq(orders.shippingLabelId, order.shippingLabelId)))
+        .returning({ id: orders.id });
+      if (!updated.length) {
+        return adminRedirect(request, "error", "O vínculo da etiqueta mudou. Consulte o pedido novamente.");
+      }
       return adminRedirect(
         request,
         "message",
@@ -216,7 +238,7 @@ export async function POST(request: Request, context: LabelRouteContext) {
         shippingLabelUpdatedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
-      .where(eq(orders.id, order.id));
+      .where(and(eq(orders.id, order.id), order.shippingLabelId ? eq(orders.shippingLabelId, order.shippingLabelId) : undefined));
     return adminRedirect(request, "error", message);
   }
 }

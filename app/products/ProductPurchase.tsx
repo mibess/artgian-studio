@@ -5,6 +5,7 @@ import type { Product } from "../../lib/catalog";
 import { getProductSelection } from "../../lib/catalog";
 import AddToCartButton from "../components/AddToCartButton";
 import { announceProductColor } from "../components/ProductColorImage";
+import ProductDelivery from "./ProductDelivery";
 export default function ProductPurchase({ product }: { product: Product }) {
   const [color, setColor] = useState(product.variants[0]?.key || "");
   const [quantity, setQuantity] = useState(product.minimumQuantity);
@@ -57,6 +58,7 @@ export default function ProductPurchase({ product }: { product: Product }) {
   }
   return (
     <div className="mt-9">
+      <ProductDelivery product={product} item={item} valid={valid} />
       {product.customizable && (
         <label className="mb-6 block text-sm font-semibold">
           {product.personalization.label}
@@ -149,14 +151,10 @@ export default function ProductPurchase({ product }: { product: Product }) {
             : product.customizable
               ? "Comprar personalizado"
               : "Comprar agora"}
-          <span>→</span>
+          <span aria-hidden="true">→</span>
         </button>
       </div>
       <AddToCartButton item={item} disabled={!valid} />
-      <p className="mt-4 text-xs opacity-65">
-        {product.productionTime || "Produção sob encomenda"} · Envio calculado
-        no checkout
-      </p>
     </div>
   );
 }

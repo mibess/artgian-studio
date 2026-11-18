@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     if (!response.ok) throw new Error("ViaCEP unavailable");
     const data = await response.json();
     if (data?.erro === true || data?.erro === "true")
-      return Response.json({ error: "CEP não encontrado. Preencha o endereço manualmente." }, { status: 404 });
+      return Response.json({ error: "CEP não encontrado. Confira o CEP e tente novamente." }, { status: 404 });
     const result = resultSchema.parse(data);
     if (result.cep.replace(/\D/g, "") !== cep) throw new Error("Unexpected postal code");
     return Response.json({ address: {
@@ -32,6 +32,6 @@ export async function GET(request: Request) {
       state: result.uf,
     } }, { headers: { "Cache-Control": "public, max-age=3600" } });
   } catch {
-    return Response.json({ error: "Consulta de CEP indisponível. Preencha o endereço manualmente." }, { status: 503 });
+    return Response.json({ error: "Consulta de CEP indisponível. Tente novamente em instantes." }, { status: 503 });
   }
 }

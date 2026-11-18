@@ -12,7 +12,8 @@ export default function AddressFields({ value, onChange, readOnly = false, inclu
   includeLabel?: boolean;
 }) {
   const cep = value.postalCode.replace(/\D/g, "");
-  const previousCep = useRef(cep);
+  const locationReadOnly = readOnly || cep.length > 0;
+  const previousCep = useRef(value.city && value.state ? cep : "");
   const [lookup, setLookup] = useState({ cep: "", message: "" });
   const currentAddress = useEffectEvent(() => value);
   const applyResult = useEffectEvent((baseline: AddressDraft, result: Partial<AddressDraft>) => {
@@ -36,11 +37,11 @@ export default function AddressFields({ value, onChange, readOnly = false, inclu
         const response = await fetch(`/api/addresses/lookup?cep=${cep}`, { signal: controller.signal });
         const result = await response.json();
         if (!active) return;
-        if (!response.ok || !result.address) throw new Error(result.error || "Consulta de CEP indisponível. Preencha o endereço manualmente.");
+        if (!response.ok || !result.address) throw new Error(result.error || "Consulta de CEP indisponível. Confira o CEP e tente novamente.");
         applyResult(baseline, result.address);
         setLookup({ cep, message: "Endereço localizado. Confira os dados e informe número e complemento, se houver." });
       } catch (error) {
-        if (active) setLookup({ cep, message: error instanceof Error ? error.message : "Consulta de CEP indisponível. Preencha o endereço manualmente." });
+        if (active) setLookup({ cep, message: error instanceof Error ? error.message : "Consulta de CEP indisponível. Confira o CEP e tente novamente." });
       }
     }, 350);
     return () => {
@@ -63,13 +64,15 @@ export default function AddressFields({ value, onChange, readOnly = false, inclu
     {fields.map(field => <label key={field.name} className={`min-w-0 ${field.span}`}>
       <span className="mb-2 block text-xs font-semibold">{field.label}</span>
       <input className={inputClass} name={field.name} value={field.name === "postalCode" ? formatPostalCode(value[field.name]) : value[field.name]}
-        onChange={event => onChange({ ...value, [field.name]: field.name === "postalCode" ? formatPostalCode(event.target.value) : event.target.value })}
-        autoComplete={field.autoComplete} required={!field.optional} maxLength={field.max} readOnly={readOnly}
+        onChange={event => onChange(field.name === "postalCode"
+          ? { ...value, postalCode: formatPostalCode(event.target.value), ...(formatPostalCode(event.target.value).replace(/\D/g, "") !== cep && { city: "", state: "" }) }
+          : { ...value, [field.name]: event.target.value })}
+        autoComplete={field.autoComplete} required={!field.optional} maxLength={field.max} readOnly={readOnly || (field.name === "city" && locationReadOnly)}
         inputMode={field.name === "postalCode" ? "numeric" : undefined} pattern={field.name === "postalCode" ? "[0-9]{5}-?[0-9]{3}" : undefined} placeholder={field.placeholder} />
     </label>)}
     <label className="min-w-0">
       <span className="mb-2 block text-xs font-semibold">UF</span>
-      {readOnly ? <input className={inputClass} name="state" value={value.state} readOnly /> :
+      {locationReadOnly ? <input className={inputClass} name="state" value={value.state} readOnly /> :
         <select aria-label="UF" className={inputClass} name="state" value={value.state} onChange={event => onChange({ ...value, state: event.target.value })} autoComplete="address-level1" required>
           <option value="" disabled>UF</option>
           {BRAZIL_STATES.map(state => <option key={state} value={state}>{state}</option>)}

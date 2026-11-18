@@ -299,3 +299,14 @@ export async function printSuperFreteLabel(labelId: string) {
   }
   return printed.url;
 }
+
+export async function getSuperFreteLabelStatus(labelId: string) {
+  const label = await superFreteRequest<{ id?: string; status?: string }>(
+    `/api/v0/order/info/${encodeURIComponent(labelId)}`,
+    { cache: "no-store" },
+  );
+  if (label.id !== labelId || typeof label.status !== "string" || !label.status.trim()) {
+    throw new ShippingProviderError("O SuperFrete retornou dados inválidos para a etiqueta.", 502);
+  }
+  return label.status;
+}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
 import type { Product } from "../../lib/catalog";
 import { productPrice } from "../../lib/product-listing";
+import ProductAvailability from "./ProductAvailability";
 
 type ProductCardProps = {
   product: Product;
@@ -91,6 +92,7 @@ export default function ProductCard({
             {product.description}
           </p>
         )}
+        {buyable && <ProductAvailability product={product} />}
         <div className="mt-auto flex items-end justify-between gap-3 pt-4">
           <span className="leading-tight">
             {price.prefix && (

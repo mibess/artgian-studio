@@ -41,7 +41,7 @@ describe("postal code lookup", () => {
     for (let index = 0; index < 5; index++) {
       const response = await lookup("01001000");
       expect(response.status).toBe(503);
-      expect((await response.json()).error).toContain("manualmente");
+      expect((await response.json()).error).toContain("Tente novamente");
     }
   });
 });

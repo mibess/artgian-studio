@@ -18,10 +18,10 @@ export const metadata: Metadata = {
   title: "Produtos | Artgian Studio",
   alternates: { canonical: "/produtos" },
   description:
-    "Conheça as criações em destaque da Artgian Studio, produzidas sob encomenda em impressão 3D.",
+    "Conheça as criações em impressão 3D da Artgian Studio e consulte a disponibilidade e o prazo de envio de cada peça.",
   openGraph: {
     title: "Produtos | Artgian Studio",
-    description: "Presentes, decoração e peças funcionais em impressão 3D, produzidos sob encomenda.",
+    description: "Presentes, decoração e peças funcionais em impressão 3D. Consulte a disponibilidade e o prazo de envio de cada peça.",
     url: "/produtos",
     siteName: "Artgian Studio",
     locale: "pt_BR",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Produtos | Artgian Studio",
-    description: "Presentes, decoração e peças funcionais em impressão 3D, produzidos sob encomenda.",
+    description: "Presentes, decoração e peças funcionais em impressão 3D. Consulte a disponibilidade e o prazo de envio de cada peça.",
     images: ["/og.png"],
   },
 };
@@ -131,8 +131,7 @@ export default async function ProductsPage({
               )}
             </h1>
             <p className="mt-3 text-sm text-[#647087]">
-              {products.length} {products.length === 1 ? "peça" : "peças"} · Produzidas sob
-              encomenda
+              {products.length} {products.length === 1 ? "peça" : "peças"} · Confira o prazo de envio em cada peça
               {busca && (
                 <>
                   {" · "}

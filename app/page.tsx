@@ -22,9 +22,9 @@ const serifTitle =
   "font-serif font-normal leading-[0.92] tracking-[-0.055em]";
 
 const assurances = [
-  [Layers, "Feito sob encomenda", "Impresso camada por camada"],
+  [Layers, "Criações em impressão 3D", "Feitas camada por camada"],
   [PenLine, "Peças personalizadas", "Projetos sob medida"],
-  [Truck, "Envio para todo o Brasil", "Frete calculado ao finalizar"],
+  [Truck, "Envio para todo o Brasil", "Consulte frete e prazo na peça"],
   [ShieldCheck, "Pagamento seguro", "Pix, cartão ou boleto"],
 ] as const;
 

@@ -3,6 +3,7 @@ import { useState, useRef } from "react";
 import type { ProductInput } from "../../../../lib/products/schema";
 import type { Storefront } from "../../../../lib/catalog";
 import { formatBrl } from "../../../../lib/catalog";
+import { fulfillmentSummary } from "../../../../lib/product-fulfillment";
 const blankStore = (): Storefront => ({
   slug: "",
   listed: false,
@@ -18,6 +19,7 @@ const blankStore = (): Storefront => ({
     },
   ],
   shippingPackage: null,
+  fulfillment: null,
   personalization: {
     enabled: false,
     required: false,
@@ -230,6 +232,7 @@ export function ProductManager({
     }
   }
   const s = draft?.storefront;
+  const fulfillmentPreview = draft ? fulfillmentSummary({ fulfillment: s?.fulfillment, productionTime: draft.productionTime }) : null;
   const selectedProduct = draft?.id ? products.find(p => p.id === draft.id) : undefined;
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[300px_1fr]">
@@ -386,7 +389,7 @@ export function ProductManager({
                 />
               )}
               <TextField
-                label="Prazo de produção confirmado"
+                label="Observação de produção (cadastros anteriores)"
                 value={draft.productionTime}
                 onChange={(v) => set("productionTime", v)}
               />
@@ -411,6 +414,55 @@ export function ProductManager({
               />
               {s && (
                 <>
+                  <fieldset className="space-y-4 rounded-2xl border border-[#dcded9] bg-[#f7f5ee] p-4">
+                    <legend className="px-1 text-sm font-semibold text-[#193244]">Disponibilidade e prazo para envio</legend>
+                    <label className="block text-xs font-semibold text-[#526873]">
+                      Disponibilidade
+                      <select
+                        className={input}
+                        value={s.fulfillment ? (s.fulfillment.readyToShip ? "ready" : "order") : "unknown"}
+                        onChange={(event) => store({ fulfillment: event.target.value === "unknown" ? null : {
+                          readyToShip: event.target.value === "ready",
+                          preparationDays: s.fulfillment?.preparationDays ?? Number.NaN,
+                        } })}
+                      >
+                        <option value="unknown">Não informado</option>
+                        <option value="ready">Pronta entrega</option>
+                        <option value="order">Sob encomenda</option>
+                      </select>
+                    </label>
+                    {s.fulfillment && (
+                      <label className="block text-xs font-semibold text-[#526873]">
+                        Prazo para envio (dias úteis)
+                        <input
+                          className={input}
+                          type="number"
+                          min={s.fulfillment.readyToShip ? 0 : 1}
+                          max={365}
+                          step={1}
+                          required
+                          value={Number.isFinite(s.fulfillment.preparationDays) ? s.fulfillment.preparationDays : ""}
+                          onChange={(event) => store({ fulfillment: {
+                            ...s.fulfillment!,
+                            preparationDays: event.target.value === "" ? Number.NaN : Number(event.target.value),
+                          } })}
+                          aria-describedby="fulfillment-help"
+                        />
+                      </label>
+                    )}
+                    <p id="fulfillment-help" className="text-xs leading-5 text-[#526873]">
+                      Informe o prazo máximo entre a confirmação do pagamento e a postagem, incluindo preparo e embalagem. O transporte será somado conforme o CEP. Pronta entrega significa que a peça já está produzida; confirme que isso vale para todas as opções e quantidades oferecidas.
+                    </p>
+                    {s.fulfillment && Number.isInteger(s.fulfillment.preparationDays) && s.fulfillment.preparationDays >= (s.fulfillment.readyToShip ? 0 : 1) && s.fulfillment.preparationDays <= 365 && (
+                      <p className="rounded-xl bg-white p-3 text-sm text-[#193244]">
+                        <span className="block text-xs text-[#526873]">Como aparece na loja</span>
+                        <strong>{fulfillmentPreview?.label}</strong>
+                        {" · "}{fulfillmentPreview?.detail}
+                        <span className="mt-1 block text-xs text-[#526873]">O prazo de transporte depende do CEP.</span>
+                      </p>
+                    )}
+                    {!s.fulfillment && <p className="text-xs leading-5 text-[#526873]">Sem um prazo confirmado, a loja orienta o cliente a consultar o preparo. Nenhum número de dias será preenchido automaticamente.</p>}
+                  </fieldset>
                   <TextField
                     label="Endereço do produto"
                     disabled={Boolean(selectedProduct?.storefront)}

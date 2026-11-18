@@ -195,4 +195,52 @@ describe("single product catalog", () => {
       true,
     );
   });
+  it("keeps legacy availability unknown and validates confirmed dispatch promises", async () => {
+    const { productFulfillmentSchema } = await import("../lib/products/schema");
+    const { getProductCatalog } = await import("../lib/products/repository");
+    expect((await getProductCatalog())["bandeja-aurora"].fulfillment).toBeNull();
+    for (const value of [
+      { readyToShip: false, preparationDays: 0 },
+      { readyToShip: true, preparationDays: -1 },
+      { readyToShip: true, preparationDays: 366 },
+      { readyToShip: false, preparationDays: 1.5 },
+      { readyToShip: true, preparationDays: null },
+      { readyToShip: true, preparationDays: "2" },
+      { readyToShip: "true", preparationDays: 2 },
+    ]) expect(productFulfillmentSchema.safeParse(value).success).toBe(false);
+    for (const value of [
+      { readyToShip: true, preparationDays: 0 },
+      { readyToShip: true, preparationDays: 2 },
+      { readyToShip: false, preparationDays: 1 },
+      { readyToShip: false, preparationDays: 365 },
+    ]) expect(productFulfillmentSchema.safeParse(value).success).toBe(true);
+    const p = await input();
+    p.storefront!.fulfillment = { readyToShip: false, preparationDays: 0 };
+    expect((await save(p)).status).toBe(400);
+    expect((await record()).version).toBe(p.version);
+  });
+  it("shares confirmed preparation with the store and assistant, preserves omitted fields and allows explicit clearing", async () => {
+    const { getProductCatalog, productConversationContext } = await import("../lib/products/repository");
+    const p = await input();
+    const fulfillment = { readyToShip: false, preparationDays: 5 };
+    p.productionTime = "20 dias úteis (observação antiga)";
+    p.storefront!.fulfillment = fulfillment;
+    expect((await save(p)).status).toBe(200);
+    expect((await getProductCatalog())["organizador-arco"].fulfillment).toEqual(fulfillment);
+    expect(productConversationContext(await record()).fulfillment).toEqual(fulfillment);
+    expect(productConversationContext(await record()).productionTime).toBe("Sob encomenda. Envio em até 5 dias úteis após a confirmação do pagamento. O prazo de transporte depende do CEP.");
+    expect((await save(p)).status).toBe(409);
+
+    const oldClient = await input();
+    delete oldClient.storefront!.fulfillment;
+    oldClient.description = "Descrição atualizada por um cliente anterior.";
+    expect((await save(oldClient)).status).toBe(200);
+    expect((await getProductCatalog())["organizador-arco"].fulfillment).toEqual(fulfillment);
+
+    const clear = await input();
+    clear.storefront!.fulfillment = null;
+    expect((await save(clear)).status).toBe(200);
+    expect((await getProductCatalog())["organizador-arco"].fulfillment).toBeNull();
+    expect(productConversationContext(await record()).productionTime).toBe("20 dias úteis (observação antiga)");
+  });
 });

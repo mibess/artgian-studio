@@ -7,6 +7,7 @@ import { Barcode, CreditCard, LockKeyhole, MapPin, Plus, QrCode, UserRound } fro
 import { cartSelections, type CartItem } from "../../lib/cart";
 import { formatCpf, formatPhone, hasFullName, isValidCpf } from "../../lib/brazil";
 import { formatBrl } from "../../lib/catalog";
+import { deliveryEstimate, fulfillmentSummary, preparationSummary } from "../../lib/product-fulfillment";
 import type { ShippingOption } from "../../lib/shipping";
 import ProductColorImage from "../components/ProductColorImage";
 
@@ -25,6 +26,7 @@ type CheckoutFormProps = {
 type QuoteResponse = {
   postalCode?: string;
   options?: ShippingOption[];
+  preparationDays?: number | null;
   error?: string;
 };
 
@@ -82,6 +84,7 @@ export default function CheckoutForm({
   const postalCode = address.postalCode;
   const [quotedPostalCode, setQuotedPostalCode] = useState("");
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
+  const [quotedPreparationDays, setQuotedPreparationDays] = useState<number | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState("");
 
   const selectedShipping = shippingOptions.find(
@@ -135,7 +138,7 @@ export default function CheckoutForm({
 
   function handlePostalCodeChange(value: string) {
     setShippingError("");
-    setAddress(current => ({ ...current, postalCode: formatPostalCode(value) }));
+    setAddress(current => ({ ...current, postalCode: formatPostalCode(value), ...(onlyPostalCodeDigits(value) !== onlyPostalCodeDigits(current.postalCode) && { city: "", state: "" }) }));
     quoteVersion.current += 1;
     setQuoting(false);
     if (onlyPostalCodeDigits(value) !== quotedPostalCode) {
@@ -192,6 +195,7 @@ export default function CheckoutForm({
       }
 
       setShippingOptions(result.options);
+      setQuotedPreparationDays(result.preparationDays ?? null);
       setQuotedPostalCode(result.postalCode);
       setSelectedServiceId(result.options[0].serviceId);
     } catch (quoteError) {
@@ -554,6 +558,9 @@ export default function CheckoutForm({
                 <legend className="mb-2 text-xs font-semibold">
                   Escolha a modalidade
                 </legend>
+                <p className="mb-3 text-xs leading-5 text-[#647087]">
+                  {preparationSummary(selections.map((selection) => selection.product))}
+                </p>
                 {shippingOptions.map((option) => (
                   <label
                     className={`flex cursor-pointer items-center justify-between gap-4 rounded-xl border p-4 transition ${
@@ -576,9 +583,11 @@ export default function CheckoutForm({
                         <strong className="block text-sm">
                           {option.companyName} · {option.serviceName}
                         </strong>
-                        <span className="mt-1 block text-xs text-[#647087]">
-                          Até {option.deliveryTimeDays} dias úteis após a
-                          postagem
+                        <span className="mt-1 block text-sm font-semibold text-[#0b2447]">
+                          {deliveryEstimate(quotedPreparationDays, option.deliveryTimeDays).label}
+                        </span>
+                        <span className="mt-1 block text-xs leading-5 text-[#647087]">
+                          {deliveryEstimate(quotedPreparationDays, option.deliveryTimeDays).detail}
                         </span>
                       </span>
                     </span>
@@ -766,6 +775,10 @@ export default function CheckoutForm({
                       Personalização: “{selection.personalization}”
                     </p>
                   )}
+                  <p className="mt-2 text-xs leading-5 text-white/80">
+                    <strong className="text-[#d8bc7b]">{fulfillmentSummary(selection.product).label}</strong>
+                    {" · "}{fulfillmentSummary(selection.product).detail}
+                  </p>
                   <p className="mt-2 text-sm font-semibold">
                     {formatBrl(selection.subtotalCents)}
                   </p>
@@ -806,6 +819,17 @@ export default function CheckoutForm({
               </div>
             )}
           </dl>
+          {selectedShipping && (
+            <div className="mt-5 rounded-xl border border-white/15 bg-white/5 p-4" aria-live="polite">
+              <p className="text-sm font-semibold text-[#d8bc7b]">
+                {deliveryEstimate(quotedPreparationDays, selectedShipping.deliveryTimeDays).label}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-white/80">
+                {deliveryEstimate(quotedPreparationDays, selectedShipping.deliveryTimeDays).detail}
+              </p>
+              {selections.length > 1 && <p className="mt-2 text-xs leading-5 text-white/65">Envio conjunto: vale o maior prazo de preparação entre as peças.</p>}
+            </div>
+          )}
           <div className="mt-5 flex items-end justify-between">
             <span className="text-xs text-white/55">Total</span>
             <strong className="font-serif text-3xl font-normal text-[#d8bc7b]">

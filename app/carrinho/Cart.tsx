@@ -5,6 +5,8 @@ import { useCart } from "../../lib/cart-store";
 import { cartItemKey } from "../../lib/cart";
 import { formatBrl } from "../../lib/catalog";
 import ProductColorImage from "../components/ProductColorImage";
+import ProductAvailability from "../components/ProductAvailability";
+import { preparationSummary } from "../../lib/product-fulfillment";
 
 export function EmptyCart() {
   return (
@@ -83,6 +85,7 @@ export default function Cart() {
                   <p className="mt-2 text-xs text-[#647087]">
                     {formatBrl(selection.product.unitPriceCents)} por unidade
                   </p>
+                  <ProductAvailability product={selection.product} />
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center rounded-full border border-[#0b2447]/15 bg-white">
                       <button
@@ -149,8 +152,11 @@ export default function Cart() {
             <span>Subtotal</span>
             <strong>{formatBrl(cart.subtotalCents)}</strong>
           </div>
-          <p className="mt-4 text-xs leading-5 text-white/65">
-            Frete calculado pelo CEP na próxima etapa. Produção sob encomenda.
+          <p className="mt-4 text-sm leading-6 text-white/90">
+            {preparationSummary(cart.selections.map((selection) => selection.product))}
+          </p>
+          <p className="mt-3 text-xs leading-5 text-white/65">
+            O transporte é somado ao prazo de preparação. Informe o CEP na próxima etapa para consultar o frete e a estimativa de entrega.
           </p>
           <Link
             href="/comprar"

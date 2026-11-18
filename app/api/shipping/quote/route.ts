@@ -1,5 +1,6 @@
 import { getProductCatalog } from "../../../../lib/products/repository";
 import { checkoutItems } from "../../../../lib/cart";
+import { preparationDaysForProducts } from "../../../../lib/product-fulfillment";
 import {
   normalizePostalCode,
   ShippingConfigurationError,
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
         postalCode,
         provider: quote.provider,
         options: quote.options,
+        preparationDays: preparationDaysForProducts(quote.selections.map((selection) => selection.product)),
         quotedAt: new Date().toISOString(),
       },
       {

@@ -5,6 +5,7 @@ import { getDb } from "../../db";
 import { catalogProducts } from "../../db/schema";
 import type { Product, ProductCatalog, Storefront } from "../catalog";
 import { storefrontSchema } from "./schema";
+import { fulfillmentSummary } from "../product-fulfillment";
 
 export type CatalogRecord = typeof catalogProducts.$inferSelect;
 export function parseStringList(value: string): string[] {
@@ -52,6 +53,7 @@ export function toProduct(row: CatalogRecord): Product | null {
     pricingType: row.pricingType,
     active: row.active,
     productionTime: row.productionTime,
+    fulfillment: s.fulfillment ?? null,
     variants: s.variants,
     shippingPackage: s.shippingPackage,
     customizable: s.personalization.enabled,
@@ -114,6 +116,7 @@ export async function findConversationProduct(
 }
 export function productConversationContext(row: CatalogRecord) {
   const p = toProduct(row);
+  const fulfillment = p?.fulfillment ? fulfillmentSummary(p) : null;
   return {
     id: row.storeId || row.id,
     name: row.name,
@@ -121,7 +124,10 @@ export function productConversationContext(row: CatalogRecord) {
     basePriceCents: row.basePriceCents,
     priceFromCents: row.priceFromCents,
     pricingType: row.pricingType,
-    productionTime: row.productionTime,
+    productionTime: fulfillment
+      ? `${fulfillment.label}. ${fulfillment.detail} O prazo de transporte depende do CEP.`
+      : row.productionTime,
+    fulfillment: p?.fulfillment ?? null,
     active: row.active,
     materials: parseStringList(row.materials),
     availableColors: p

@@ -1,3 +1,4 @@
+import { productAvailabilityCaption } from "../../../lib/product-fulfillment";
 import Link from "next/link";
 import BrandHeader from "../../components/BrandHeader";
 import ProductPurchase from "../ProductPurchase";
@@ -57,7 +58,7 @@ export default function ProductTemplate({
               </strong>
             </div>
             <span className="mb-1 rounded-full border border-[#132746]/20 px-3 py-1 text-[0.62rem] font-bold uppercase tracking-[0.14em]">
-              {product.presentation.copy.text005?.value}
+              {productAvailabilityCaption(product)}
             </span>
           </div>
 
