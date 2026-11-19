@@ -4,7 +4,7 @@ import StoreHeaderActions from "./StoreHeaderActions";
 import MobileMenu, { type MenuLink } from "./MobileMenu";
 import HeaderSearch, { HeaderSearchFallback } from "./HeaderSearch";
 import HeaderLogo from "./HeaderLogo";
-import { Store } from "lucide-react";
+import { PenLine, ReceiptText, Store, type LucideIcon } from "lucide-react";
 import { headerButtonInteraction } from "./header-styles";
 
 type BrandHeaderProps = {
@@ -15,17 +15,15 @@ type BrandHeaderProps = {
 // "Produtos" is the header's primary button, so the desktop nav lists the
 // quote link instead; the menu carries every destination. The search box takes
 // the middle of the bar, so these text links only fit from the xl breakpoint.
-const navigation = [
-  ["Personalizados", "/personalizados"],
-  ["Como funciona", "/personalizados#como-funciona"],
-  ["Orçamento", "/personalizados#orcamento"],
-] as const;
+const navigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
+  ["Personalizados", "/personalizados", PenLine],
+  ["Orçamento", "/personalizados#orcamento", ReceiptText],
+];
 
 const menuLinks: MenuLink[] = [
   { label: "Produtos", href: "/produtos", description: "Todas as peças da loja", icon: "loja" },
   { label: "Personalizados", href: "/personalizados", description: "Peças criadas sob medida", icon: "personalizados" },
-  { label: "Como funciona", href: "/personalizados#como-funciona", description: "Da ideia à entrega", icon: "processo" },
-  { label: "Orçamento", href: "/personalizados#orcamento", description: "Conte a sua ideia", icon: "contato" },
+  { label: "Orçamento", href: "/personalizados#orcamento", description: "Conte a sua ideia", icon: "orcamento" },
 ];
 
 export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
@@ -54,12 +52,13 @@ export default function BrandHeader({ fixed = false }: BrandHeaderProps) {
           className="relative z-10 hidden shrink-0 items-center gap-1 xl:flex"
           aria-label="Navegação principal"
         >
-          {navigation.map(([label, href]) => (
+          {navigation.map(([label, href, Icon]) => (
             <Link
               key={href}
-              className={`rounded-full px-4 py-2 text-xs font-semibold ${headerButtonInteraction}`}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold ${headerButtonInteraction}`}
               href={href}
             >
+              <Icon size={15} strokeWidth={2} className="shrink-0" aria-hidden="true" />
               {label}
             </Link>
           ))}

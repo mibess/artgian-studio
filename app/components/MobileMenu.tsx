@@ -4,10 +4,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Layers,
   Menu,
-  MessageCircle,
   PenLine,
+  ReceiptText,
   ShoppingBag,
   X,
   type LucideIcon,
@@ -17,8 +16,7 @@ import { headerButtonInteraction } from "./header-styles";
 const icons = {
   loja: ShoppingBag,
   personalizados: PenLine,
-  processo: Layers,
-  contato: MessageCircle,
+  orcamento: ReceiptText,
 } satisfies Record<string, LucideIcon>;
 
 export type MenuLink = {
