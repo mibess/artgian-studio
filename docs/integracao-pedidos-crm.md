@@ -79,6 +79,7 @@ Exclusões físicas não produzem tombstones e não são suportadas pelo increme
 | --- | --- |
 | `source`, `id` | `source` fixo `artgian_studio`; ID original e estável do pedido. |
 | `status` | Status original do site, predominantemente financeiro: por exemplo `pending`, `paid`, `rejected`, `cancelled`, `refunded`, `charged_back`, `payment_setup_failed`. Preserve valores desconhecidos. |
+| `test` | `true` quando o administrador marcou o pedido como teste da loja; `false` nos demais. Marcar ou desmarcar atualiza `effectiveUpdatedAt`, então a mudança chega na próxima sincronização. Não conte pedidos de teste como vendas; o status original é preservado. |
 | `payment` | `provider: "mercado_pago"`, `status` original do provedor ou `null`. É separado do status de entrega. |
 | `fulfillment` | `status` de preparação/entrega e `updatedAt` opcional. Não deduza entrega concluída a partir de pagamento aprovado. O default `preparing` não significa pagamento aprovado nem autorização para produzir. |
 | `customer` | `name`, `email`, `phone`, conforme o pedido. Não contém CPF. |

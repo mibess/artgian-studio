@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db";
 import { orderFulfillmentEvents, orderItems, orders } from "../db/schema";
@@ -16,14 +16,17 @@ const closedPayments = ["rejected", "cancelled", "refunded", "charged_back"];
 
 type OrderRow = typeof orders.$inferSelect;
 
-function queueCondition(queue: OrderQueue): SQL | undefined {
+function queueCondition(queue: OrderQueue): SQL {
+  // Store tests only appear in their own queue, never in the work queues or their counts.
+  const real = isNull(orders.testMarkedAt);
   switch (queue) {
-    case "a-enviar": return and(eq(orders.status, "paid"), inArray(orders.fulfillmentStatus, ["preparing", "ready_to_ship"]));
-    case "em-transito": return and(eq(orders.status, "paid"), inArray(orders.fulfillmentStatus, ["shipped", "out_for_delivery"]));
-    case "entregues": return and(eq(orders.status, "paid"), eq(orders.fulfillmentStatus, "delivered"));
-    case "aguardando-pagamento": return eq(orders.status, "pending");
-    case "cancelados": return inArray(orders.status, closedPayments);
-    case "todos": return undefined;
+    case "a-enviar": return and(real, eq(orders.status, "paid"), inArray(orders.fulfillmentStatus, ["preparing", "ready_to_ship"]))!;
+    case "em-transito": return and(real, eq(orders.status, "paid"), inArray(orders.fulfillmentStatus, ["shipped", "out_for_delivery"]))!;
+    case "entregues": return and(real, eq(orders.status, "paid"), eq(orders.fulfillmentStatus, "delivered"))!;
+    case "aguardando-pagamento": return and(real, eq(orders.status, "pending"))!;
+    case "cancelados": return and(real, inArray(orders.status, closedPayments))!;
+    case "todos": return real;
+    case "testes": return isNotNull(orders.testMarkedAt);
   }
 }
 
@@ -54,12 +57,13 @@ async function countQueues(search: SQL | undefined): Promise<OrderQueueCounts> {
   const db = await getDb();
   const sum = (condition: SQL) => sql<number>`coalesce(sum(case when ${condition} then 1 else 0 end), 0)`.mapWith(Number);
   const [row] = await db.select({
-    "a-enviar": sum(queueCondition("a-enviar")!),
-    "em-transito": sum(queueCondition("em-transito")!),
-    entregues: sum(queueCondition("entregues")!),
-    "aguardando-pagamento": sum(queueCondition("aguardando-pagamento")!),
-    cancelados: sum(queueCondition("cancelados")!),
-    todos: count(),
+    "a-enviar": sum(queueCondition("a-enviar")),
+    "em-transito": sum(queueCondition("em-transito")),
+    entregues: sum(queueCondition("entregues")),
+    "aguardando-pagamento": sum(queueCondition("aguardando-pagamento")),
+    cancelados: sum(queueCondition("cancelados")),
+    todos: sum(queueCondition("todos")),
+    testes: sum(queueCondition("testes")),
   }).from(orders).where(search);
   return row;
 }
@@ -233,6 +237,7 @@ async function toAdminOrders(rows: OrderRow[]): Promise<AdminOrder[]> {
         trackingCode: order.shippingTrackingCode,
         updatedLabel: order.fulfillmentUpdatedAt ? absoluteDate(order.fulfillmentUpdatedAt) : null,
       },
+      testMarkedLabel: order.testMarkedAt ? absoluteDate(order.testMarkedAt) : null,
       events: events.filter(event => event.orderId === order.id).slice(0, 12).map(event => ({
         id: event.id,
         status: fulfillmentStep(event.status).id,

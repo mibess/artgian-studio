@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useActionState, useState, type Ref } from "react";
 import {
-  AlertTriangle, ArrowLeft, ChevronDown, ChevronUp, Clock3, ExternalLink, FileText, Mail, MessageCircleMore, Phone, Printer, RefreshCw, Tag, X,
+  AlertTriangle, ArrowLeft, ChevronDown, ChevronUp, Clock3, ExternalLink, FileText, FlaskConical, Mail, MessageCircleMore, Phone, Printer, RefreshCw, Tag, X,
 } from "lucide-react";
 import { formatBrl } from "../../../../lib/catalog";
 import { fulfillmentSteps, type FulfillmentStatus } from "../../../../lib/fulfillment-status";
 import { orderSituation, paymentStatus, type AdminOrder } from "../../../../lib/admin-order-view";
-import { saveFulfillment, updateShippingLabel, type OrderActionState } from "./actions";
+import { saveFulfillment, updateShippingLabel, updateTestMark, type OrderActionState } from "./actions";
 import { Badge, CopyButton, Feedback, Section } from "./ui";
 
 type PanelProps = {
@@ -30,6 +30,14 @@ export function OrderPanel({ order, headingRef, position, onClose, onPrev, onNex
   const situation = orderSituation(order);
   const payment = paymentStatus(order.status);
   const isPaid = order.status === "paid";
+  const isTest = Boolean(order.testMarkedLabel);
+  // Kept here so the confirmation survives the switch between the bottom button and the top banner.
+  const [testState, testAction, testPending] = useActionState(async (previous: OrderActionState, formData: FormData) => {
+    const result = await updateTestMark(previous, formData);
+    if (result?.order) onOrderChange(result.order);
+    document.getElementById(`pedido-${order.id}-titulo`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    return result;
+  }, null);
 
   return (
     <article aria-labelledby={`pedido-${order.id}-titulo`} className="flex min-h-full flex-col">
@@ -58,21 +66,72 @@ export function OrderPanel({ order, headingRef, position, onClose, onPrev, onNex
             {order.createdLabel} · {order.itemCount} {order.itemCount === 1 ? "item" : "itens"} · <strong className="font-semibold text-[#193244]">{formatBrl(order.totals.totalCents)}</strong>
           </p>
           <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {isTest && <Badge tone="neutral">Teste</Badge>}
             <Badge tone={payment.tone}>{payment.label}</Badge>
-            {isPaid && <Badge tone={situation.tone}>{situation.label}</Badge>}
+            {isPaid && !isTest && <Badge tone={situation.tone}>{situation.label}</Badge>}
             {order.unread > 0 && <Badge tone="critical">{order.unread} {order.unread === 1 ? "mensagem nova" : "mensagens novas"}</Badge>}
           </div>
         </header>
 
-        {!isPaid && <PaymentNotice order={order} />}
+        {testState && <Feedback state={testState} />}
+        {isTest && <TestNotice order={order} formAction={testAction} pending={testPending} />}
+        {!isTest && !isPaid && <PaymentNotice order={order} />}
         <ItemsSection order={order} />
-        {isPaid && <FulfillmentSection order={order} onOrderChange={onOrderChange} />}
-        {isPaid && <LabelSection order={order} onOrderChange={onOrderChange} />}
+        {!isTest && isPaid && <FulfillmentSection order={order} onOrderChange={onOrderChange} />}
+        {!isTest && isPaid && <LabelSection order={order} onOrderChange={onOrderChange} />}
         <CustomerSection order={order} />
         <PaymentSection order={order} />
         <HistorySection order={order} />
+        {!isTest && <MarkAsTest key={testState?.at ?? 0} order={order} formAction={testAction} pending={testPending} />}
       </div>
     </article>
+  );
+}
+
+function TestNotice({ order, formAction, pending }: { order: AdminOrder; formAction: (formData: FormData) => void; pending: boolean }) {
+  return (
+    <div className="flex gap-3 rounded-2xl border border-dashed border-[#c5cac6] bg-[#eceeec] p-4 text-sm leading-6 text-[#415967]">
+      <FlaskConical size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-[#193244]">Pedido de teste</p>
+        <p>Fica fora das filas e dos contadores, não compra etiqueta e não envia avisos ao cliente. Nada foi apagado.</p>
+        <p className="mt-1 text-xs opacity-80">Marcado como teste em {order.testMarkedLabel}.</p>
+        <form action={formAction} className="mt-3">
+          <input type="hidden" name="orderId" value={order.id} />
+          <button type="submit" name="intent" value="unmark" disabled={pending} className={secondaryButton}>
+            {pending ? <><span className="ui-spinner" aria-hidden="true" /> Desmarcando…</> : "Não é teste: desmarcar"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MarkAsTest({ order, formAction, pending }: { order: AdminOrder; formAction: (formData: FormData) => void; pending: boolean }) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <section aria-labelledby={`pedido-${order.id}-teste`} className="rounded-2xl border border-dashed border-[#d9d8d0] p-4 sm:p-5">
+      <h3 id={`pedido-${order.id}-teste`} className="text-sm font-semibold text-[#193244]">Foi um pedido para testar a loja?</h3>
+      <p className="mt-1 text-xs leading-5 text-[#74838a]">Marque como teste para tirá-lo das filas e dos contadores. Nada é apagado e dá para desmarcar depois.</p>
+      {confirming ? (
+        <form action={formAction} role="group" aria-label="Confirmar pedido de teste" className="mt-3 rounded-xl border border-[#193244]/15 bg-[#f8f7f3] p-3.5">
+          <input type="hidden" name="orderId" value={order.id} />
+          <p className="text-sm leading-6 text-[#193244]">
+            Marcar <strong className="font-semibold">#{order.shortId}</strong> como teste? Até ser desmarcado, ele não aparece nas filas e não pode receber etiqueta nem atualizações de entrega.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="submit" name="intent" value="mark" disabled={pending} className={primaryButton}>
+              {pending ? <><span className="ui-spinner" aria-hidden="true" /> Marcando…</> : "Sim, é um teste"}
+            </button>
+            <button type="button" onClick={() => setConfirming(false)} disabled={pending} className={secondaryButton}>Cancelar</button>
+          </div>
+        </form>
+      ) : (
+        <button type="button" onClick={() => setConfirming(true)} className={`${secondaryButton} mt-3`}>
+          <FlaskConical size={16} aria-hidden="true" /> Marcar como teste
+        </button>
+      )}
+    </section>
   );
 }
 

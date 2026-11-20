@@ -9,6 +9,7 @@ import { getAdminOrder } from "../../../../lib/admin-orders";
 import { fulfillmentStep } from "../../../../lib/fulfillment-status";
 import { FulfillmentError, fulfillmentUpdateSchema, updateOrderFulfillment } from "../../../../lib/order-fulfillment";
 import { runShippingLabelAction } from "../../../../lib/order-shipping-label";
+import { setOrderTestMark } from "../../../../lib/order-test-mark";
 
 export type OrderActionState = {
   ok: boolean;
@@ -63,4 +64,22 @@ export async function updateShippingLabel(_previous: OrderActionState, formData:
   const result = await runShippingLabelAction(orderId, intent, { recipientName: String(formData.get("recipientName") ?? "") });
   revalidatePath("/admin/pedidos");
   return { ...result, order: await getAdminOrder(orderId), at: Date.now() };
+}
+
+export async function updateTestMark(_previous: OrderActionState, formData: FormData): Promise<OrderActionState> {
+  const target = await orderIdFrom(formData);
+  if ("error" in target) return fail(target.error);
+  const intent = String(formData.get("intent") ?? "");
+  if (!["mark", "unmark"].includes(intent)) return fail("Ação inválida.");
+  const marked = intent === "mark";
+  const changed = await setOrderTestMark(target.orderId, marked);
+  revalidatePath("/admin/pedidos");
+  return {
+    ok: true,
+    message: !changed
+      ? marked ? "Este pedido já estava marcado como teste." : "Este pedido já estava fora dos testes."
+      : marked ? "Pedido marcado como teste. Ele saiu das filas e agora fica em Testes." : "Pedido desmarcado. Ele voltou para a fila correspondente.",
+    order: await getAdminOrder(target.orderId),
+    at: Date.now(),
+  };
 }

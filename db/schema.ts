@@ -86,6 +86,8 @@ export const orders = sqliteTable(
     mercadoPagoStatusDetail: text("mercado_pago_status_detail"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    // Set when the seller flags a store test; such orders leave every work queue.
+    testMarkedAt: text("test_marked_at"),
   },
   (table) => [
     index("orders_status_idx").on(table.status),

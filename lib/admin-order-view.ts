@@ -8,6 +8,7 @@ export const ORDER_QUEUES = [
   { id: "aguardando-pagamento", label: "Aguardando pagamento", empty: "Nenhum checkout aguardando pagamento." },
   { id: "cancelados", label: "Cancelados", empty: "Nenhum pagamento recusado, cancelado ou estornado." },
   { id: "todos", label: "Todos", empty: "Nenhum pedido encontrado." },
+  { id: "testes", label: "Testes", empty: "Nenhum pedido marcado como teste." },
 ] as const;
 
 export type OrderQueue = typeof ORDER_QUEUES[number]["id"];
@@ -95,11 +96,13 @@ export type AdminOrder = {
   label: { state: "unavailable" | "missing-cpf" | "to-buy" | "bought" | "ready"; canceled: boolean; url: string | null; error: string | null; canSync: boolean };
   fulfillment: { status: FulfillmentStatus; revision: number; note: string | null; trackingCode: string | null; updatedLabel: string | null };
   events: AdminOrderEvent[];
+  /** When set, the order was a store test: kept for reference but out of every work queue. */
+  testMarkedLabel: string | null;
 };
 
 /** What the seller should do next, shown on list rows so the queue reads as a to-do list. */
 export function nextStepHint(order: AdminOrder): { label: string; tone: Tone } | null {
-  if (order.status !== "paid") return null;
+  if (order.status !== "paid" || order.testMarkedLabel) return null;
   if (order.label.error) return { label: "Erro na etiqueta", tone: "critical" };
   const step = order.fulfillment.status;
   if (step === "preparing") return { label: "Produzir e embalar", tone: "neutral" };

@@ -101,7 +101,7 @@ const effectiveUpdatedAt = sql<string>`max(
 // Allowlist at the SQL boundary: payment/checkout links, CPF, raw payloads,
 // label URLs/errors, internal notes and provider payment IDs are never selected.
 const orderSelection = {
-  id: orders.id, status: orders.status,
+  id: orders.id, status: orders.status, testMarkedAt: orders.testMarkedAt,
   customerName: orders.customerName, customerEmail: orders.customerEmail, customerPhone: orders.customerPhone,
   postalCode: orders.postalCode, streetAddress: orders.streetAddress, addressNumber: orders.addressNumber,
   addressComplement: orders.addressComplement, neighborhood: orders.neighborhood, city: orders.city, state: orders.state,
@@ -121,6 +121,8 @@ export interface IntegrationOrder {
   source: "artgian_studio";
   id: string;
   status: string;
+  /** True when the seller flagged the order as a store test; the CRM should not count it as a sale. */
+  test: boolean;
   payment: { provider: "mercado_pago"; status: string | null };
   fulfillment: { status: string; updatedAt: string | null };
   customer: { name: string; email: string; phone: string };
@@ -150,7 +152,7 @@ async function readOrders(condition: SQL, limit: number): Promise<IntegrationOrd
     let dto = result.get(order.id);
     if (!dto) {
       dto = {
-        source: "artgian_studio", id: order.id, status: order.status,
+        source: "artgian_studio", id: order.id, status: order.status, test: Boolean(order.testMarkedAt),
         payment: { provider: "mercado_pago", status: order.mercadoPagoStatus },
         fulfillment: { status: order.fulfillmentStatus, updatedAt: order.fulfillmentUpdatedAt },
         customer: { name: order.customerName, email: order.customerEmail, phone: order.customerPhone },

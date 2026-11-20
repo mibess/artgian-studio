@@ -174,7 +174,7 @@ export function OrdersWorkspace({ orders, focusOrder, queue, query, counts, page
     <div>
       <nav aria-label="Filas de pedidos" className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] sm:-mx-7 sm:px-7 lg:mx-0 lg:px-0">
         <ul className="flex min-w-max gap-1 border-b border-[#dfded6]">
-          {ORDER_QUEUES.map(item => {
+          {ORDER_QUEUES.filter(item => item.id !== "testes" || counts.testes > 0 || queue === "testes").map(item => {
             const active = item.id === queue;
             const urgent = item.id === "a-enviar" && counts[item.id] > 0;
             return (
@@ -311,7 +311,7 @@ export function OrdersWorkspace({ orders, focusOrder, queue, query, counts, page
 function OrderRow({ order, selected, href, onSelect, rowRef }: {
   order: AdminOrder; selected: boolean; href: string; onSelect: () => void; rowRef: (element: HTMLAnchorElement | null) => void;
 }) {
-  const situation = orderSituation(order);
+  const situation = order.testMarkedLabel ? { label: "Teste", tone: "neutral" as const } : orderSituation(order);
   const hint = nextStepHint(order);
   const [firstItem, ...rest] = order.items;
   return (

@@ -45,6 +45,38 @@ para Em preparação e Pronto para envio também publicam eventos. A ativação 
 os canais/regras do Notify e a migração 0024 descritos na documentação da integração.
 O botão **Atualizar acompanhamento** busca a informação salva pela equipe.
 
+## Pedidos de teste
+
+Pedidos feitos só para testar a loja podem ser marcados no painel do pedido, em
+**Marcar como teste** (no fim do painel, com confirmação). O pedido marcado:
+
+- sai das filas **A enviar**, **Em trânsito**, **Entregues**, **Aguardando pagamento**,
+  **Cancelados** e **Todos**, e dos contadores; aparece só na fila **Testes**, que
+  surge quando há ao menos um teste;
+- não permite comprar ou gerar etiqueta nem atualizar a entrega, o que também
+  evita avisos ao cliente;
+- continua inteiro no banco, com itens, mensagens e histórico, e segue visível
+  para o cliente em **Minha conta**;
+- chega à API do CRM com `test: true`.
+
+**Não é teste: desmarcar** devolve o pedido à fila correspondente. Para não
+criar novos testes em produção, teste no preview local ou em um deploy de
+Preview com Mercado Pago e frete em modo sandbox e banco separado.
+
+A coluna `test_marked_at` vem da migração aditiva `0025_test_orders.sql`. Ela
+precisa estar no banco de produção **antes** do deploy, porque o build recusa
+publicar com o banco desatualizado:
+
+```sh
+node scripts/migrate-store-with-backup.mjs --test-orders --env=/caminho/seguro.env
+node scripts/migrate-store-with-backup.mjs --test-orders --env=/caminho/seguro.env --apply
+```
+
+A primeira execução faz o backup criptografado, restaura e ensaia a migração
+localmente sem alterar o banco remoto; a segunda aplica. O script só aceita
+adicionar essa coluna, confere que nenhum pedido começa marcado e que todos os
+dados anteriores continuam iguais.
+
 ## Banco e publicação
 
 A migração aditiva `0020_order_fulfillment.sql` adiciona a etapa atual, observação,

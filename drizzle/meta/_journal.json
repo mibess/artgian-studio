@@ -176,6 +176,13 @@
       "when": 1794878700621,
       "tag": "0024_customer_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1795190458921,
+      "tag": "0025_test_orders",
+      "breakpoints": true
     }
   ]
 }

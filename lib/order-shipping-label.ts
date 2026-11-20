@@ -12,6 +12,7 @@ import {
   resolveShippingProvider,
 } from "./shipping";
 import { syncSuperFreteLabelCancellation } from "./super-frete-label-sync";
+import { TEST_ORDER_BLOCKED } from "./order-test-mark";
 
 export type ShippingLabelResult = { ok: boolean; message: string };
 
@@ -33,6 +34,8 @@ export async function runShippingLabelAction(
 
   if (!order || !items.length) return failed("Pedido não encontrado.");
   if (order.status !== "paid") return failed("A etiqueta só pode ser criada para um pedido pago.");
+  // Checking a cancellation is harmless; buying or generating a label for a test order is not.
+  if (order.testMarkedAt && action !== "sync") return failed(TEST_ORDER_BLOCKED);
 
   try {
     const provider = resolveShippingProvider(order.shippingProvider);

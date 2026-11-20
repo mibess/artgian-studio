@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { verifyCustomerNotificationsSchema, verifyOrderMessagesSchema, verifyStoreSchema } from "../scripts/verify-store-schema.mjs";
+import { verifyCustomerNotificationsSchema, verifyOrderMessagesSchema, verifyStoreSchema, verifyTestOrdersSchema } from "../scripts/verify-store-schema.mjs";
 
 let client: Client;
 let directory: string;
@@ -71,6 +71,9 @@ describe("deployment database schema gate", () => {
     await expect(verifyStoreSchema(client)).rejects.toThrow("consentimento para notificações");
     const customerNotify = await readFile("drizzle/0024_customer_notifications.sql", "utf8");
     for (const sql of customerNotify.split("--> statement-breakpoint")) await client.execute(sql.trim());
+    await expect(verifyStoreSchema(client)).rejects.toThrow("pedidos de teste");
+    const testOrders = await readFile("drizzle/0025_test_orders.sql", "utf8");
+    for (const sql of testOrders.split("--> statement-breakpoint")) await client.execute(sql.trim());
     await verifyStoreSchema(client);
     await client.execute("DROP TRIGGER notify_outbox_immutable");
     await expect(verifyStoreSchema(client)).rejects.toThrow("imutabilidade");
@@ -111,6 +114,17 @@ describe("deployment database schema gate", () => {
     expect((await client.execute("SELECT * FROM orders")).rows).toEqual([{ id: "legacy", customer_email: "buyer@example.com", total_cents: 12500, whatsapp_opt_in: 0, whatsapp_opt_in_at: null, whatsapp_opt_in_source: null }]);
     await client.execute("INSERT INTO orders (id) VALUES ('new')");
     expect((await client.execute("SELECT whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_source FROM orders WHERE id='new'")).rows[0]).toEqual({ whatsapp_opt_in: 0, whatsapp_opt_in_at: null, whatsapp_opt_in_source: null });
+  });
+  it("adds the test-order flag with every existing order left unflagged", async () => {
+    await fixture();
+    await client.execute("CREATE TABLE orders (id TEXT PRIMARY KEY, status TEXT, total_cents INTEGER)");
+    await client.execute("INSERT INTO orders VALUES ('real', 'paid', 12500)");
+    await expect(verifyTestOrdersSchema(client)).rejects.toThrow("pedidos de teste");
+    const migration = await readFile("drizzle/0025_test_orders.sql", "utf8");
+    expect(migration.split("--> statement-breakpoint").map(sql => sql.trim())).toEqual(["ALTER TABLE `orders` ADD `test_marked_at` text;"]);
+    for (const sql of migration.split("--> statement-breakpoint")) await client.execute(sql.trim());
+    await verifyTestOrdersSchema(client);
+    expect((await client.execute("SELECT * FROM orders")).rows).toEqual([{ id: "real", status: "paid", total_cents: 12500, test_marked_at: null }]);
   });
 });
 

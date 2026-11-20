@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { orderFulfillmentEvents, orderItems, orders } from "../db/schema";
 import { retryTransaction } from "./checkout-orders";
 import { enqueueFulfillment } from "./mibess-notify/outbox";
+import { TEST_ORDER_BLOCKED } from "./order-test-mark";
 
 export class FulfillmentError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -34,6 +35,8 @@ export async function updateOrderFulfillment(orderId: string, input: z.infer<typ
     const [order] = await tx.select().from(orders).where(eq(orders.id, orderId));
     if (!order) throw new FulfillmentError("Pedido não encontrado.", 404);
     if (order.status !== "paid") throw new FulfillmentError("O acompanhamento só pode ser atualizado para pedidos com pagamento aprovado.", 409);
+    // Delivery updates notify the buyer, so a store test never sends them.
+    if (order.testMarkedAt) throw new FulfillmentError(TEST_ORDER_BLOCKED, 409);
     const note = input.note || null;
     const trackingCode = input.trackingCode || null;
     // Repeating the same submission never creates duplicate history entries.
