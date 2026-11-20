@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { orderFulfillmentEvents, orderItems, orders } from "../db/schema";
 import { digitsOnly, formatPhone, hasFullName, maskCpf } from "./brazil";
 import { fulfillmentStep } from "./fulfillment-status";
+import { ISSUED_PAYMENT_DAYS, LEGACY_UNPAID_DAYS } from "./order-expiration";
 import { getOrderMessageUnreadCounts } from "./order-messages";
 import { getShippingProviderEnvironment, resolveShippingProvider, shippingProviderName } from "./shipping";
 import type { AdminOrder, OrderQueue, OrderQueueCounts } from "./admin-order-view";
@@ -117,6 +118,22 @@ function relativeDate(value: string, now: number) {
   return date.toLocaleDateString("pt-BR", { timeZone: TIME_ZONE, day: "2-digit", month: "short", year: "numeric" });
 }
 
+/** Explains when an unpaid order closes, following the rules in order-expiration.ts. */
+function paymentDeadlineLabel(order: OrderRow, now: number) {
+  if (order.status === "cancelled" && order.paymentExpiresAt && parseDbDate(order.paymentExpiresAt).getTime() <= now) {
+    return `Cancelado automaticamente: o prazo para pagar terminou em ${absoluteDate(order.paymentExpiresAt)}.`;
+  }
+  if (order.status !== "pending") return null;
+  if (order.paymentExpiresAt) {
+    return parseDbDate(order.paymentExpiresAt).getTime() > now
+      ? `Prazo para pagar até ${absoluteDate(order.paymentExpiresAt)}. Depois disso, o pedido é cancelado automaticamente.`
+      : `O prazo terminou em ${absoluteDate(order.paymentExpiresAt)}, mas há um Pix ou boleto emitido que ainda pode ser pago.`;
+  }
+  const waiting = ["pending", "in_process", "authorized"].includes(order.mercadoPagoStatus ?? "");
+  const closesAt = new Date(parseDbDate(order.createdAt).getTime() + (waiting ? ISSUED_PAYMENT_DAYS : LEGACY_UNPAID_DAYS) * 86_400_000);
+  return `Se não for pago, será cancelado automaticamente em ${absoluteDate(closesAt.toISOString())}.`;
+}
+
 function formatPostalCode(value: string) {
   const digits = digitsOnly(value, 8);
   return digits.length === 8 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : value;
@@ -163,9 +180,7 @@ async function toAdminOrders(rows: OrderRow[]): Promise<AdminOrder[]> {
       createdAt: order.createdAt,
       createdLabel: absoluteDate(order.createdAt),
       createdRelative: relativeDate(order.createdAt, now),
-      paymentExpiresLabel: order.status === "pending" && order.paymentExpiresAt
-        ? `${parseDbDate(order.paymentExpiresAt).getTime() < now ? "Expirou em" : "Expira em"} ${absoluteDate(order.paymentExpiresAt)}`
-        : null,
+      paymentExpiresLabel: paymentDeadlineLabel(order, now),
       paymentId: order.mercadoPagoPaymentId,
       customer: {
         name: order.customerName || "Cliente sem nome",

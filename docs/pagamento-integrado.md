@@ -119,6 +119,25 @@ cupom. Pix/boletos já emitidos usam o vencimento retornado pelo Mercado Pago e
 podem ser confirmados depois desse prazo. Nunca se libera uma nova cobrança
 enquanto a anterior está pendente ou incerta.
 
+### Pedidos não pagos
+
+Quando o prazo termina sem pagamento, o pedido passa a **Cancelado**, sai da fila
+**Aguardando pagamento** e a vaga reservada do cupom volta a ficar disponível. Nada
+é apagado: o pedido continua no histórico do cliente e do admin.
+
+- Um Pix ou boleto já emitido continua valendo até o Mercado Pago encerrá-lo. Se
+  essa atualização se perder, o pedido é cancelado 30 dias após a emissão.
+- Uma cobrança incerta (resultado desconhecido) nunca é cancelada automaticamente.
+- Pedidos do checkout antigo, que não tinham prazo, são cancelados 7 dias após a
+  criação (30 dias se houver boleto em aberto).
+- Um pagamento aprovado depois do cancelamento ainda confirma o pedido pelo aviso
+  do Mercado Pago.
+
+A verificação roda ao abrir **Admin → Pedidos e entregas** e **Minha conta** (só os
+pedidos daquele cliente) e uma vez por dia pela rotina `/api/cron/orders`, que usa
+o mesmo `CRON_SECRET` da rotina do Instagram. A regra fica em
+`lib/order-expiration.ts`.
+
 ## Referências oficiais
 
 - [Identificador de segurança do dispositivo](https://www.mercadopago.com.br/developers/pt/docs/checkout-bricks/how-tos/improve-payment-approval/recommendations)

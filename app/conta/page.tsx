@@ -14,6 +14,7 @@ import AccountTabs from "./AccountTabs";
 import OrderThumbnail from "./OrderThumbnail";
 import OrderMessageLink from "./OrderMessageLink";
 import { getOrderMessageUnreadCounts } from "../../lib/order-messages";
+import { expireUnpaidOrdersQuietly } from "../../lib/order-expiration";
 import { listAddresses } from "../../lib/addresses/repository";
 import { fulfillmentStep } from "../../lib/fulfillment-status";
 
@@ -47,6 +48,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const params = await searchParams;
   const session = await getCustomerSession(await headers());
   if (!session) redirect(`/login?next=${encodeURIComponent(params.aba === "enderecos" ? "/conta?aba=enderecos" : "/conta")}`);
+  // An unpaid order past its payment window must not keep offering "Continuar pagamento".
+  await expireUnpaidOrdersQuietly({ userId: session.user.id });
   const db = await getDb();
   const owned = eq(orders.userId, session.user.id);
   const [totals, addresses, catalog] = await Promise.all([

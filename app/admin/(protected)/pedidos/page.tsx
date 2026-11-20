@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MessageCircleMore } from "lucide-react";
 import { parseOrderQueue } from "../../../../lib/admin-order-view";
 import { ADMIN_ORDERS_PAGE_SIZE, getAdminOrder, listAdminOrders } from "../../../../lib/admin-orders";
+import { expireUnpaidOrdersQuietly } from "../../../../lib/order-expiration";
 import { getConfiguredShippingProvider, getShippingProviderEnvironment, shippingProviderName } from "../../../../lib/shipping";
 import { PageHeader } from "../_components";
 import { OrdersWorkspace } from "./OrdersWorkspace";
@@ -26,6 +27,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
     ? { ok: false, text: single(params.error)! }
     : single(params.message) ? { ok: true, text: single(params.message)! } : null;
 
+  await expireUnpaidOrdersQuietly();
   const data = await listAdminOrders({ queue, query, page });
   const focusOrder = focusId && !data.orders.some(order => order.id === focusId) ? await getAdminOrder(focusId) : null;
   const provider = getConfiguredShippingProvider();
@@ -43,7 +45,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/admin/mensagens" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#193244]/15 bg-white px-3.5 text-xs font-semibold transition hover:border-[#193244]/35 sm:min-h-11 sm:px-4">
-              <MessageCircleMore size={16} aria-hidden="true" /> Mensagens<span className="hidden sm:inline"> de compras</span>
+              <MessageCircleMore size={16} aria-hidden="true" /> <span>Mensagens<span className="hidden sm:inline"> de compras</span></span>
             </Link>
             <span
               title={`Etiquetas compradas pela ${shippingProviderName(provider)} em ambiente de ${sandbox ? "teste" : "produção"}`}
