@@ -22,8 +22,8 @@ test("login, navegação integrada, sessão e saída", async ({ page, context })
   await expect(menu.getByRole("link", { name: "Descontos", exact: true })).toHaveAttribute("aria-current", "page");
   await menu.getByRole("link", { name: "Dashboard" }).click();
   await expect(page.getByRole("heading", { name: /Olá, Angélica/i })).toBeVisible();
-  await menu.getByRole("link", { name: "Pedidos e etiquetas" }).click();
-  await expect(page.getByRole("heading", { name: "Pedidos e etiquetas", exact: true })).toBeVisible();
+  await menu.getByRole("link", { name: "Pedidos e entregas" }).click();
+  await expect(page.getByRole("heading", { name: "Pedidos e entregas", exact: true })).toBeVisible();
   await menu.getByRole("link", { name: "Pedidos comerciais" }).click();
   await expect(page.getByRole("heading", { name: "Pedidos comerciais", exact: true })).toBeVisible();
   await page.reload();

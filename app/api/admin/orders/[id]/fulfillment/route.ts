@@ -7,12 +7,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!hasAdminAccess(request.headers)) return Response.json({ error: "Autenticação necessária." }, { status: 401 });
   if (request.headers.get("origin") !== requestOrigin(request)) return Response.json({ error: "Origem inválida." }, { status: 403 });
   const { id } = await context.params;
+  // Form fallback for the admin orders page; the page itself uses a Server Action.
   const destination = new URL("/admin/pedidos", requestOrigin(request));
-  const page = new URL(request.url).searchParams.get("page");
-  if (page && /^[1-9]\d{0,5}$/.test(page)) destination.searchParams.set("page", page);
   if (!z.uuid().safeParse(id).success) return Response.json({ error: "Pedido inválido." }, { status: 400 });
-  destination.hash = `pedido-${id}`;
-  destination.searchParams.set("updatedOrder", id);
+  destination.searchParams.set("pedido", id);
   try {
     const form = await request.formData();
     const input = fulfillmentUpdateSchema.parse(Object.fromEntries(form));

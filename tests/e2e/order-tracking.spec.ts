@@ -44,11 +44,8 @@ test("approved payment and account link to tracking, and manual admin updates re
   await page.getByRole("link", { name: "Acompanhar pedido", exact: true }).click();
   await expect(page).toHaveURL(trackingUrl);
 
-  // Keep the paid order on the second page to exercise access to older orders.
-  for (let index = 0; index < 50; index++) await order(buyer, "pending");
-  const seeder = createClient({ url: process.env.E2E_DATABASE_URL! });
-  await seeder.execute({ sql: "UPDATE orders SET created_at = '2099-01-01 00:00:00' WHERE user_id = ? AND status = 'pending'", args: [buyer.userId] });
-  seeder.close();
+  // Unpaid checkouts stay out of the shipping queue and page through their own queue.
+  for (let index = 0; index < 26; index++) await order(buyer, "pending");
 
   const adminContext = await browser.newContext();
   const admin = await adminContext.newPage();
@@ -56,23 +53,31 @@ test("approved payment and account link to tracking, and manual admin updates re
   await admin.getByRole("textbox", { name: "Usuário", exact: true }).fill("artgian");
   await admin.getByLabel("Senha", { exact: true }).fill("teste-local");
   await admin.getByRole("button", { name: "Entrar no admin" }).click();
-  await expect(admin.getByRole("heading", { name: "Pedidos, entregas e etiquetas" })).toBeVisible();
-  await admin.getByRole("link", { name: "Pedidos anteriores" }).click();
-  await expect(admin).toHaveURL(/page=2/);
-  const section = admin.getByRole("region", { name: `Acompanhamento do pedido ${orderId.slice(0, 8)}` });
-  for (const [status, label] of [["ready_to_ship", "Pronto para envio"], ["shipped", "Enviado"], ["out_for_delivery", "Saiu para entrega"], ["delivered", "Entregue"]]) {
-    await section.getByLabel("Etapa do pedido").selectOption(status);
-    await section.getByLabel("Código de rastreio (opcional)").fill("AA123456789BR");
-    await section.getByLabel("Observação para o cliente (opcional)").fill(`Atualização da equipe: ${label}.`);
-    await section.getByRole("button", { name: "Atualizar acompanhamento" }).click();
-    await expect(admin.getByText("Acompanhamento atualizado. A nova etapa já está disponível para o cliente.", { exact: true })).toBeInViewport();
-    await expect(section.getByLabel("Etapa do pedido")).toHaveValue(status);
-    await expect(admin).toHaveURL(/page=2/);
+  await expect(admin.getByRole("heading", { name: "Pedidos e entregas" })).toBeVisible();
+  await admin.getByRole("link", { name: /^Aguardando pagamento/ }).click();
+  await admin.getByRole("navigation", { name: "Páginas de pedidos" }).getByRole("link", { name: "Próxima" }).click();
+  await expect(admin).toHaveURL(/fila=aguardando-pagamento&pagina=2/);
+  await admin.getByRole("link", { name: /^A enviar/ }).click();
+  await admin.getByRole("searchbox", { name: "Buscar pedidos" }).fill(orderId.slice(0, 8));
+  await expect(admin).toHaveURL(new RegExp(`busca=${orderId.slice(0, 8)}`));
+  await admin.getByRole("link", { name: new RegExp(`#${orderId.slice(0, 8)}`) }).click();
+  await expect(admin).toHaveURL(new RegExp(`pedido=${orderId}`));
+  const section = admin.getByRole("region", { name: "Andamento da entrega" });
+  for (const [status, label, action] of [["ready_to_ship", "Pronto para envio", "Marcar como pronto para envio"], ["shipped", "Enviado", "Marcar como enviado"], ["out_for_delivery", "Saiu para entrega", "Informar saída para entrega"], ["delivered", "Entregue", "Marcar como entregue"]]) {
+    const shipped = status !== "ready_to_ship";
+    if (shipped) await section.getByLabel("Código de rastreio (opcional)").fill("AA123456789BR");
+    await section.getByLabel("Mensagem para o cliente (opcional)").fill(`Atualização da equipe: ${label}.`);
+    await section.getByRole("button", { name: action }).click();
+    await expect(section.getByText(`Pedido marcado como “${label}”. O cliente já vê a atualização.`, { exact: true })).toBeVisible();
+    await expect(section.getByRole("listitem").filter({ hasText: label }).first()).toHaveAttribute("aria-current", "step");
     await page.getByRole("link", { name: "Atualizar acompanhamento" }).click();
     await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Acompanhamento da entrega" }).getByText(`Atualização da equipe: ${label}.`, { exact: true })).toBeVisible();
-    await expect(page.getByText("AA123456789BR", { exact: true })).toBeVisible();
+    if (shipped) await expect(page.getByText("AA123456789BR", { exact: true })).toBeVisible();
   }
+  await expect(section.getByText("Pedido entregue. Não há mais nada a fazer.")).toBeVisible();
+  // The order left the shipping queue but stays open with its saved state.
+  await expect(admin.getByRole("link", { name: new RegExp(`#${orderId.slice(0, 8)}`) })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Histórico de atualizações" }).getByRole("listitem")).toHaveCount(4);
   await section.screenshot({ path: "screenshots/order-tracking-admin.png" });
   await page.screenshot({ path: "screenshots/order-tracking-delivered-mobile.png", fullPage: true });

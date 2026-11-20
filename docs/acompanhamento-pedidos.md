@@ -6,15 +6,24 @@ O cliente encontra **Acompanhar pedido** na confirmação de pagamento e em
 
 ## Atualizar pelo administrador
 
-1. Acesse **Admin → Pedidos e entregas** (`/admin/pedidos`).
-2. Localize um pedido com pagamento aprovado.
-3. Em **Acompanhamento da entrega**, selecione a etapa:
+1. Acesse **Admin → Pedidos e entregas** (`/admin/pedidos`). A página abre na fila
+   **A enviar**: pedidos pagos em preparação ou prontos para envio, dos mais antigos
+   para os mais recentes. As outras filas são **Em trânsito**, **Entregues**,
+   **Aguardando pagamento**, **Cancelados** e **Todos**, cada uma com seu contador.
+2. Clique no pedido. Os detalhes abrem ao lado da lista no computador e em tela
+   cheia no celular, sem perder a posição na lista. A busca encontra nome, e-mail,
+   número do pedido, código de rastreio, CPF, telefone ou CEP.
+3. Em **Andamento da entrega**, o botão principal leva o pedido à próxima etapa:
    **Em preparação → Pronto para envio → Enviado → Saiu para entrega → Entregue**.
-4. Opcionalmente, preencha o código de rastreio e uma observação para o cliente.
-5. Clique em **Atualizar acompanhamento**.
+   Para pular ou corrigir uma etapa, use **Escolher outra etapa**.
+4. Opcionalmente, preencha o código de rastreio (a partir de **Enviado**) e uma
+   mensagem para o cliente, e confirme.
+5. Em **Etiqueta de envio**, siga os passos **Comprar → Gerar PDF → Imprimir**.
+   A compra pede confirmação antes de ser feita na transportadora.
 
 A alteração aparece quando o cliente abre ou atualiza o acompanhamento.
-Use **Pedidos anteriores** no final da lista para acessar as páginas seguintes.
+Atalhos no computador: **J** e **K** passam ao próximo pedido ou ao anterior,
+**/** vai para a busca e **Esc** fecha o pedido aberto.
 Cada alteração registra data, etapa, observação e código no histórico.
 A observação é pública para o comprador; evite informações internas.
 É possível corrigir uma etapa sem apagar o histórico anterior. Uma aba
