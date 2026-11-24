@@ -144,7 +144,7 @@ export default function ProductPurchase({ product }: { product: Product }) {
           onClick={buy}
           disabled={!valid || pending}
           aria-busy={pending}
-          className="flex h-14 flex-1 items-center justify-between rounded-full bg-[#193244] px-6 font-semibold text-white shadow-lg disabled:opacity-45"
+          className="flex h-14 items-center justify-between rounded-full bg-[#193244] px-6 font-semibold text-white shadow-lg disabled:opacity-45 sm:flex-1"
         >
           {pending
             ? "Abrindo checkout…"
