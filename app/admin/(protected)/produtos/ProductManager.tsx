@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef } from "react";
 import type { ProductInput } from "../../../../lib/products/schema";
-import type { Storefront } from "../../../../lib/catalog";
+import type { ShippingPackage, Storefront } from "../../../../lib/catalog";
 import { formatBrl } from "../../../../lib/catalog";
 import { fulfillmentSummary } from "../../../../lib/product-fulfillment";
 const blankStore = (): Storefront => ({
@@ -66,6 +66,17 @@ const input =
 const button =
   "rounded-xl bg-[#193244] px-4 py-3 text-xs font-bold text-white disabled:opacity-50";
 const tabs = ["Dados e venda", "Variantes", "Página e imagens", "Atendimento"];
+const shippingFields = [
+  { key: "lengthCm", label: "Comprimento (cm)", hint: "Lado mais longo da base da caixa." },
+  { key: "widthCm", label: "Largura (cm)", hint: "Lado mais curto da base da caixa." },
+  { key: "heightCm", label: "Altura (cm)", hint: "Da base até o topo da caixa." },
+  { key: "weightKg", label: "Peso total (kg)", hint: "Pese o pacote com o produto, a caixa e a proteção." },
+] as const;
+const shippingNumberFormat = new Intl.NumberFormat("pt-BR", {
+  useGrouping: false,
+  maximumSignificantDigits: 21,
+});
+
 function TextField({
   label,
   value,
@@ -135,6 +146,9 @@ export function ProductManager({
   const [products, setProducts] = useState(initialProducts);
   const [draftIds, setDraftIds] = useState(() => new Set(initialDraftIds));
   const [draft, setDraft] = useState<ProductInput | null>(null);
+  const [shippingEdits, setShippingEdits] = useState<
+    Partial<Record<keyof ShippingPackage, string>>
+  >({});
   const [tab, setTab] = useState(0);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -147,6 +161,7 @@ export function ProductManager({
   }
   function edit(p: ProductInput) {
     setDraft(structuredClone(p));
+    setShippingEdits({});
     setTab(0);
     setMessage("");
     setError("");
@@ -193,11 +208,30 @@ export function ProductManager({
     setError("");
     setMessage("");
     try {
+      const storefront = draft.storefront ? { ...draft.storefront } : null;
+      if (storefront?.shippingPackage) {
+        const shippingPackage = { ...storefront.shippingPackage };
+        for (const { key, label } of shippingFields) {
+          const rawValue = shippingEdits[key];
+          if (rawValue === undefined) continue;
+          const text = rawValue.trim();
+          const value = Number(text.replace(",", "."));
+          if (!/^(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(text) || !Number.isFinite(value) || value <= 0) {
+            setTab(0);
+            throw new Error(
+              `Informe um valor maior que zero no campo “${label}”. Use vírgula ou ponto para os decimais.`,
+            );
+          }
+          shippingPackage[key] = value;
+        }
+        storefront.shippingPackage = shippingPackage;
+      }
       const res = await fetch("/api/admin/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...draft,
+          storefront,
           aliases: draft.aliases.filter((v) => v.trim()),
           materials: draft.materials.filter((v) => v.trim()),
           verifiedClaims: draft.verifiedClaims.filter((v) => v.trim()),
@@ -210,7 +244,7 @@ export function ProductManager({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Não foi possível salvar.");
-      const saved = { ...draft, id: data.id, version: data.version };
+      const saved = { ...draft, storefront, id: data.id, version: data.version };
       if (saved.active && draftIds.has(saved.id)) {
         setDraftIds(previous => {
           const remaining = new Set(previous);
@@ -232,6 +266,7 @@ export function ProductManager({
     }
   }
   const s = draft?.storefront;
+  const shippingPackage = s?.shippingPackage;
   const fulfillmentPreview = draft ? fulfillmentSummary({ fulfillment: s?.fulfillment, productionTime: draft.productionTime }) : null;
   const selectedProduct = draft?.id ? products.find(p => p.id === draft.id) : undefined;
   return (
@@ -410,7 +445,10 @@ export function ProductManager({
               <Check
                 label="Criar página na loja"
                 value={Boolean(s)}
-                onChange={(v) => set("storefront", v ? blankStore() : null)}
+                onChange={(v) => {
+                  setShippingEdits({});
+                  set("storefront", v ? blankStore() : null);
+                }}
               />
               {s && (
                 <>
@@ -486,8 +524,9 @@ export function ProductManager({
                   />
                   <Check
                     label="Embalagem de envio cadastrada"
-                    value={Boolean(s.shippingPackage)}
-                    onChange={(v) =>
+                    value={Boolean(shippingPackage)}
+                    onChange={(v) => {
+                      setShippingEdits({});
                       store({
                         shippingPackage: v
                           ? {
@@ -497,35 +536,36 @@ export function ProductManager({
                               weightKg: 0.1,
                             }
                           : null,
-                      })
-                    }
+                      });
+                    }}
                   />
-                  {s.shippingPackage && (
+                  {shippingPackage && (
                     <fieldset className="grid gap-4 sm:grid-cols-2">
                       <legend className="mb-3 text-sm font-bold">
                         Medidas da embalagem para frete
                       </legend>
-                      {(
-                        [
-                          ["widthCm", "Largura (cm)"],
-                          ["heightCm", "Altura (cm)"],
-                          ["lengthCm", "Comprimento (cm)"],
-                          ["weightKg", "Peso embalado (kg)"],
-                        ] as const
-                      ).map(([key, label]) => (
-                        <TextField
-                          key={key}
-                          label={label}
-                          value={s.shippingPackage![key]}
-                          onChange={(v) =>
-                            store({
-                              shippingPackage: {
-                                ...s.shippingPackage!,
-                                [key]: Number(v.replace(",", ".")),
-                              },
-                            })
-                          }
-                        />
+                      <p id="shipping-package-help" className="text-xs leading-5 text-[#526873] sm:col-span-2">
+                        Meça por fora da caixa fechada, na posição de envio. Use vírgula ou ponto para os decimais, como 12,5 cm ou 0.35 kg.
+                      </p>
+                      {shippingFields.map(({ key, label, hint }) => (
+                        <div key={key}>
+                          <label htmlFor={key} className="block text-xs font-semibold text-[#526873]">
+                            {label}
+                          </label>
+                          <input
+                            id={key}
+                            type="text"
+                            inputMode="decimal"
+                            className={input}
+                            value={shippingEdits[key] ?? shippingNumberFormat.format(shippingPackage[key])}
+                            onChange={(event) => {
+                              const value = event.currentTarget.value;
+                              setShippingEdits((previous) => ({ ...previous, [key]: value }));
+                            }}
+                            aria-describedby={`${key}-hint shipping-package-help`}
+                          />
+                          <p id={`${key}-hint`} className="mt-1.5 text-xs text-[#526873]">{hint}</p>
+                        </div>
                       ))}
                     </fieldset>
                   )}
