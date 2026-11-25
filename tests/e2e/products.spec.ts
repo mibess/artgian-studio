@@ -13,11 +13,13 @@ test("admin cria produto, publica página, altera preço e arquiva em todos os c
   const suffix = Date.now();
   const name = `Peça E2E ${suffix}`;
   const slug = `peca-e2e-${suffix}`;
+  const description = "Uma peça com identidade própria.";
+  const technicalValue = "PLA\nAcabamento fosco";
   await page.getByLabel("Nome", { exact: true }).fill(name);
   await page.getByLabel("Categoria", { exact: true }).fill("Decoração");
   await page
-    .getByLabel("Descrição do produto")
-    .fill("Uma peça com identidade própria.");
+    .getByLabel("Descrição do produto (comercial)")
+    .fill(description);
   await page.getByLabel("Tipo de preço").selectOption("fixed");
   await page.getByLabel("Preço (R$)", { exact: true }).fill("89.90");
   await page.getByLabel("Criar página na loja").check();
@@ -40,6 +42,10 @@ test("admin cria produto, publica página, altera preço e arquiva em todos os c
   await page
     .getByLabel("Texto da seção")
     .fill("Conteúdo personalizado cadastrado no admin.");
+  await page.getByRole("tab", { name: "Ficha técnica", exact: true }).click();
+  await page.getByRole("button", { name: "Adicionar informação técnica" }).click();
+  await page.getByLabel("Característica", { exact: true }).fill("Material");
+  await page.getByLabel("Valor ou detalhe").fill(technicalValue);
   await page.getByRole("tab", { name: "Atendimento", exact: true }).click();
   await page
     .getByLabel("Outros nomes usados pelos clientes (um por linha)")
@@ -50,10 +56,14 @@ test("admin cria produto, publica página, altera preço e arquiva em todos os c
   await expect(page.getByRole("status")).toContainText("Produto salvo");
   await page.goto(`/produtos/${slug}`);
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  await expect(page.getByText(description, { exact: true })).toBeVisible();
   await expect(page.getByText("R$ 89,90", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Feita para você" }),
   ).toBeVisible();
+  const technicalCard = page.getByRole("region", { name: "Ficha técnica" });
+  await expect(technicalCard.getByText("Material", { exact: true })).toBeVisible();
+  await expect(technicalCard.getByText(/Acabamento fosco/)).toHaveText(/PLA\nAcabamento fosco/);
   await page
     .getByRole("button", { name: "Adicionar ao carrinho", exact: true })
     .click();
@@ -61,13 +71,19 @@ test("admin cria produto, publica página, altera preço e arquiva em todos os c
   await expect(page.getByRole("article")).toContainText("R$ 89,90");
   await page.goto("/admin/produtos");
   await page.getByRole("button").filter({ hasText: name }).click();
+  await expect(page.getByLabel("Descrição do produto (comercial)")).toHaveValue(description);
   await page.getByLabel("Preço (R$)", { exact: true }).fill("99.90");
+  await page.getByRole("tab", { name: "Ficha técnica", exact: true }).click();
+  await expect(page.getByLabel("Característica", { exact: true })).toHaveValue("Material");
+  await expect(page.getByLabel("Valor ou detalhe")).toHaveValue(technicalValue);
+  await page.getByRole("button", { name: "Remover informação técnica" }).click();
   await page
     .getByRole("button", { name: "Salvar produto", exact: true })
     .click();
   await expect(page.getByRole("status")).toContainText("Produto salvo");
   await page.goto(`/produtos/${slug}`);
   await expect(page.getByText("R$ 99,90", { exact: true })).toBeVisible();
+  await expect(technicalCard).toHaveCount(0);
   await page.goto("/admin/conversas");
   await page.getByLabel("Perfil de teste").fill(`produto.e2e.${suffix}`);
   await page

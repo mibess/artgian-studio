@@ -17,6 +17,7 @@ export const createProductSchema = z.object({
   publish: z.boolean().describe("true somente quando o usuário pedir para publicar; false cria rascunho fora da vitrine."),
   name: z.string().min(2).max(200), slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80),
   category: z.string().min(1).max(100), description: z.string().min(1).max(5000),
+  technicalDetails: storefrontSchema.shape.technicalDetails.describe("Ficha técnica pública no final da página. Informe pares de característica e detalhe confirmados e use description para a descrição comercial."),
   priceCents: z.number().int().positive().max(100_000_000).describe("Preço em centavos: R$ 55,00 = 5500."),
   imageIds: z.array(z.string().uuid()).min(1).max(10).describe("IDs de imagens já enviadas por esta conexão; primeira imagem é a capa. Sem imagem, não há cadastro."),
   shippingPackage: storefrontSchema.shape.shippingPackage.describe("Medidas da embalagem e peso de envio em kg; obrigatório para publicar compra direta. Não inventar."),
@@ -34,6 +35,7 @@ const editableFields = z.strictObject({
   name: createProductSchema.shape.name.optional(),
   category: createProductSchema.shape.category.optional(),
   description: createProductSchema.shape.description.optional(),
+  technicalDetails: storefrontSchema.shape.technicalDetails.describe("Substitui os pares de característica e detalhe da ficha técnica pública. Omita para preservar; envie [] para limpar."),
   priceCents: createProductSchema.shape.priceCents.optional(),
   productionTime: productInputSchema.shape.productionTime.optional().describe("Observação legada; fulfillment tem precedência na loja e no atendimento quando configurado."),
   fulfillment: storefrontSchema.shape.fulfillment.describe("Altera a disponibilidade e os dias úteis até envio após pagamento. Omita para preservar; null remove a informação confirmada. Não confundir com transporte nem deduzir prontidão da disponibilidade de compra."),
@@ -86,6 +88,7 @@ export async function findEditableProducts(query: string, identity: McpIdentity)
   const p = recordInput(rows[0]);
   return { matches, hasMore: false, product: {
     ...matches[0], category: p.category, description: p.description, pricingType: p.pricingType,
+    technicalDetails: p.storefront?.technicalDetails ?? [],
     priceCents: p.basePriceCents ?? p.priceFromCents, productionTime: p.productionTime, fulfillment: p.storefront?.fulfillment ?? null, materials: p.materials,
     aliases: p.aliases, verifiedClaims: p.verifiedClaims, shippingPackage: p.storefront?.shippingPackage,
     personalization: p.storefront?.personalization, presentation: p.storefront?.presentation, variants: p.storefront?.variants,
@@ -104,7 +107,7 @@ export async function updateProduct(input: z.infer<typeof updateProductSchema>, 
   const current = recordInput(row);
   const store = current.storefront;
   if (!store) throw new McpHttpError("Este produto precisa de uma página cadastrada no painel da loja.");
-  const { coverImageId, addImageIds, presentation, personalization, shippingPackage, fulfillment, priceCents, ...fields } = input.changes;
+  const { coverImageId, addImageIds, presentation, personalization, shippingPackage, fulfillment, technicalDetails, priceCents, ...fields } = input.changes;
   if (priceCents !== undefined && row.pricingType === "quote") throw new McpHttpError("Produtos sob orçamento exigem alterar o tipo de preço no painel.");
   if (shippingPackage === null && store.purchasable) throw new McpHttpError("A compra direta exige embalagem e peso.");
 
@@ -132,6 +135,7 @@ export async function updateProduct(input: z.infer<typeof updateProductSchema>, 
     ...current, ...fields, ...(priceCents !== undefined ? newPrice : {}),
     storefront: { ...store, shippingPackage: shippingPackage === undefined ? store.shippingPackage : shippingPackage,
       fulfillment: fulfillment === undefined ? store.fulfillment : fulfillment,
+      technicalDetails: technicalDetails ?? store.technicalDetails,
       personalization: { ...store.personalization, ...personalization },
       presentation: { ...store.presentation, ...presentation, copy: { ...store.presentation.copy, ...presentation?.copy }, media },
     },
@@ -185,6 +189,7 @@ export async function createProduct(input: z.infer<typeof createProductSchema>, 
     storefront: { slug: input.slug, listed: input.publish, featured: false, purchasable: input.publish,
       variants,
       fulfillment: input.fulfillment,
+      technicalDetails: input.technicalDetails,
       shippingPackage: input.shippingPackage, personalization: input.personalization || { enabled: false, required: false, maxLength: 18, label: "Nome na peça" },
       presentation: { template: "standard", accent: "#b88a3b", background: "#f7f3ea", copy: {}, features: [], specifications: [], contactUrl: "", sections: [], ...input.presentation, media },
       seoTitle: `${input.name} | Artgian Studio`, seoDescription: input.description.slice(0, 500) },

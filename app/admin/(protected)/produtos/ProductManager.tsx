@@ -65,7 +65,7 @@ const input =
   "mt-1.5 w-full rounded-xl border border-[#dcded9] bg-white px-3 py-2.5 text-sm text-[#193244] outline-none focus:border-[#ee6e4f]";
 const button =
   "rounded-xl bg-[#193244] px-4 py-3 text-xs font-bold text-white disabled:opacity-50";
-const tabs = ["Dados e venda", "Variantes", "Página e imagens", "Atendimento"];
+const tabs = ["Dados e venda", "Variantes", "Página e imagens", "Ficha técnica", "Atendimento"];
 const shippingFields = [
   { key: "lengthCm", label: "Comprimento (cm)", hint: "Lado mais longo da base da caixa." },
   { key: "widthCm", label: "Largura (cm)", hint: "Lado mais curto da base da caixa." },
@@ -84,6 +84,7 @@ function TextField({
   multiline = false,
   type = "text",
   disabled = false,
+  maxLength,
 }: {
   label: string;
   value: string | number;
@@ -91,6 +92,7 @@ function TextField({
   multiline?: boolean;
   type?: string;
   disabled?: boolean;
+  maxLength?: number;
 }) {
   return (
     <label className="block text-xs font-semibold text-[#526873]">
@@ -98,6 +100,7 @@ function TextField({
       {multiline ? (
         <textarea
           value={value}
+          maxLength={maxLength}
           onChange={(e) => onChange(e.target.value)}
           className={input}
           rows={3}
@@ -108,6 +111,7 @@ function TextField({
           step={type === "number" ? "any" : undefined}
           value={value}
           disabled={disabled}
+          maxLength={maxLength}
           onChange={(e) => onChange(e.target.value)}
           className={`${input} ${type === "color" ? "h-12 p-1" : ""}`}
         />
@@ -209,6 +213,17 @@ export function ProductManager({
     setMessage("");
     try {
       const storefront = draft.storefront ? { ...draft.storefront } : null;
+      if (storefront?.technicalDetails) {
+        const details = storefront.technicalDetails.map(({ label, value }) => ({
+          label: label.trim(),
+          value: value.trim(),
+        }));
+        if (details.some(({ label, value }) => !label || !value)) {
+          setTab(3);
+          throw new Error("Preencha a característica e o detalhe de cada item da ficha técnica.");
+        }
+        storefront.technicalDetails = details;
+      }
       if (storefront?.shippingPackage) {
         const shippingPackage = { ...storefront.shippingPackage };
         for (const { key, label } of shippingFields) {
@@ -266,6 +281,7 @@ export function ProductManager({
     }
   }
   const s = draft?.storefront;
+  const technicalDetails = s?.technicalDetails ?? [];
   const shippingPackage = s?.shippingPackage;
   const fulfillmentPreview = draft ? fulfillmentSummary({ fulfillment: s?.fulfillment, productionTime: draft.productionTime }) : null;
   const selectedProduct = draft?.id ? products.find(p => p.id === draft.id) : undefined;
@@ -363,7 +379,7 @@ export function ProductManager({
                 />
               </div>
               <TextField
-                label="Descrição do produto"
+                label="Descrição do produto (comercial)"
                 multiline
                 value={draft.description}
                 onChange={(v) => set("description", v)}
@@ -904,7 +920,7 @@ export function ProductManager({
                 </details>
                 <details>
                   <summary className="cursor-pointer font-bold">
-                    Benefícios e especificações
+                    Benefícios e especificações do modelo
                   </summary>
                   <div className="mt-4 space-y-4">
                     {s.presentation.features.map((f, i) => (
@@ -1096,6 +1112,66 @@ export function ProductManager({
               </div>
             ))}
           {tab === 3 && (
+            s ? (
+              <div className="space-y-5">
+                <p className="text-sm leading-6 text-[#526873]">
+                  Cadastre medidas, materiais, conteúdo da embalagem e cuidados.
+                  Essas informações aparecem no card Ficha técnica ao final da página do produto.
+                </p>
+                {technicalDetails.map((detail, index) => (
+                  <fieldset
+                    key={index}
+                    aria-label={`Informação técnica ${index + 1}`}
+                    className="space-y-3 rounded-xl bg-[#f7f5ef] p-4"
+                  >
+                    <TextField
+                      label="Característica"
+                      value={detail.label}
+                      maxLength={100}
+                      onChange={(label) => store({
+                        technicalDetails: technicalDetails.map((item, i) =>
+                          i === index ? { ...item, label } : item,
+                        ),
+                      })}
+                    />
+                    <TextField
+                      label="Valor ou detalhe"
+                      value={detail.value}
+                      multiline
+                      maxLength={2000}
+                      onChange={(value) => store({
+                        technicalDetails: technicalDetails.map((item, i) =>
+                          i === index ? { ...item, value } : item,
+                        ),
+                      })}
+                    />
+                    <button
+                      type="button"
+                      className="text-xs text-red-700"
+                      onClick={() => store({
+                        technicalDetails: technicalDetails.filter((_, i) => i !== index),
+                      })}
+                    >
+                      Remover informação técnica
+                    </button>
+                  </fieldset>
+                ))}
+                <button
+                  type="button"
+                  className={button}
+                  disabled={technicalDetails.length >= 30}
+                  onClick={() => store({
+                    technicalDetails: [...technicalDetails, { label: "", value: "" }],
+                  })}
+                >
+                  Adicionar informação técnica
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm">Ative a página na loja em Dados e venda.</p>
+            )
+          )}
+          {tab === 4 && (
             <div className="space-y-5">
               {(
                 [

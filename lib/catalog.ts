@@ -9,6 +9,10 @@ export type ProductFulfillment = {
   /** Maximum business days between payment confirmation and dispatch. */
   preparationDays: number;
 };
+export type ProductTechnicalDetail = {
+  label: string;
+  value: string;
+};
 export type ProductVariant = {
   key: string;
   name: string;
@@ -43,6 +47,7 @@ export type Storefront = {
   variants: ProductVariant[];
   shippingPackage: ShippingPackage | null;
   fulfillment?: ProductFulfillment | null;
+  technicalDetails?: ProductTechnicalDetail[];
   personalization: {
     enabled: boolean;
     required: boolean;
@@ -69,6 +74,7 @@ export type Product = {
   active: boolean;
   productionTime: string | null;
   fulfillment?: ProductFulfillment | null;
+  technicalDetails?: ProductTechnicalDetail[];
   variants: ProductVariant[];
   shippingPackage: ShippingPackage | null;
   customizable: boolean;

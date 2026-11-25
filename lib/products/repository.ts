@@ -54,6 +54,7 @@ export function toProduct(row: CatalogRecord): Product | null {
     active: row.active,
     productionTime: row.productionTime,
     fulfillment: s.fulfillment ?? null,
+    technicalDetails: s.technicalDetails,
     variants: s.variants,
     shippingPackage: s.shippingPackage,
     customizable: s.personalization.enabled,
@@ -142,6 +143,7 @@ export function productConversationContext(row: CatalogRecord) {
       : parseStringList(row.customizationOptions),
     verifiedClaims: parseStringList(row.verifiedClaims),
     specifications: p?.presentation.specifications || [],
+    technicalDetails: p?.technicalDetails || [],
     variants: p?.variants.map((v) => ({
       name: v.name,
       priceCents:

@@ -47,6 +47,8 @@ export async function saveProduct(raw: string, actor = "admin", transaction?: Pr
     // an explicit null is the only way to clear it while keeping the storefront.
     if (p.storefront && p.storefront.fulfillment === undefined && previous?.fulfillment !== undefined)
       p.storefront.fulfillment = previous.fulfillment;
+    if (p.storefront && p.storefront.technicalDetails === undefined && previous?.technicalDetails !== undefined)
+      p.storefront.technicalDetails = previous.technicalDetails;
     if (previous && p.storefront?.slug !== previous.slug)
       return Response.json(
         { error: "O endereço de produtos existentes deve ser preservado." },

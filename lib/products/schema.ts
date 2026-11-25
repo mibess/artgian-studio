@@ -61,6 +61,13 @@ export const storefrontSchema = z
     featured: z.boolean(),
     purchasable: z.boolean(),
     fulfillment: productFulfillmentSchema.nullable().optional(),
+    technicalDetails: z
+      .array(z.object({
+        label: z.string().trim().min(1, "Informe o nome da característica.").max(100, "O nome da característica pode ter até 100 caracteres."),
+        value: z.string().trim().min(1, "Informe o detalhe da característica.").max(2000, "O detalhe da característica pode ter até 2000 caracteres."),
+      }))
+      .max(30, "A ficha técnica aceita até 30 características.")
+      .optional(),
     variants: z
       .array(
         z.object({

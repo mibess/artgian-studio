@@ -241,6 +241,21 @@ describe("MCP remoto de produtos", () => {
     expect(createProductSchema.safeParse({ ...input, fulfillment: { readyToShip: false, preparationDays: 0 } }).success).toBe(false);
     expect(updateProductSchema.safeParse({ id: created.id, version: changed.version, changes: { fulfillment: { readyToShip: true, preparationDays: -1 } } }).success).toBe(false);
   });
+  it("cria, consulta e altera a ficha técnica pelo MCP", async () => {
+    const details = [{ label: "Material", value: "PLA" }];
+    const input = createProductSchema.parse({ ...product("ficha-tecnica"), technicalDetails: details });
+    const { id, version } = await createProduct(input, identity);
+    expect((await findEditableProducts(id, identity)).product?.technicalDetails).toEqual(details);
+
+    const edited = await updateProduct({ id, version, changes: { description: "Nova descrição comercial." } }, identity);
+    expect((await findEditableProducts(id, identity)).product?.technicalDetails).toEqual(details);
+
+    const updated = [{ label: "Dimensões", value: "26 cm de altura" }];
+    const changed = await updateProduct(updateProductSchema.parse({ id, version: edited.version, changes: { technicalDetails: updated } }), identity);
+    expect((await findEditableProducts(id, identity)).product?.technicalDetails).toEqual(updated);
+    await updateProduct({ id, version: changed.version, changes: { technicalDetails: [] } }, identity);
+    expect((await findEditableProducts(id, identity)).product?.technicalDetails).toEqual([]);
+  });
   it("publica diretamente somente com permissão, imagens próprias e embalagem", async () => {
     const other = await connect(["products:write", "images:write"]);
     const limited = await authenticate(new Request(origin, { headers: { authorization: `Bearer ${other.access}` } }));

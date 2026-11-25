@@ -243,4 +243,32 @@ describe("single product catalog", () => {
     expect((await getProductCatalog())["organizador-arco"].fulfillment).toBeNull();
     expect(productConversationContext(await record()).productionTime).toBe("20 dias úteis (observação antiga)");
   });
+  it("keeps technical details separate and preserves them for older admin clients", async () => {
+    const { getProductCatalog, productConversationContext } = await import("../lib/products/repository");
+    const p = await input();
+    const details = [{ label: "Dimensões", value: "11 cm de comprimento\n26 cm de altura" }];
+    const specifications = p.storefront!.presentation.specifications;
+    p.storefront!.technicalDetails = [{ label: " ", value: "26 cm" }];
+    expect((await save(p)).status).toBe(400);
+
+    p.description = "Um jeito de decorar o Natal.";
+    p.storefront!.technicalDetails = details;
+    expect((await save(p)).status).toBe(200);
+
+    const oldClient = await input();
+    delete oldClient.storefront!.technicalDetails;
+    oldClient.description = "Um jeito de decorar e celebrar o Natal.";
+    expect((await save(oldClient)).status).toBe(200);
+    expect((await getProductCatalog())["organizador-arco"]).toMatchObject({
+      description: oldClient.description,
+      technicalDetails: details,
+      presentation: { specifications },
+    });
+    expect(productConversationContext(await record()).technicalDetails).toEqual(details);
+
+    const clear = await input();
+    clear.storefront!.technicalDetails = [];
+    expect((await save(clear)).status).toBe(200);
+    expect((await getProductCatalog())["organizador-arco"].technicalDetails).toEqual([]);
+  });
 });

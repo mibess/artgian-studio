@@ -54,24 +54,49 @@ export async function productMetadata(id: string): Promise<Metadata> {
 export async function ProductPage({ id }: { id: string }) {
   const product = (await getProductCatalog())[id];
   if (!product?.active) notFound();
-  const Template = templates[product.presentation.template];
+  const Template = templates[product.presentation.template] ?? StandardProduct;
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeStructuredData(productStructuredData(product)) }}
       />
-      {Template ? (
-        <Template product={product}>
-          <ExtraSections product={product} />
-        </Template>
-      ) : (
-        <StandardProduct product={product}>
-          <ExtraSections product={product} />
-        </StandardProduct>
-      )}
+      <Template product={product}>
+        <ExtraSections product={product} />
+        <ProductTechnicalDetails details={product.technicalDetails} />
+      </Template>
       <FloatingWhatsApp />
     </>
+  );
+}
+function ProductTechnicalDetails({
+  details,
+}: {
+  details: Product["technicalDetails"];
+}) {
+  if (!details?.length) return null;
+
+  return (
+    <section className="site-container py-10 sm:py-12" aria-labelledby="ficha-tecnica">
+      <div className="rounded-3xl border border-[#193244]/12 bg-[#fffdf8] p-6 text-[#193244] sm:p-10">
+        <h2 id="ficha-tecnica" className="font-serif text-3xl sm:text-4xl">
+          Ficha técnica
+        </h2>
+        <dl className="mt-5 divide-y divide-[#193244]/12 border-t border-[#193244]/12">
+          {details.map(({ label, value }, index) => (
+            <div
+              key={index}
+              className="grid gap-1.5 py-4 last:pb-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-6"
+            >
+              <dt className="wrap-anywhere text-sm font-semibold">{label}</dt>
+              <dd className="whitespace-pre-line wrap-anywhere text-sm leading-relaxed">
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
   );
 }
 function ExtraSections({ product }: { product: Product }) {
