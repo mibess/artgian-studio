@@ -3,7 +3,8 @@
 ## Rotas
 
 - Loja de produção: `https://www.artgian.com.br`.
-- Geração: `POST https://www.artgian.com.br/api/coupons/game`.
+- Geração por sorteio: `POST https://www.artgian.com.br/api/coupons/game`.
+- Geração com percentual escolhido pelo backend: `POST https://www.artgian.com.br/api/coupons/game/fixed`.
 - Painel: `https://www.artgian.com.br/admin/descontos` (autenticação do admin).
 - Desenvolvimento: mesmas rotas em `http://localhost:3000`.
 
@@ -90,6 +91,32 @@ de limite. `expiresInSeconds` é o tempo restante no momento da resposta.
 
 Os erros têm o formato `{ "error": "mensagem em português" }`. Respostas de
 sucesso e erros de domínio usam `Cache-Control: no-store`.
+
+### Percentual escolhido pelo backend
+
+Chame `POST /api/coupons/game/fixed` com os mesmos cabeçalhos. O corpo inclui
+`discountPercent`, que deve ser o número `10` ou `20`.
+
+```bash
+curl --fail-with-body --request POST \
+  'https://www.artgian.com.br/api/coupons/game/fixed' \
+  --header "Authorization: Bearer $COUPON_GAME_API_KEY" \
+  --header 'Content-Type: application/json' \
+  --header 'Idempotency-Key: conclusao-fixa-abc123' \
+  --data '{"playerId":"jogador-123","completionId":"partida-789-fase-3","discountPercent":20}'
+```
+
+A resposta tem os mesmos campos, com código no formato `GAME-FIXED-…` e o
+percentual solicitado. As duas rotas compartilham as cotas de emissão e
+emitem no máximo um cupom por conclusão do jogador. Para repetir uma emissão,
+use a rota, a chave e o percentual originais. Trocar a rota ou o percentual
+para uma recompensa ainda disponível retorna 409.
+
+Se os jogos geram IDs independentemente, use um prefixo do jogo no
+`playerId` (por exemplo, `jogo-novo:jogador-123`) e na `Idempotency-Key`
+(por exemplo, `jogo-novo-conclusao-abc123`). Isso evita que IDs locais
+iguais compartilhem a cota por jogador ou causem um conflito de emissão.
+A cota global continua compartilhada entre os jogos.
 
 ## Uso, exclusão e pagamentos
 

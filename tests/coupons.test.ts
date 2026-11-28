@@ -28,6 +28,7 @@ import {
   reserveCoupon,
 } from "../lib/coupons";
 import { POST as game } from "../app/api/coupons/game/route";
+import { POST as fixedGame } from "../app/api/coupons/game/fixed/route";
 import { POST as checkout } from "../app/api/checkout/route";
 import { POST as validate } from "../app/api/coupons/validate/route";
 import { POST as webhook } from "../app/api/mercado-pago/webhook/route";
@@ -77,6 +78,23 @@ const rewardRequest = (
     { playerId, completionId },
     { Authorization: `Bearer ${key}`, "Idempotency-Key": idempotencyKey },
   );
+function fixedRequest(
+  discountPercent: unknown,
+  completionId = "level-1",
+  requestKey = "request-0001",
+) {
+  return request(
+    "/api/coupons/game/fixed",
+    { playerId: "player-1", completionId, discountPercent },
+    { Authorization: `Bearer ${key}`, "Idempotency-Key": requestKey },
+  );
+}
+
+const rewardRoutes = [
+  { mode: "random", route: "/api/coupons/game", post: game, issue: () => rewardRequest() },
+  { mode: "fixed", route: "/api/coupons/game/fixed", post: fixedGame, issue: () => fixedRequest(20) },
+];
+
 async function seed(overrides: Partial<typeof coupons.$inferInsert> = {}) {
   const now = new Date().toISOString();
   const [coupon] = await db
@@ -174,13 +192,13 @@ describe("game reward rarity", () => {
 });
 
 describe("game rewards API using a real migrated database", () => {
-  it("requires a secret, server-to-server calls and valid payload", async () => {
-    expect((await game(request("/api/coupons/game", {}))).status).toBe(401);
+  it.each(rewardRoutes)("$mode requires a secret, server-to-server calls and valid payload", async ({ route, post, issue }) => {
+    expect((await post(request(route, {}))).status).toBe(401);
     expect(
       (
-        await game(
+        await post(
           request(
-            "/api/coupons/game",
+            route,
             {},
             { Authorization: `Bearer ${key}`, Origin: root },
           ),
@@ -189,13 +207,13 @@ describe("game rewards API using a real migrated database", () => {
     ).toBe(403);
     expect(
       (
-        await game(
-          request("/api/coupons/game", {}, { Authorization: `Bearer ${key}` }),
+        await post(
+          request(route, {}, { Authorization: `Bearer ${key}` }),
         )
       ).status,
     ).toBe(400);
     vi.stubEnv("COUPON_GAME_API_KEY", "");
-    expect((await game(rewardRequest())).status).toBe(503);
+    expect((await post(issue())).status).toBe(503);
     expect(await db.select().from(coupons)).toHaveLength(0);
   });
   it("issues exactly one random reward per completion, with 30 minute expiry", async () => {
@@ -230,19 +248,19 @@ describe("game rewards API using a real migrated database", () => {
     expect(await db.select().from(coupons)).toHaveLength(1);
     expect(await db.select().from(couponIssuances)).toHaveLength(1);
   });
-  it("never reissues an expired, deleted or reserved reward and removes expired coupons", async () => {
-    const response = await game(rewardRequest());
+  it.each(rewardRoutes)("$mode removes expired coupons and prevents reissuing them", async ({ post, issue }) => {
+    const response = await post(issue());
     const { code } = await response.json();
     await db
       .update(coupons)
       .set({ expiresAt: new Date(Date.now() - 1).toISOString() })
       .where(eq(coupons.code, code));
-    expect((await game(rewardRequest())).status).toBe(410);
+    expect((await post(issue())).status).toBe(410);
     expect(await db.select().from(coupons)).toHaveLength(0);
     expect(await db.select().from(couponIssuances)).toHaveLength(1);
-    expect(
-      (await game(rewardRequest("level-1", "player-1", "new-key-1234"))).status,
-    ).toBe(409);
+    const retry = issue();
+    retry.headers.set("Idempotency-Key", "new-key-1234");
+    expect((await post(retry)).status).toBe(409);
   });
   it("enforces per-player and global quotas across distinct requests", async () => {
     vi.stubEnv("COUPON_GAME_PLAYER_HOURLY_LIMIT", "1");
@@ -261,6 +279,47 @@ describe("game rewards API using a real migrated database", () => {
     ).toBe(429);
     expect(await db.select().from(coupons)).toHaveLength(2);
     expect((await game(rewardRequest())).status).toBe(200);
+  });
+});
+
+describe("fixed game rewards API", () => {
+  it.each([10, 20])("issues a single-use coupon for exactly %i percent", async (percent) => {
+    const response = await fixedGame(fixedRequest(percent));
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body).toMatchObject({ discountPercent: percent, reusable: false });
+    expect(body.expiresInSeconds).toBeGreaterThanOrEqual(1799);
+    await expect(quoteCoupon(db, body.code, 10_000)).resolves.toMatchObject({
+      discountCents: percent * 100,
+      coupon: { maxUses: 1, minSubtotalCents: 10_000 },
+    });
+
+    const replay = await fixedGame(fixedRequest(percent));
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({
+      code: body.code,
+      discountPercent: percent,
+      expiresAt: body.expiresAt,
+    });
+    expect((await fixedGame(fixedRequest(percent === 10 ? 20 : 10))).status).toBe(409);
+    expect((await game(rewardRequest())).status).toBe(409);
+    expect(await db.select().from(couponIssuances)).toHaveLength(1);
+  });
+
+  it("rejects missing or unsupported percentages and keeps the random payload strict", async () => {
+    for (const percent of [undefined, 5, 30, "10"]) {
+      expect((await fixedGame(fixedRequest(percent))).status).toBe(400);
+    }
+    expect((await game(fixedRequest(10))).status).toBe(400);
+    expect(await db.select().from(coupons)).toHaveLength(0);
+  });
+
+  it("shares completion records and issuance quotas with the random route", async () => {
+    vi.stubEnv("COUPON_GAME_PLAYER_HOURLY_LIMIT", "1");
+    expect((await game(rewardRequest())).status).toBe(201);
+    expect((await fixedGame(fixedRequest(10))).status).toBe(409);
+    expect((await fixedGame(fixedRequest(10, "level-2", "request-0002"))).status).toBe(429);
+    expect(await db.select().from(couponIssuances)).toHaveLength(1);
   });
 });
 
@@ -691,14 +750,15 @@ describe("checkout and payment lifecycle", () => {
     ).toBe(500);
     expect((await db.select().from(coupons))[0].allocatedUses).toBe(1);
   });
-  it("deletes a game coupon only on verified approval and preserves the order snapshot on replay", async () => {
-    const coupon = await seed({
-      source: "game",
-      expiresAt: new Date(Date.now() + 1_800_000).toISOString(),
-    });
-    await checkout(
-      request("/api/checkout", { ...checkoutBody, couponCode: coupon.code }),
+  it.each(rewardRoutes)("$mode reserves the coupon until verified approval and preserves the order snapshot", async ({ post, issue }) => {
+    const issued = await post(issue());
+    expect(issued.status).toBe(201);
+    const { code, discountPercent } = await issued.json();
+    const checkoutResponse = await checkout(
+      request("/api/checkout", { ...checkoutBody, couponCode: code }),
     );
+    expect(checkoutResponse.status).toBe(201);
+    expect((await post(issue())).status).toBe(410);
     const [order] = await db.select().from(orders);
     const notify = () =>
       webhook(
@@ -737,10 +797,12 @@ describe("checkout and payment lifecycle", () => {
     const [paid] = await db.select().from(orders);
     expect(paid).toMatchObject({
       status: "paid",
-      discountCents: 1826,
-      couponCode: coupon.code,
+      discountCents: Math.floor((order.subtotalCents * discountPercent) / 100),
+      couponCode: code,
+      couponValue: discountPercent,
     });
     expect(paid.couponRedeemedAt).toBeTruthy();
+    expect((await post(issue())).status).toBe(410);
     expect(await cleanupExpiredGameCoupons(db)).toBe(0);
   });
 });

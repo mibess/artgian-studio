@@ -32,6 +32,7 @@ export class CouponError extends Error {
 const MAX_DISCOUNT_CENTS = 10_000;
 const GAME_MIN_SUBTOTAL_CENTS = 10_000;
 const GAME_DISCOUNT_BUCKETS = 100;
+const FIXED_GAME_CODE_PREFIX = "GAME-FIXED-";
 
 export function drawGameDiscount(
   randomBucket = randomInt(GAME_DISCOUNT_BUCKETS),
@@ -240,6 +241,13 @@ const rewardSchema = z
     completionId: z.string().trim().min(1).max(128),
   })
   .strict();
+const fixedRewardSchema = rewardSchema.extend({
+  discountPercent: z.literal([10, 20]),
+});
+const randomRewardSchema = rewardSchema.transform((body) => ({
+  ...body,
+  discountPercent: undefined,
+}));
 function configuredLimit(name: string, fallback: number) {
   const value = process.env[name]?.trim();
   if (!value) return fallback;
@@ -276,16 +284,25 @@ async function takeQuota(
       Math.max(1, Math.ceil((Date.parse(resetsAt) - now.getTime()) / 1000)),
     );
 }
-export async function generateGameCoupon(rawBody: unknown, rawKey: unknown) {
-  const body = rewardSchema.safeParse(rawBody);
+export async function generateGameCoupon(
+  rawBody: unknown,
+  rawKey: unknown,
+  mode: "random" | "fixed" = "random",
+) {
+  const body = (mode === "fixed" ? fixedRewardSchema : randomRewardSchema).safeParse(
+    rawBody,
+  );
   const key = z
     .string()
     .regex(/^[A-Za-z0-9_-]{8,128}$/)
     .safeParse(rawKey);
   if (!body.success || !key.success)
     throw new CouponError(
-      "Envie playerId, completionId e o cabeçalho Idempotency-Key (8 a 128 letras, números, hífen ou sublinhado).",
+      mode === "fixed"
+        ? "Envie playerId, completionId, discountPercent (10 ou 20) e o cabeçalho Idempotency-Key (8 a 128 letras, números, hífen ou sublinhado)."
+        : "Envie playerId, completionId e o cabeçalho Idempotency-Key (8 a 128 letras, números, hífen ou sublinhado).",
     );
+  const { discountPercent } = body.data;
   const playerHash = hash(body.data.playerId);
   const completionHash = hash(
     JSON.stringify([body.data.playerId, body.data.completionId]),
@@ -338,19 +355,28 @@ export async function generateGameCoupon(rawBody: unknown, rawKey: unknown) {
             "A recompensa desta conclusão já expirou, foi usada ou está reservada.",
             410,
           );
+        if (
+          coupon.code.startsWith(FIXED_GAME_CODE_PREFIX) !== (mode === "fixed") ||
+          (discountPercent !== undefined && discountPercent !== coupon.value)
+        )
+          throw new CouponError(
+            "Recompensa já registrada. Repita na rota e com o percentual originais.",
+            409,
+          );
         return { coupon, replayed: true };
       }
       const bucket = Math.floor(now.getTime() / 3_600_000);
       await takeQuota(tx, `game:${bucket}`, globalLimit, now);
       await takeQuota(tx, `player:${playerHash}:${bucket}`, playerLimit, now);
+      const codePrefix = mode === "fixed" ? FIXED_GAME_CODE_PREFIX : "GAME-";
       const [coupon] = await tx
         .insert(coupons)
         .values({
           id: crypto.randomUUID(),
-          code: `GAME-${randomBytes(10).toString("hex").toUpperCase()}`,
+          code: `${codePrefix}${randomBytes(10).toString("hex").toUpperCase()}`,
           source: "game",
           kind: "percent",
-          value: drawGameDiscount(),
+          value: discountPercent ?? drawGameDiscount(),
           maxUses: 1,
           minSubtotalCents: GAME_MIN_SUBTOTAL_CENTS,
           expiresAt: new Date(now.getTime() + 30 * 60_000).toISOString(),
